@@ -1,0 +1,1900 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>投資組合儀表板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --yellow: #e3b341;
+    --orange: #d29922;
+    --accent: #1f6feb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; min-height: 52px; height: auto; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 6px; }
+  .nav-brand { font-size: 16px; font-weight: 700; color: var(--blue); display: flex; align-items: center; gap: 6px; }
+  .nav-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+  .nav-tab { padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text2); border: none; background: transparent; transition: all .15s; }
+  .nav-tab:hover { background: var(--surface2); color: var(--text); }
+  .nav-tab.active { background: var(--accent); color: white; }
+  .nav-date { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .nav-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-action { padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border); font-size: 12px; cursor: pointer; transition: all .15s; white-space: nowrap; }
+  .btn-refresh { background: rgba(88,166,255,.1); color: var(--blue); }
+  .btn-refresh:hover { background: rgba(88,166,255,.25); }
+  .btn-sheets { background: rgba(63,185,80,.1); color: var(--green); }
+  .btn-sheets:hover { background: rgba(63,185,80,.25); }
+  .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+  .sync-status { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); padding: 8px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; z-index: 999; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .sync-status.success { background: rgba(63,185,80,.15); border: 1px solid var(--green); color: var(--green); }
+  .sync-status.error { background: rgba(248,81,73,.15); border: 1px solid var(--red); color: var(--red); }
+  .sync-status.loading { background: rgba(88,166,255,.15); border: 1px solid var(--blue); color: var(--blue); }
+
+  .page { display: none; padding: 20px; max-width: 1400px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .kpi-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+  .kpi-value { font-size: 24px; font-weight: 700; }
+  .kpi-sub { font-size: 12px; margin-top: 4px; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .neutral { color: var(--text2); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  @media(max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; margin-bottom: 14px; }
+  .card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card-title .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--surface2); color: var(--text2); font-weight: 400; }
+
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-wrap-lg { position: relative; height: 300px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { color: var(--text2); font-weight: 500; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 11px; white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--surface2); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .tag-green { background: rgba(63,185,80,.15); color: var(--green); }
+  .tag-red { background: rgba(248,81,73,.15); color: var(--red); }
+  .tag-yellow { background: rgba(227,179,65,.15); color: var(--yellow); }
+  .tag-blue { background: rgba(88,166,255,.15); color: var(--blue); }
+  .tag-purple { background: rgba(188,140,255,.15); color: var(--purple); }
+
+  .progress-wrap { margin-bottom: 10px; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 3px; }
+  .progress-bar { height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+
+  .agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .agent-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .agent-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .agent-name { font-weight: 600; font-size: 14px; }
+  .agent-role { font-size: 11px; color: var(--text2); }
+  .agent-rec { background: var(--surface2); border-radius: 8px; padding: 12px; font-size: 12px; line-height: 1.7; }
+  .agent-rec strong { display: block; color: var(--blue); margin-bottom: 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .bullet { margin: 3px 0; padding-left: 12px; position: relative; }
+  .bullet::before { content: '›'; position: absolute; left: 0; color: var(--blue); }
+
+  .alert { padding: 11px 14px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; display: flex; gap: 8px; align-items: flex-start; }
+  .alert-warn { background: rgba(227,179,65,.1); border: 1px solid rgba(227,179,65,.3); color: var(--yellow); }
+  .alert-danger { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.3); color: var(--red); }
+  .alert-info { background: rgba(88,166,255,.1); border: 1px solid rgba(88,166,255,.3); color: var(--blue); }
+  .alert-success { background: rgba(63,185,80,.1); border: 1px solid rgba(63,185,80,.3); color: var(--green); }
+  .alert-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+  .risk-meter { display: flex; gap: 3px; margin: 6px 0; }
+  .risk-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--surface2); }
+  .risk-bar.active { background: var(--orange); }
+  .risk-bar.active.high { background: var(--red); }
+  .risk-bar.active.low { background: var(--green); }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── AI CHAT ── */
+  .chat-fab { position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: white; font-size: 22px; border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.4); z-index: 1000; transition: transform .15s; display: flex; align-items: center; justify-content: center; }
+  .chat-fab:hover { transform: scale(1.08); }
+  .chat-panel { position: fixed; bottom: 88px; right: 24px; width: 420px; max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 120px); background: var(--surface); border: 1px solid var(--border); border-radius: 14px; display: flex; flex-direction: column; z-index: 999; box-shadow: 0 8px 32px rgba(0,0,0,.5); }
+  .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; }
+  .chat-close { background: none; border: none; color: var(--text2); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-bubble { max-width: 90%; }
+  .chat-bubble.user { align-self: flex-end; background: var(--accent); color: white; padding: 8px 12px; border-radius: 12px 12px 2px 12px; font-size: 13px; }
+  .chat-bubble.agent { align-self: flex-start; }
+  .chat-agent-name { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+  .chat-agent-body { background: var(--surface2); padding: 10px 12px; border-radius: 2px 12px 12px 12px; font-size: 13px; line-height: 1.6; border-left: 3px solid var(--blue); }
+  .chat-input-row { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); }
+  .chat-input-row input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; }
+  .chat-input-row input:focus { border-color: var(--accent); }
+  .chat-input-row button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .chat-typing { color: var(--text2); font-size: 12px; padding: 4px 8px; }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+  .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .summary-row:last-child { border-bottom: none; }
+  .summary-key { color: var(--text2); }
+
+  /* SIGNAL PANEL */
+  .signal-panel { border: 2px solid var(--border); border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 16px; }
+  .signal-panel.buy { border-color: var(--green); background: rgba(63,185,80,.05); }
+  .signal-panel.sell { border-color: var(--red); background: rgba(248,81,73,.05); }
+  .signal-panel.hold { border-color: var(--yellow); background: rgba(227,179,65,.05); }
+  .signal-big { font-size: 48px; font-weight: 900; margin: 8px 0; }
+  .signal-big.buy { color: var(--green); }
+  .signal-big.sell { color: var(--red); }
+  .signal-big.hold { color: var(--yellow); }
+  .signal-label { font-size: 12px; color: var(--text2); }
+
+  /* STRATEGY GAUGE */
+  .gauge-row { display: flex; gap: 16px; margin: 16px 0; }
+  .gauge-item { flex: 1; background: var(--surface2); border-radius: 10px; padding: 14px; text-align: center; }
+  .gauge-pct { font-size: 28px; font-weight: 700; }
+  .gauge-name { font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .gauge-amount { font-size: 13px; color: var(--text); margin-top: 2px; }
+
+  /* BACKTEST */
+  .bt-scenario { background: var(--surface2); border-radius: 10px; padding: 16px; }
+  .bt-year { font-size: 11px; color: var(--text2); margin-bottom: 8px; }
+  .bt-value { font-size: 20px; font-weight: 700; }
+  .bt-return { font-size: 12px; margin-top: 2px; }
+
+  /* TICKER BADGE */
+  .ticker { font-family: monospace; font-size: 11px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--blue); }
+
+  /* REC BADGE */
+  .rec-buy { color: var(--green); font-weight: 700; font-size: 12px; }
+  .rec-hold { color: var(--yellow); font-weight: 700; font-size: 12px; }
+  .rec-sell { color: var(--red); font-weight: 700; font-size: 12px; }
+  .rec-watch { color: var(--purple); font-weight: 700; font-size: 12px; }
+
+  .team-grid { display: flex; flex-direction: column; gap: 16px; }
+  .team-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .team-card-header { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--border); }
+  .team-avatar-lg { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+  .team-meta { flex: 1; }
+  .team-name { font-weight: 700; font-size: 16px; }
+  .team-role { font-size: 12px; color: var(--text2); margin-top: 2px; }
+  .team-verdict { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
+  .team-body { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+  @media(max-width:700px) { .team-body { grid-template-columns: 1fr; } }
+  .team-section { padding: 16px 20px; border-right: 1px solid var(--border); }
+  .team-section:last-child { border-right: none; }
+  .team-section-title { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; font-weight: 600; }
+  .team-bullet { font-size: 13px; line-height: 1.6; padding: 5px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+  .team-bullet:last-child { border-bottom: none; }
+  .team-dot { flex-shrink: 0; margin-top: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">📊 投資儀表板</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('overview')">總覽</button>
+    <button class="nav-tab" onclick="showPage('tw')">台股分析</button>
+    <button class="nav-tab" onclick="showPage('us')">美股分析</button>
+    <button class="nav-tab" onclick="showPage('qqq')">QQQ策略</button>
+    <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
+    <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
+    <button class="nav-tab" onclick="showPage('team')">AI投資團隊</button>
+  </div>
+  <div class="nav-actions">
+    <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
+    <button class="btn-action btn-sheets" onclick="syncSheets()">📊 同步試算表</button>
+  </div>
+  <div class="nav-date" id="navDate">2026/03/27</div>
+</nav>
+<div id="syncStatus" class="sync-status" style="display:none"></div>
+
+<!-- ═══ PAGE: OVERVIEW ═══ -->
+<div id="page-overview" class="page active">
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">總資產 (TWD)</div>
+      <div class="kpi-value">$10,156,888</div>
+      <div class="kpi-sub up">↑ $302,357 本月</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">年度報酬</div>
+      <div class="kpi-value up">+41.2%</div>
+      <div class="kpi-sub neutral">Apr 2025 → Mar 2026</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">台股未實現損益</div>
+      <div class="kpi-value up">+$1,203,110</div>
+      <div class="kpi-sub up">+16.68%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">累計實現損益</div>
+      <div class="kpi-value up">+$2,131,479</div>
+      <div class="kpi-sub neutral">2020 至今</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">現金</div>
+      <div class="kpi-value neutral">5.74%</div>
+      <div class="kpi-sub neutral">$597,828</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">美股 + 加密</div>
+      <div class="kpi-value neutral">15.65%</div>
+      <div class="kpi-sub neutral">Firstrade + Binance</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🥧 資產配置</div>
+      <div class="chart-wrap"><canvas id="chartAlloc"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 資產成長走勢 <span class="badge">Apr 2025 - Mar 2026</span></div>
+      <div class="chart-wrap"><canvas id="chartGrowth"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💼 資產配置明細</div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>台灣股票</span><span class="up">73.45% · $7,648,566</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:73.45%;background:var(--blue)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Firstrade 美股</span><span class="neutral">12.31% · $1,250,000</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:12.31%;background:var(--purple)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>銀行存款</span><span class="neutral">5.74% · $597,828</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:5.74%;background:var(--text2)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Binance 加密</span><span class="down">3.35% · $349,126</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:3.35%;background:var(--orange)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>複委託</span><span class="up">2.46% · $255,737</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:2.46%;background:var(--green)"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>定期定額</span><span class="up">1.54% · $160,782</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:1.54%;background:#3b82f6"></div></div>
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>基富通</span><span class="down">1.15% · $119,232</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:1.15%;background:var(--red)"></div></div>
+    </div>
+  </div>
+
+  <!-- 配置建議 -->
+  <div class="card">
+    <div class="card-title">🎯 配置建議 — 基於現況損益</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">現況問題</div>
+        <div class="alert alert-danger" style="margin-bottom:8px">
+          <div class="alert-icon">🔴</div>
+          <div><strong>台股過度集中 73%</strong> — 系統風險高，台海/景氣衝擊將重傷組合</div>
+        </div>
+        <div class="alert alert-danger" style="margin-bottom:8px">
+          <div class="alert-icon">🔴</div>
+          <div><strong>基富通 -44.67%</strong> — $96,250 損失持續擴大，建議認賠止血</div>
+        </div>
+        <div class="alert alert-warn" style="margin-bottom:8px">
+          <div class="alert-icon">⚠️</div>
+          <div><strong>Binance -30%</strong> — $153,877 損失，加密市場波動難控</div>
+        </div>
+        <div class="alert alert-warn">
+          <div class="alert-icon">⚠️</div>
+          <div><strong>現金偏低 5.74%</strong> — 應對市場黑天鵝緩衝不足</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">建議目標配置</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12px">
+          <div class="summary-row"><span class="summary-key">台股 ETF（0050/006208）</span><span class="up">目標 55%</span></div>
+          <div class="summary-row"><span class="summary-key">美股（QQQ/SPY/個股）</span><span style="color:var(--purple)">目標 22%</span></div>
+          <div class="summary-row"><span class="summary-key">債券（複委託/公司債）</span><span style="color:var(--blue)">目標 10%</span></div>
+          <div class="summary-row"><span class="summary-key">現金</span><span style="color:var(--text2)">目標 10%</span></div>
+          <div class="summary-row"><span class="summary-key">加密貨幣</span><span class="down">目標 3%（減碼）</span></div>
+        </div>
+        <div style="margin-top:10px;font-size:12px;background:var(--surface2);border-radius:8px;padding:12px">
+          <div style="font-weight:600;margin-bottom:6px;color:var(--yellow)">⚡ 立即行動</div>
+          <div class="bullet">基富通全數贖回 → 轉 QQQ/SPY</div>
+          <div class="bullet">台積電/006208 各了結 20% → 提升現金至 8%</div>
+          <div class="bullet">Binance 逐步減碼 50% → 降低尾部風險</div>
+          <div class="bullet">QQQ 補足至 $18,000（策略目標）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📅 逐月資產 (2025-2026)</div>
+    <table>
+      <thead><tr><th>月份</th><th>總資產</th><th>月增減</th><th>月增率</th></tr></thead>
+      <tbody id="monthlyTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ PAGE: TAIWAN STOCKS ═══ -->
+<div id="page-tw" class="page">
+  <div class="alert alert-info">
+    <div class="alert-icon">🤖</div>
+    <div><strong>AI 台股分析師：</strong>以下建議基於持倉成本、未實現損益、產業趨勢及技術面綜合評估。市場每日變動，請搭配即時行情做最終判斷。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 台股持倉分析 <span class="badge">建議操作</span></div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th><th>建議</th><th>操作理由</th>
+        </tr>
+      </thead>
+      <tbody id="twHoldTable"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">已賣出 + 建議清單</span></div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>代號</th><th>股票</th><th>現價(估)</th><th>建議</th><th>理由</th><th>風險</th></tr>
+      </thead>
+      <tbody id="twWatchTable"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🏆 持倉贏家 Top 5</div>
+      <div id="twTopWinners"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">⚠️ 持倉需關注 Top 5</div>
+      <div id="twTopLosers"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: US STOCKS ═══ -->
+<div id="page-us" class="page">
+  <div class="alert alert-info">
+    <div class="alert-icon">🤖</div>
+    <div><strong>AI 美股分析師：</strong>以下建議基於持倉成本、產業景氣及宏觀環境（關稅、Fed利率政策）。目前美股面臨關稅不確定性，建議保持靈活應對。</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Firstrade 總市值</div>
+      <div class="kpi-value">$41,088</div>
+      <div class="kpi-sub neutral">USD · 約 TWD $1,314K</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">未實現損益</div>
+      <div class="kpi-value down">-$2,105</div>
+      <div class="kpi-sub down">-4.87%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大虧損</div>
+      <div class="kpi-value down">MSFT -17%</div>
+      <div class="kpi-sub neutral">-$764.20</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大獲利</div>
+      <div class="kpi-value up">BOXX +0.19%</div>
+      <div class="kpi-sub neutral">穩定現金替代品</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🇺🇸 美股持倉分析 — 主帳戶</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr>
+      </thead>
+      <tbody id="usMainTable"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏦 美股持倉 — 複委託帳戶</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr>
+      </thead>
+      <tbody id="usRoyTable"></tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🎯 美股整體策略建議</div>
+    <div class="alert alert-warn">
+      <div class="alert-icon">⚠️</div>
+      <div><strong>關稅風險：</strong>2026年初美國關稅政策不確定性高，科技股（MSFT、MAGS、NVDA）短期承壓。建議保留現有部位，等待明確後再加碼。</div>
+    </div>
+    <div class="alert alert-success">
+      <div class="alert-icon">✅</div>
+      <div><strong>核心配置維持：</strong>QQQ + SPY 為指數核心，建議長期持有。BOXX 作為現金替代品功能正常，繼續持有。</div>
+    </div>
+    <div class="alert alert-info">
+      <div class="alert-icon">💡</div>
+      <div><strong>NVDA 長期邏輯：</strong>AI 算力需求持續，NVDA 雖短期下跌 -7.5%，但長線 AI 基礎設施主題不變。逢低可考慮分批加碼。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: QQQ STRATEGY ═══ -->
+<div id="page-qqq" class="page">
+  <div class="card">
+    <div class="card-title">📐 QQQ / QLD / TQQQ 動態槓桿策略 <span class="badge">$30,000 USD</span></div>
+    <p style="color:var(--text2);font-size:13px;line-height:1.7;margin-bottom:16px">
+      核心邏輯：用 Nasdaq 100 SMA200 作為市場趨勢判斷依據。強勢時加槓桿提升報酬；疲弱時退回 QQQ 降低風險。
+    </p>
+    <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:13px;line-height:1.8">
+      <div style="margin-bottom:8px"><strong style="color:var(--blue)">🔵 永久配置（60%）：</strong>QQQ $18,000 — 無論市場強弱，核心部位不動</div>
+      <div style="margin-bottom:8px"><strong style="color:var(--green)">🟢 進場條件（剩餘40%）：</strong>Nasdaq 指數 > SMA200 × 1.04 → QLD 30%（$9,000）+ TQQQ 10%（$3,000）</div>
+      <div><strong style="color:var(--red)">🔴 退場條件：</strong>Nasdaq 指數 &lt; SMA200 × 0.07 → 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金</div>
+    </div>
+  </div>
+
+  <!-- Current Signal -->
+  <div class="grid-2">
+    <div>
+      <div id="signalPanel" class="signal-panel hold">
+        <div class="signal-label">目前訊號</div>
+        <div id="signalText" class="signal-big hold">HOLD ◆</div>
+        <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 關鍵數值 <span class="badge">Nasdaq Composite ^IXIC</span></div>
+        <div class="summary-row"><span class="summary-key">Nasdaq 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">21,408</span></div>
+        <div class="summary-row"><span class="summary-key">Nasdaq SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">22,303</span></div>
+        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">23,195</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.07）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">1,561</span></div>
+        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-1,787 (-7.7%)</span></div>
+        <div class="summary-row"><span class="summary-key">Nasdaq vs SMA200</span><span id="nasdaqVsSMA" class="down">-4.0%（低於SMA200）</span></div>
+        <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💰 目前建議配置 <span class="badge">$30,000 USD · 訊號：等待</span></div>
+      <div class="alert alert-warn" style="margin-bottom:12px">
+        <div class="alert-icon">⏸</div>
+        <div>Nasdaq（21,408）目前低於進場門檻（23,195），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 Nasdaq 突破 23,195 再建 QLD/TQQQ。</div>
+      </div>
+      <div class="gauge-row">
+        <div class="gauge-item">
+          <div class="gauge-pct" style="color:var(--blue)">60%</div>
+          <div class="gauge-name">QQQ ✅ 持有</div>
+          <div class="gauge-amount">$18,000</div>
+          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 31.3 股 @$576</div>
+        </div>
+        <div class="gauge-item" style="opacity:0.4">
+          <div class="gauge-pct" style="color:var(--purple)">30%</div>
+          <div class="gauge-name">QLD ⏸ 待機</div>
+          <div class="gauge-amount">$9,000</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+        </div>
+        <div class="gauge-item" style="opacity:0.4">
+          <div class="gauge-pct" style="color:var(--orange)">10%</div>
+          <div class="gauge-name">TQQQ ⏸ 待機</div>
+          <div class="gauge-amount">$3,000</div>
+          <div style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 策略回測（歷史模擬）<span class="badge">2015-2024</span></div>
+    <div class="alert alert-warn">
+      <div class="alert-icon">⚠️</div>
+      <div>以下為策略概念模擬，非精確回測。槓桿 ETF 有耗損效應（Decay），長期持有表現受市場波動影響大。實際績效需用完整回測工具驗證。</div>
+    </div>
+    <div class="grid-3" style="margin-top:12px">
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">純 QQQ（10年）</div>
+        <div style="font-size:26px;font-weight:700;color:var(--green)">+387%</div>
+        <div style="font-size:12px;color:var(--text2)">CAGR ~17.2%/yr</div>
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">本策略模擬（10年）</div>
+        <div style="font-size:26px;font-weight:700;color:var(--purple)">~+550%</div>
+        <div style="font-size:12px;color:var(--text2)">趨勢上行時加槓桿增幅</div>
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">最大回撤風險</div>
+        <div style="font-size:26px;font-weight:700;color:var(--red)">-60%</div>
+        <div style="font-size:12px;color:var(--text2)">TQQQ 熊市最大損失</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標</div>
+    <table>
+      <thead><tr><th>商品</th><th>目前持股</th><th>目前市值</th><th>策略目標</th><th>缺口</th><th>動作</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="ticker">QQQ</span></td>
+          <td>13 股</td>
+          <td>$7,488</td>
+          <td>$18,000</td>
+          <td class="down">-$10,512</td>
+          <td><span class="tag tag-green">分批加碼 ≈18股</span></td>
+        </tr>
+        <tr>
+          <td><span class="ticker">QLD</span></td>
+          <td>0 股</td>
+          <td>$0</td>
+          <td>$9,000</td>
+          <td class="down">-$9,000</td>
+          <td><span class="tag tag-green">考慮買入</span></td>
+        </tr>
+        <tr>
+          <td><span class="ticker">TQQQ</span></td>
+          <td>0 股</td>
+          <td>$0</td>
+          <td>$3,000</td>
+          <td class="down">-$3,000</td>
+          <td><span class="tag tag-yellow">謹慎評估</span></td>
+        </tr>
+        <tr>
+          <td colspan="5" style="color:var(--text2);font-size:11px">* 其他美股持倉（NVDA、TSLA等）計入美股整體，不納入此$30k策略計算</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ PAGE: BACKTEST ═══ -->
+<div id="page-backtest" class="page">
+  <div class="alert alert-info">
+    <div class="alert-icon">📊</div>
+    <div><strong>回測說明：</strong>使用歷史平均年化報酬率進行複利試算。台股以0050歷史CAGR約11%，美股QQQ以17%，混合投資組合以12%為基準。過去績效不代表未來表現。</div>
+  </div>
+
+  <!-- Current Base -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">當前總資產</div>
+      <div class="kpi-value">$10.16M</div>
+      <div class="kpi-sub neutral">TWD · 起始基數</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">當前年投入</div>
+      <div class="kpi-value">~$500K</div>
+      <div class="kpi-sub neutral">預估每年新增資金</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">台股 (0050 CAGR)</div>
+      <div class="kpi-value" style="color:var(--blue)">11%</div>
+      <div class="kpi-sub neutral">歷史 10 年均值</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">美股 (QQQ CAGR)</div>
+      <div class="kpi-value" style="color:var(--purple)">17%</div>
+      <div class="kpi-sub neutral">歷史 10 年均值</div>
+    </div>
+  </div>
+
+  <!-- Projection Tables -->
+  <div class="card">
+    <div class="card-title">🔮 投資組合試算（不含新增資金）</div>
+    <div class="grid-3">
+      <div class="bt-scenario">
+        <div class="bt-year">保守（CAGR 8%）</div>
+        <div class="bt-value" style="color:var(--text2)">5年後：$14.9M</div>
+        <div class="bt-return up">+47%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--text2)">10年後：$21.9M</div>
+        <div class="bt-return up">+116%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--text2)">15年後：$32.2M</div>
+        <div class="bt-return up">+217%</div>
+      </div>
+      <div class="bt-scenario">
+        <div class="bt-year">穩健（CAGR 11%）</div>
+        <div class="bt-value" style="color:var(--green)">5年後：$17.1M</div>
+        <div class="bt-return up">+68%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--green)">10年後：$28.7M</div>
+        <div class="bt-return up">+183%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--green)">15年後：$48.2M</div>
+        <div class="bt-return up">+375%</div>
+      </div>
+      <div class="bt-scenario">
+        <div class="bt-year">積極（CAGR 15%）</div>
+        <div class="bt-value" style="color:var(--purple)">5年後：$20.5M</div>
+        <div class="bt-return up">+102%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--purple)">10年後：$41.1M</div>
+        <div class="bt-return up">+305%</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" style="color:var(--purple)">15年後：$82.4M</div>
+        <div class="bt-return up">+711%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 資產成長預測圖</div>
+    <div class="chart-wrap-lg"><canvas id="chartProjection"></canvas></div>
+  </div>
+
+  <!-- ETF Backtest -->
+  <div class="card">
+    <div class="card-title">🏷️ 主要 ETF 歷史回測（$100萬投入）</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>ETF</th><th>名稱</th><th>年化(10yr)</th><th>5年後</th><th>10年後</th><th>15年後</th><th>特性</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="ticker">006208</span></td><td>富邦台50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股大型股，低費用</td></tr>
+        <tr><td><span class="ticker">0050</span></td><td>元大台灣50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股最具代表性</td></tr>
+        <tr><td><span class="ticker">00878</span></td><td>國泰永續高股息</td><td class="up">+9%</td><td class="up">$154萬</td><td class="up">$237萬</td><td class="up">$365萬</td><td>月配息，ESG篩選</td></tr>
+        <tr><td><span class="ticker">QQQ</span></td><td>Nasdaq 100</td><td class="up" style="color:var(--purple)">+17%</td><td class="up" style="color:var(--purple)">$219萬</td><td class="up" style="color:var(--purple)">$480萬</td><td class="up" style="color:var(--purple)">$1,054萬</td><td>美科技主導，高波動</td></tr>
+        <tr><td><span class="ticker">SPY</span></td><td>S&P 500</td><td class="up">+13%</td><td class="up">$185萬</td><td class="up">$340萬</td><td class="up">$628萬</td><td>美股廣基指數</td></tr>
+        <tr><td><span class="ticker">00662</span></td><td>富邦NASDAQ</td><td class="up">+17%</td><td class="up">$219萬</td><td class="up">$480萬</td><td class="up">$1,054萬</td><td>台幣計價QQQ替代</td></tr>
+        <tr><td><span class="ticker">QLD</span></td><td>2× Nasdaq</td><td class="up" style="color:var(--orange)">+28%*</td><td class="up" style="color:var(--orange)">$345萬</td><td class="up" style="color:var(--orange)">$1,190萬</td><td class="up" style="color:var(--orange)">$4,110萬</td><td>⚠️ 2倍槓桿，高風險</td></tr>
+        <tr>
+          <td colspan="7" style="font-size:11px;color:var(--text2);padding-top:8px">* QLD/TQQQ 因槓桿耗損效應，長期報酬低於2×/3×理論值。以上為牛市情境估算，熊市可能虧損 50-90%。</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Taiwan Stock Backtest -->
+    <div class="card">
+      <div class="card-title">🇹🇼 台股主力持倉回測</div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>代號</th><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr>
+        </thead>
+        <tbody id="twBacktestTable"></tbody>
+      </table>
+      </div>
+    </div>
+
+    <!-- US Stock Backtest -->
+    <div class="card">
+      <div class="card-title">🇺🇸 美股持倉回測（USD）</div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr>
+        </thead>
+        <tbody id="usBacktestTable"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: HISTORY ═══ -->
+<div id="page-history" class="page">
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">累計實現損益</div>
+      <div class="kpi-value up">$2,131,479</div>
+      <div class="kpi-sub neutral">2020 - 2025</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">歷年股息</div>
+      <div class="kpi-value up">$606,327</div>
+      <div class="kpi-sub neutral">含 2020-2025</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最佳年份</div>
+      <div class="kpi-value" style="color:var(--yellow)">2025</div>
+      <div class="kpi-sub up">$880,071 實現損益</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">出借收益</div>
+      <div class="kpi-value up">$7,615</div>
+      <div class="kpi-sub neutral">股票出借收入</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">📊 歷年實現損益</div>
+      <div class="chart-wrap"><canvas id="chartYearlyPnl"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">💰 歷年股息收入</div>
+      <div class="chart-wrap"><canvas id="chartDividend"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 歷年績效彙整</div>
+    <table>
+      <thead><tr><th>年份</th><th>實現損益</th><th>股息</th><th>出借</th><th>合計</th><th>YoY成長</th></tr></thead>
+      <tbody id="historyTable"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📅 月資產總覽</div>
+    <div class="chart-wrap-lg"><canvas id="chartMonthly"></canvas></div>
+  </div>
+</div>
+
+<!-- ═══ PAGE: AI TEAM ═══ -->
+<div id="page-team" class="page">
+  <div class="kpi-grid" style="margin-bottom:16px">
+    <div class="kpi-card"><div class="kpi-label">總資產</div><div class="kpi-value">$10.16M</div><div class="kpi-sub neutral">TWD 2026/03</div></div>
+    <div class="kpi-card"><div class="kpi-label">組合評級</div><div class="kpi-value" style="color:var(--yellow)">中高風險</div><div class="kpi-sub neutral">集中度偏高</div></div>
+    <div class="kpi-card"><div class="kpi-label">最緊急行動</div><div class="kpi-value down" style="font-size:16px">基富通出場</div><div class="kpi-sub down">-44.67% 持續虧損</div></div>
+    <div class="kpi-card"><div class="kpi-label">最大獲利保留</div><div class="kpi-value up" style="font-size:16px">台積電 +107%</div><div class="kpi-sub up">核心持倉不賣</div></div>
+  </div>
+
+  <div class="team-grid">
+
+    <!-- Alex -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(88,166,255,.15)">📈</div>
+        <div class="team-meta">
+          <div class="team-name">Alex — 技術分析師</div>
+          <div class="team-role">圖表趨勢 · 支撐壓力 · 進出場時機</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">⚠️ 需注意</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">📉 警示訊號</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>材料-KY(4763) 跌破長期支撐 -48%，停損點已在均價$40下方</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>Nasdaq 低於 SMA200，大盤偏弱，槓桿部位暫不啟動</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div>加密幣仍在下降通道，無反彈訊號，勿加碼</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">✅ 強勢標的</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>台積電(2330) +107%，月線強勢多頭排列，繼續持有</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>006208 富邦台50 +141%，可考慮分批了結 20-30%</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>00662 富邦NASDAQ +53%，趨勢強，持有</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">🎯 建議動作</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>006208 設停利 +120% 觸發點，分批出場</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>4763 材料-KY 設停損，跌破 $42 立即出場</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>等 Nasdaq 突破 23,195 再建 QLD/TQQQ</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sophia -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(63,185,80,.15)">💡</div>
+        <div class="team-meta">
+          <div class="team-name">Sophia — 基本面分析師</div>
+          <div class="team-role">財報分析 · 產業趨勢 · 估值</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(88,166,255,.15);color:var(--blue)">📊 長線看好</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">🔑 核心觀點</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>台積電 AI 晶片（N3/N2）需求爆發，長期競爭護城河深</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>MSFT Azure AI 每季成長 30%+，-17% 跌幅是基本面買點</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>NVDA Blackwell GPU 出貨加速，AI 算力需求 2026-27 強勁</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">⚠️ 基本面疑慮</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>海悅(2348) 建商基本面轉弱，房市降溫，-37% 難反彈</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>中租-KY(5871) 利差縮小，獲利能力受壓，待降息環境</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div>台塑(1301) 石化景氣低谷，但配息穩，可長線等</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">💎 關注機會</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>廣達(2382) AI 伺服器爆發，尚未持有，可分批布局</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>聯發科(2454) AI PC 晶片，估值回落後值得關注</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>SCHD 美股高息加碼，股息成長股抗跌性強</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Max -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(248,81,73,.15)">🛡️</div>
+        <div class="team-meta">
+          <div class="team-name">Max — 風險管理師</div>
+          <div class="team-role">下行保護 · 集中度控管 · 停損紀律</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(248,81,73,.15);color:var(--red)">🚨 高度警示</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">🚨 緊急風險</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div><strong>基富通 -44.67%</strong>：損失 $96,250，每月繼續虧損，立即贖回</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div><strong>材料-KY -48%</strong>：深套，繼續持有成本高，設硬停損</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div><strong>Binance -30%</strong>：加密黑天鵝風險不可控，建議分批退出</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">⚖️ 集中度風險</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div>台股 73% 遠超合理上限 60%，台海/景氣衝擊致命</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div>現金 5.74% 偏低，黑天鵝來時無子彈抄底</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--yellow)"></div><div>美股部位 12%，相對安全，但仍面臨關稅不確定性</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">🛡️ 風控行動</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>目標：現金提升至 10%，賣出 006208 20%</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>台股降至 60%，釋出資金補美股指數</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>所有虧損持倉設硬停損，不追平均成本</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Emma -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(188,140,255,.15)">💰</div>
+        <div class="team-meta">
+          <div class="team-name">Emma — 股息策略師</div>
+          <div class="team-role">被動收入 · 殖利率 · 股息再投入</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(63,185,80,.15);color:var(--green)">✅ 穩健收益</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">💎 股息核心持倉</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>00878 殖利率 5.58%，月配息 $46,703/年，持續定期定額</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>006208 股息 $77,446/年，+141% 帳面利潤雙賺</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>00713 殖利率 5.04%，低波動+高息，理想存股標的</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">📊 股息進度</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>2025 年股息收入 $279,621（歷史最高）</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>目標 2026 年突破 $320K（+14.4%）</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>SCHD 美股殖利率 3.5%，建議加碼至 $3,000+</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">🎯 股息優化</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>00900 殖利率 7%+，$224K 市值年貢獻 $15K+</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>00937B 債息穩定，降息後可望加價差收益</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--purple)"></div><div>股息全數再投入 00878/00713，複利加速滾大</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- David -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(227,179,65,.15)">🌏</div>
+        <div class="team-meta">
+          <div class="team-name">David — 宏觀策略師</div>
+          <div class="team-role">總體經濟 · 匯率 · 地緣政治</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">📡 審慎觀察</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">🌐 宏觀環境</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>美國關稅戰 2026 最大風險，科技股出口受限壓制</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--orange)"></div><div>Fed 降息步伐放緩，高利率環境對成長股不利</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--yellow)"></div><div>台幣匯率 31.96，美元強勢對美股換算有利</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">🇹🇼 台灣地緣</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>台積電戰略重要性↑，美日歐設廠，長期股價撐盤</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>AI 半導體需求 2026-27 仍強勁，台灣供應鏈受益</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--yellow)"></div><div>中國景氣未如預期，減少對陸依賴標的正確</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">💡 策略含意</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>加大美元資產比例，對沖台幣地緣政治風險</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>持有 QQQ/SPY 作為美元計價資產核心</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>關稅明朗前，美股個股維持觀望，不大幅加碼</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ryan -->
+    <div class="team-card">
+      <div class="team-card-header">
+        <div class="team-avatar-lg" style="background:rgba(63,185,80,.15)">⚡</div>
+        <div class="team-meta">
+          <div class="team-name">Ryan — 槓桿策略師</div>
+          <div class="team-role">QQQ / QLD / TQQQ · SMA200 動態配置</div>
+        </div>
+        <span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">⏸ HOLD 等待</span>
+      </div>
+      <div class="team-body">
+        <div class="team-section">
+          <div class="team-section-title">📊 當前訊號</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--yellow)"></div><div>Nasdaq 21,408 &lt; SMA200×1.04（23,195）→ 槓桿不啟動</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>Nasdaq 21,408 >> 退場線 1,561 → 無退場風險</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>SMA200 = 22,303，現價低於 SMA200 達 -4%</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">💼 持倉現狀</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>QQQ 13股（$7,488）距目標 $18,000 仍差 $10,512</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--text2)"></div><div>QLD 0股 — 條件未達，不建倉</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--text2)"></div><div>TQQQ 0股 — 條件未達，不建倉</div></div>
+        </div>
+        <div class="team-section">
+          <div class="team-section-title">🎯 行動計劃</div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>補足 QQQ 至 $18,000（約再買 18股）</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>監控：Nasdaq 突破 23,195 → 買 QLD $9,000</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>Nasdaq 突破 23,195 → 買 TQQQ $3,000</div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ─────── DATA ───────
+const MONTHLY = [
+  { m:'2025/04', v:7194423 },
+  { m:'2025/05', v:7646950 },
+  { m:'2025/06', v:8206076 },
+  { m:'2025/07', v:8315051 },
+  { m:'2025/08', v:8539765 },
+  { m:'2025/09', v:8789845 },
+  { m:'2025/10', v:8937488 },
+  { m:'2025/11', v:9152861 },
+  { m:'2025/12', v:9141396 },
+  { m:'2026/01', v:9580374 },
+  { m:'2026/02', v:9854532 },
+  { m:'2026/03', v:10156888 },
+];
+
+const YEARLY = [
+  { y:2020, pnl:9498,   div:100,    lend:0,    total:9598 },
+  { y:2021, pnl:28173,  div:433,    lend:0,    total:28606 },
+  { y:2022, pnl:96107,  div:37866,  lend:0,    total:133973 },
+  { y:2023, pnl:227678, div:75569,  lend:0,    total:303247 },
+  { y:2024, pnl:555631, div:212738, lend:7615, total:775984 },
+  { y:2025, pnl:600450, div:279621, lend:0,    total:880071 },
+];
+
+// Taiwan stock holdings (代號, 名稱, 持股, 均價, 現價, 未實現%, 市值)
+const TW_HOLD = [
+  { code:'4763', name:'材料-KY',      shares:800,   avg:90.86,  price:44.50,  pct:-48.27, mv:35600,   rec:'STOP',  reason:'跌幅-48%已深套，基本面轉弱，建議設停損或認賠出場' },
+  { code:'2348', name:'海悅',         shares:3000,  avg:129.87, price:78.50,  pct:-37.25, mv:235500,  rec:'EVAL',  reason:'建商受房市降溫影響，待房市信號改善再決定是否續持' },
+  { code:'1301', name:'台塑',         shares:2000,  avg:69.65,  price:46.95,  pct:-29.72, mv:93900,   rec:'HOLD',  reason:'石化景氣低谷，待油價回升，配息穩定可長期持有' },
+  { code:'6763', name:'綠界科技',     shares:1000,  avg:70.03,  price:47.80,  pct:-26.81, mv:47800,   rec:'HOLD',  reason:'電商支付成長，短期獲利壓縮，長線布局等待反彈' },
+  { code:'5871', name:'中租-KY',      shares:4111,  avg:150.75, price:110.00, pct:-19.84, mv:452210,  rec:'HOLD',  reason:'利差收窄影響獲利，降息後租賃業務可望回升' },
+  { code:'2646', name:'星宇',         shares:3000,  avg:25.29,  price:21.30,  pct:-15.78, mv:63900,   rec:'HOLD',  reason:'航空業持續復甦，長線看好，短期虧損屬正常波動' },
+  { code:'1537', name:'廣隆',         shares:1000,  avg:154.00, price:124.00, pct:-12.66, mv:124000,  rec:'HOLD',  reason:'傳產股，基本面穩定，等待景氣回升' },
+  { code:'1580', name:'新麥',         shares:1000,  avg:149.50, price:129.00, pct:-7.58,  mv:129000,  rec:'HOLD',  reason:'食品機械，內需穩定，-7.5%在合理波動範圍' },
+  { code:'1513', name:'中興電',       shares:950,   avg:155.74, price:151.00, pct:-3.04,  mv:143450,  rec:'HOLD',  reason:'電力設備需求增，-3%屬短期波動，持有' },
+  { code:'00937B',name:'群益ESG投等債',shares:25000, avg:15.90,  price:14.74,  pct:2.23,   mv:368500,  rec:'HOLD',  reason:'債券ETF，提供穩定配息，利率高峰後有資本利得空間' },
+  { code:'00725B',name:'國泰投等公司債',shares:8000, avg:38.05,  price:35.04,  pct:2.80,   mv:280320,  rec:'HOLD',  reason:'投資等級債，降息受惠，繼續持有領息' },
+  { code:'2357', name:'華碩',         shares:600,   avg:543.00, price:570.00, pct:4.97,   mv:342000,  rec:'HOLD',  reason:'PC+AI周邊需求穩定，估值合理' },
+  { code:'2881', name:'富邦金',       shares:2000,  avg:86.65,  price:87.30,  pct:5.65,   mv:174600,  rec:'HOLD',  reason:'金控配息穩定，殖利率約4-5%，長期存股標的' },
+  { code:'2603', name:'長榮',         shares:400,   avg:190.13, price:201.00, pct:5.72,   mv:80400,   rec:'HOLD',  reason:'航運景氣維持，但波動大，配息收益可期' },
+  { code:'00991A',name:'復華未來50',  shares:3000,  avg:11.43,  price:12.49,  pct:9.27,   mv:37470,   rec:'HOLD',  reason:'主動式ETF，績效優於預期，繼續持有' },
+  { code:'00751B',name:'元大AAA公司債',shares:9000, avg:33.61,  price:31.47,  pct:12.02,  mv:283230,  rec:'HOLD',  reason:'高評級債，降息環境利多，持續持有' },
+  { code:'00713', name:'元大高息低波',shares:5403,  avg:50.88,  price:51.45,  pct:14.07,  mv:277984,  rec:'ADD',   reason:'高股息+低波動雙優，定期定額持續加碼' },
+  { code:'00720B',name:'元大投等公司債',shares:8332,avg:34.26,  price:33.02,  pct:14.94,  mv:275123,  rec:'HOLD',  reason:'債券ETF，績效穩健，繼續持有' },
+  { code:'00924', name:'復華S&P500',  shares:5766,  avg:23.44,  price:26.96,  pct:14.99,  mv:155451,  rec:'ADD',   reason:'台幣計價S&P500，表現良好，可定期定額' },
+  { code:'00916', name:'國泰全球品牌',shares:11705, avg:21.29,  price:24.77,  pct:18.03,  mv:289933,  rec:'ADD',   reason:'全球品牌指數，分散配置好標的' },
+  { code:'00900', name:'富邦特選高息',shares:16000, avg:12.52,  price:14.02,  pct:19.62,  mv:224320,  rec:'HOLD',  reason:'高股息ETF，穩定配息，持有' },
+  { code:'0050',  name:'元大台灣50', shares:2217,  avg:62.00,  price:74.65,  pct:21.90,  mv:165499,  rec:'ADD',   reason:'台股旗艦ETF，可持續加碼，長期核心部位' },
+  { code:'00981A',name:'統一台股增長',shares:2441,  avg:17.03,  price:20.79,  pct:22.05,  mv:50748,   rec:'HOLD',  reason:'主動型ETF，績效超越大盤，持有' },
+  { code:'0052',  name:'富邦科技',   shares:4000,  avg:36.00,  price:44.25,  pct:22.91,  mv:177000,  rec:'HOLD',  reason:'台灣科技股ETF，受益AI/半導體趨勢' },
+  { code:'00878', name:'國泰永續高息',shares:14966, avg:19.77,  price:22.29,  pct:28.53,  mv:333592,  rec:'ADD',   reason:'月配息+殖利率5.58%，長期存股首選，繼續定期定額' },
+  { code:'2890',  name:'永豐金',     shares:4000,  avg:24.60,  price:31.60,  pct:29.38,  mv:126400,  rec:'HOLD',  reason:'金控股穩健，殖利率約4.5%' },
+  { code:'00858', name:'永豐美國500',shares:3000,  avg:27.60,  price:31.32,  pct:41.03,  mv:93960,   rec:'HOLD',  reason:'台幣計價S&P500，持有' },
+  { code:'00662', name:'富邦NASDAQ', shares:6304,  avg:63.41,  price:97.10,  pct:53.14,  mv:612118,  rec:'HOLD',  reason:'台幣計價QQQ，+53%佳績，可考慮部分獲利了結再攤平' },
+  { code:'00646', name:'元大S&P500', shares:1000,  avg:38.17,  price:65.30,  pct:71.08,  mv:65300,   rec:'HOLD',  reason:'+71%大幅獲利，可考慮部分獲利了結' },
+  { code:'2330',  name:'台積電',     shares:240,   avg:880.52, price:1810.00,pct:107.58, mv:434400,  rec:'HOLD',  reason:'+107%核心持倉，AI晶片需求撐腰，絕對不賣' },
+  { code:'006208',name:'富邦台50',   shares:6000,  avg:77.37,  price:173.50, pct:140.92, mv:1041000, rec:'TRIM',  reason:'+141%驚人獲利！可考慮分批了結20-30%，落袋為安' },
+];
+
+// Taiwan watchlist (not currently held)
+const TW_WATCH = [
+  { code:'2454',  name:'聯發科',   price:1000, rec:'BUY',   reason:'手機+AI晶片雙引擎，進入AI PC時代受益',        risk:'估值偏高，關稅影響中國出貨' },
+  { code:'2382',  name:'廣達',     price:310,  rec:'BUY',   reason:'AI伺服器出貨高速成長，輝達DGXH100合作',       risk:'毛利率壓力，客戶集中' },
+  { code:'2317',  name:'鴻海',     price:199,  rec:'WATCH', reason:'已出場獲利，台幣計價AI佈局，等待修正再布局',    risk:'蘋果依賴度高' },
+  { code:'2308',  name:'台達電',   price:350,  rec:'BUY',   reason:'AI資料中心電源供應需求爆發，長線看好',          risk:'估值偏高' },
+  { code:'00919', name:'群益精選高息',price:21,rec:'BUY',   reason:'高股息ETF，殖利率5%+，尚未持有可補倉',        risk:'成立時間較短，歷史資料少' },
+  { code:'00929', name:'復華台灣科技優息',price:22,rec:'BUY',reason:'科技+高息，填補AI主題部位',                  risk:'集中科技，波動較大' },
+  { code:'6669',  name:'緯穎',     price:3420, rec:'BUY',   reason:'AI伺服器ODM龍頭，已賣出但可考慮低點買回',      risk:'客戶集中(微軟)' },
+  { code:'2385',  name:'群光',     price:121,  rec:'WATCH', reason:'光學元件，已獲利出場，等待再次布局時機',        risk:'產業週期影響大' },
+];
+
+// US stocks - Main account
+const US_MAIN = [
+  { sym:'BOXX', shares:103,    avg:115.87, price:116.09, cost:11934.61, mv:11957.27, pnl:22.66,    pct:0.19,   rec:'HOLD',  reason:'現金替代品，短期國庫券策略，穩定持有' },
+  { sym:'GOOGL',shares:1,      avg:310.00, price:282.06, cost:310.00,   mv:282.06,   pnl:-27.94,   pct:-9.01,  rec:'HOLD',  reason:'AI搜尋+Gemini，長期競爭力強，短期承壓可加碼' },
+  { sym:'MAGS', shares:17,     avg:63.79,  price:57.33,  cost:1084.43,  mv:974.61,   pnl:-109.82,  pct:-10.13, rec:'HOLD',  reason:'七巨頭ETF，關稅影響短暫，長線AI受益' },
+  { sym:'MSFT', shares:10,     avg:443.59, price:367.17, cost:4435.90,  mv:3671.70,  pnl:-764.20,  pct:-17.23, rec:'BUY',   reason:'Azure AI成長強勁，-17%是絕佳買點，考慮加碼' },
+  { sym:'MU',   shares:7,      avg:379.36, price:356.67, cost:2655.52,  mv:2496.69,  pnl:-158.83,  pct:-5.98,  rec:'HOLD',  reason:'HBM記憶體需求看好，短期庫存修正，持有' },
+  { sym:'NVDA', shares:6,      avg:186.47, price:172.53, cost:1118.82,  mv:1035.18,  pnl:-83.64,   pct:-7.48,  rec:'BUY',   reason:'AI GPU龍頭，-7.5%是買點，逢低分批加碼' },
+  { sym:'QQQ',  shares:13,     avg:592.00, price:576.03, cost:7696.00,  mv:7488.39,  pnl:-207.61,  pct:-2.70,  rec:'ADD',   reason:'核心指數部位，距策略目標$18K還差，優先補足' },
+  { sym:'SCHD', shares:1,      avg:31.10,  price:30.69,  cost:31.10,    mv:30.69,    pnl:-0.41,    pct:-1.32,  rec:'ADD',   reason:'美股高股息ETF，殖利率3.5%，考慮加碼至$2K+' },
+  { sym:'SMH',  shares:11,     avg:394.99, price:383.12, cost:4344.89,  mv:4214.32,  pnl:-130.57,  pct:-3.01,  rec:'HOLD',  reason:'半導體ETF，AI需求旺，短期波動持有' },
+  { sym:'SPY',  shares:3,      avg:658.80, price:647.82, cost:1976.40,  mv:1943.46,  pnl:-32.94,   pct:-1.67,  rec:'HOLD',  reason:'S&P500核心，長期持有不動' },
+  { sym:'TSLA', shares:16,     avg:420.37, price:374.64, cost:6725.92,  mv:5994.24,  pnl:-731.68,  pct:-10.88, rec:'HOLD',  reason:'EV+Robotaxi，短期Musk政治噪音，長線看好' },
+];
+
+// US stocks - Roy account
+const US_ROY = [
+  { sym:'MAGS', shares:48,     avg:64.92,  price:57.03,  cost:3115.97,  mv:2737.44,  pnl:-378.53,  pct:-12.15, rec:'HOLD',  reason:'七巨頭ETF，關稅影響短暫，長線AI受益' },
+  { sym:'NVDA', shares:10,     avg:179.45, price:171.24, cost:1794.48,  mv:1712.40,  pnl:-82.08,   pct:-4.57,  rec:'BUY',   reason:'AI GPU龍頭，逢低加碼機會' },
+  { sym:'TSLA', shares:8,      avg:297.90, price:372.11, cost:2383.16,  mv:2976.88,  pnl:593.72,   pct:24.91,  rec:'HOLD',  reason:'+24.9%獲利，持有，設trailing stop保護利潤' },
+  { sym:'NVDA', shares:3.5,    avg:185.60, price:171.24, cost:649.59,   mv:599.34,   pnl:-50.25,   pct:-7.74,  rec:'HOLD',  reason:'NVDA持倉補倉，合併看待' },
+  { sym:'SPY',  shares:6.474,  avg:618.95, price:655.09, cost:4007.08,  mv:4241.05,  pnl:233.97,   pct:5.84,   rec:'HOLD',  reason:'+5.84%穩健，S&P500長期持有' },
+];
+
+// Backtest data for Taiwan stocks
+const TW_BT = [
+  { code:'006208', name:'富邦台50',   mv:1041000, cagr:11 },
+  { code:'00878',  name:'國泰永續高息',mv:333592, cagr:9  },
+  { code:'00662',  name:'富邦NASDAQ',  mv:612118, cagr:17 },
+  { code:'2330',   name:'台積電',      mv:434400, cagr:15 },
+  { code:'00646',  name:'元大S&P500',  mv:65300,  cagr:13 },
+  { code:'0050',   name:'元大台灣50',  mv:165499, cagr:11 },
+  { code:'00713',  name:'元大高息低波',mv:277984, cagr:9  },
+  { code:'0052',   name:'富邦科技',    mv:177000, cagr:12 },
+];
+
+// ─────── HELPERS ───────
+const fmt = n => n >= 0 ? `+$${n.toLocaleString()}` : `-$${Math.abs(n).toLocaleString()}`;
+const fmtN = n => `$${Math.abs(n).toLocaleString()}`;
+const pctCls = p => p >= 0 ? 'up' : 'down';
+const recTag = {
+  'HOLD':  '<span class="rec-hold">◆ 持有</span>',
+  'ADD':   '<span class="rec-buy">▲ 加碼</span>',
+  'BUY':   '<span class="rec-buy">▲ 買進</span>',
+  'TRIM':  '<span class="rec-sell">▼ 部分獲利</span>',
+  'SELL':  '<span class="rec-sell">▼ 賣出</span>',
+  'STOP':  '<span class="rec-sell">⛔ 停損評估</span>',
+  'EVAL':  '<span class="rec-hold">◎ 觀察評估</span>',
+  'WATCH': '<span class="rec-watch">◉ 觀察</span>',
+};
+
+// Advisor-quality recommendation logic — considers stock type, narrative, and market context
+const STOCK_PROFILES = {
+  // 台股 ETF 寬基指數 — 長期核心，不輕易賣
+  '006208':{ type:'etf-tw',  thesis:'台股大型股 ETF，長期核心持倉' },
+  '0050':  { type:'etf-tw',  thesis:'元大台灣50，台股旗艦 ETF' },
+  '00662': { type:'etf-us',  thesis:'台幣計價 Nasdaq 100 ETF，美股代理' },
+  '00858': { type:'etf-us',  thesis:'台幣計價 S&P 500 ETF' },
+  '00646': { type:'etf-us',  thesis:'元大 S&P 500，美股長期持倉' },
+  '0052':  { type:'etf-tw',  thesis:'富邦科技，台灣 AI/半導體集中' },
+  // 高息 ETF — 核心存股，逢低加碼
+  '00878': { type:'div-etf', thesis:'月配息高息 ETF，殖利率 5.58%，長期現金流首選' },
+  '00713': { type:'div-etf', thesis:'高息低波動 ETF，殖利率 5.04%，穩定配息' },
+  '00900': { type:'div-etf', thesis:'富邦特選高息，殖利率 7%+，月配息' },
+  '00916': { type:'div-etf', thesis:'全球品牌 ETF，分散配置' },
+  '00924': { type:'etf-us',  thesis:'復華 S&P 500，台幣計價' },
+  // 主動型/成長型 ETF
+  '00991A':{ type:'active',  thesis:'復華未來50 主動型 ETF，科技成長主軸' },
+  '00981A':{ type:'active',  thesis:'統一台股增長，主動型超越大盤' },
+  // 債券 ETF — 持有領息，降息環境有資本利得
+  '00937B':{ type:'bond',    thesis:'群益 ESG 投等債，利率高峰後有資本利得空間' },
+  '00725B':{ type:'bond',    thesis:'國泰投等公司債，降息受惠標的' },
+  '00751B':{ type:'bond',    thesis:'元大 AAA 公司債，最高信評，降息利多' },
+  '00720B':{ type:'bond',    thesis:'元大投等公司債，穩健債券部位' },
+  // 台股個股
+  '2330':  { type:'growth',  thesis:'台積電，AI 晶片需求驅動，地緣戰略地位，絕對核心持倉' },
+  '2454':  { type:'growth',  thesis:'聯發科，AI PC 晶片雙引擎，手機復甦受益' },
+  '2382':  { type:'growth',  thesis:'廣達，AI 伺服器出貨爆發，NVIDIA 密切合作' },
+  '2357':  { type:'value',   thesis:'華碩，PC+AI 周邊穩健，估值合理' },
+  '2881':  { type:'div',     thesis:'富邦金，金控配息穩，殖利率 4-5%，存股標的' },
+  '2890':  { type:'div',     thesis:'永豐金，殖利率 4.5%，穩健金融股' },
+  '2603':  { type:'cyclical',thesis:'長榮，航運景氣波動大，配息可期' },
+  '1301':  { type:'cyclical',thesis:'台塑，石化景氣低谷，待油價回升，配息穩' },
+  '5871':  { type:'cyclical',thesis:'中租-KY，利差收窄，待降息環境反彈' },
+  '2646':  { type:'speculative',thesis:'星宇，航空業復甦，長線看好，短期虧損' },
+  '4763':  { type:'speculative',thesis:'材料-KY，深度套牢，基本面轉弱' },
+  '2348':  { type:'speculative',thesis:'海悅，建商基本面轉弱，房市降溫' },
+  '1537':  { type:'value',   thesis:'廣隆，傳產股，等待景氣回升' },
+  '1580':  { type:'value',   thesis:'新麥，食品機械，內需穩定' },
+  '1513':  { type:'growth',  thesis:'中興電，電力設備需求增，台電建設受益' },
+  '2308':  { type:'growth',  thesis:'台達電，AI 資料中心電源供應需求爆發' },
+  // 美股
+  'QQQ':   { type:'etf-us',  thesis:'Nasdaq 100 核心 ETF，策略目標 $18,000，優先補足' },
+  'SPY':   { type:'etf-us',  thesis:'S&P 500 長期核心，持有不動' },
+  'NVDA':  { type:'growth',  thesis:'AI GPU 龍頭，Blackwell 出貨加速，2026-27 需求強' },
+  'MSFT':  { type:'growth',  thesis:'Azure AI 每季成長 30%+，估值回落是買點' },
+  'TSLA':  { type:'speculative',thesis:'Robotaxi+EV，短期政治噪音，長線高度不確定' },
+  'GOOGL': { type:'growth',  thesis:'AI 搜尋+Gemini，廣告護城河深，估值合理' },
+  'MAGS':  { type:'etf-us',  thesis:'七巨頭 ETF，分散科技龍頭風險' },
+  'MU':    { type:'growth',  thesis:'HBM 記憶體需求看好，AI 伺服器受益' },
+  'SMH':   { type:'etf-us',  thesis:'半導體 ETF，AI 需求旺，週期性波動持有' },
+  'SCHD':  { type:'div-etf', thesis:'美股高息成長 ETF，殖利率 3.5%+，抗跌股息成長' },
+  'BOXX':  { type:'bond',    thesis:'現金替代品，短期國庫券策略，穩定持有' },
+};
+
+function advisorRec(s, isUS) {
+  const code = isUS ? s.sym : s.code;
+  const profile = STOCK_PROFILES[code] || {};
+  const type = profile.type || 'unknown';
+  const thesis = profile.thesis || '';
+  const pct = s.pct || 0;
+  const p = pct.toFixed(1);
+
+  // 債券 ETF — 降息環境持有，輕易不動
+  if (type === 'bond') {
+    if (pct > 5)   return { rec: 'HOLD', reason: `${thesis}，降息環境利多，繼續持有領息待價差` };
+    if (pct > -5)  return { rec: 'HOLD', reason: `${thesis}，短期波動正常，持有等降息資本利得` };
+    if (pct > -15) return { rec: 'ADD',  reason: `${thesis}，跌幅 ${p}% 反而是加碼機會，降息後反彈` };
+    return             { rec: 'EVAL', reason: `${thesis}，跌幅 ${p}% 超預期，重新評估利率走向` };
+  }
+
+  // 高息 ETF — 核心存股，逢低加碼
+  if (type === 'div-etf') {
+    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利但月配息持續流入，核心存股不動` };
+    if (pct > -5)  return { rec: 'ADD',  reason: `${thesis}，持續定期定額，股息再投入複利加速` };
+    return             { rec: 'ADD',  reason: `${thesis}，下跌提升殖利率，逢低加碼更划算` };
+  }
+
+  // 寬基指數 ETF — 長期持有，大跌才加碼
+  if (type === 'etf-tw' || type === 'etf-us') {
+    if (pct > 100) return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅獲利，可分批了結 20-30% 鎖利，保留核心` };
+    if (pct > 50)  return { rec: 'TRIM', reason: `${thesis}，${p}% 顯著獲利，考慮了結 15-20% 提高現金水位` };
+    if (pct > 0)   return { rec: 'HOLD', reason: `${thesis}，表現良好，長期持有勿追高` };
+    return             { rec: 'ADD',  reason: `${thesis}，指數逢跌是買點，加碼攤低成本` };
+  }
+
+  // 成長股 — 基本面優，跌幅是機會
+  if (type === 'growth') {
+    if (pct > 80)  return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅領先，可了結 15-25% 保護利潤，保留核心` };
+    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 良好，基本面持續支撐，繼續持有` };
+    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，基本面無變，持有` };
+    if (pct > -30) return { rec: 'ADD',  reason: `${thesis}，${p}% 回調幅度大，基本面強勁，分批加碼機會` };
+    return             { rec: 'EVAL', reason: `${thesis}，${p}% 深度回調，確認基本面是否惡化，設停損` };
+  }
+
+  // 價值股/配息股 — 看殖利率，不追跌
+  if (type === 'value' || type === 'div') {
+    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利加股息，持有勿輕易賣` };
+    if (pct > -20) return { rec: 'HOLD', reason: `${thesis}，${p}% 波動正常，殖利率撐住，長期存股` };
+    return             { rec: 'EVAL', reason: `${thesis}，${p}% 回跌，重新評估殖利率與基本面` };
+  }
+
+  // 景氣循環股 — 等週期回升
+  if (type === 'cyclical') {
+    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，景氣回升已反映，持有等下一波` };
+    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，景氣低谷期，持有等待週期反轉` };
+    if (pct > -35) return { rec: 'EVAL', reason: `${thesis}，${p}% 跌幅，評估景氣反轉時間點，設停損` };
+    return             { rec: 'STOP', reason: `${thesis}，${p}% 深度虧損，景氣未見底，建議停損出場` };
+  }
+
+  // 投機/高風險 — 嚴格停損
+  if (type === 'speculative') {
+    if (pct > 30)  return { rec: 'TRIM', reason: `${thesis}，${p}% 獲利，投機部位應分批了結，鎖定利潤` };
+    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 小幅回調，暫持有但設緊止損點` };
+    if (pct > -30) return { rec: 'STOP', reason: `${thesis}，${p}% 跌幅超預期，投機部位應停損出場` };
+    return             { rec: 'SELL', reason: `${thesis}，${p}% 嚴重虧損，投機部位無縫手，認賠出場` };
+  }
+
+  // 未知股票 fallback — 保守策略
+  if (pct > 50)  return { rec: 'TRIM', reason: `+${p}% 大幅獲利，分批了結 20-30% 鎖利` };
+  if (pct > -15) return { rec: 'HOLD', reason: `${p}% 在合理波動範圍，繼續持有` };
+  if (pct > -30) return { rec: 'EVAL', reason: `${p}% 明顯虧損，設定停損點避免擴大` };
+  return             { rec: 'STOP', reason: `${p}% 深度虧損，嚴格停損評估` };
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (id === 'overview' && !window._overviewInit) { initOverviewCharts(); window._overviewInit = true; }
+  if (id === 'history' && !window._historyInit) { initHistoryCharts(); window._historyInit = true; }
+  if (id === 'qqq' && !window._qqqInit) { initQQQChart(); window._qqqInit = true; }
+  if (id === 'backtest' && !window._btInit) { initBacktestChart(); window._btInit = true; }
+}
+
+// ─────── OVERVIEW ───────
+function initOverviewCharts() {
+  // Monthly table
+  const tbody = document.getElementById('monthlyTable');
+  MONTHLY.forEach((r, i) => {
+    const prev = i > 0 ? MONTHLY[i-1].v : null;
+    const diff = prev ? r.v - prev : null;
+    const pct = prev ? ((r.v-prev)/prev*100).toFixed(1) : null;
+    tbody.innerHTML += `<tr>
+      <td>${r.m}</td>
+      <td>$${r.v.toLocaleString()}</td>
+      <td class="${diff >= 0 ? 'up' : 'down'}">${diff ? fmt(diff) : '—'}</td>
+      <td class="${diff >= 0 ? 'up' : 'down'}">${pct ? (diff>=0?'+':'')+pct+'%' : '—'}</td>
+    </tr>`;
+  });
+
+  // Allocation Pie
+  new Chart(document.getElementById('chartAlloc'), {
+    type: 'doughnut',
+    data: {
+      labels: ['台股', 'Firstrade', '銀行', 'Binance', '複委託', '定期定額', '基富通'],
+      datasets: [{ data: [73.45, 12.31, 5.74, 3.35, 2.46, 1.54, 1.15],
+        backgroundColor: ['#58a6ff','#bc8cff','#8b949e','#d29922','#3fb950','#3b82f6','#f85149'],
+        borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
+  });
+
+  // Growth Line
+  new Chart(document.getElementById('chartGrowth'), {
+    type: 'line',
+    data: {
+      labels: MONTHLY.map(r => r.m.slice(5)),
+      datasets: [{ label: '總資產', data: MONTHLY.map(r => r.v),
+        borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { color: '#8b949e', callback: v => '$'+v.toLocaleString() }, grid: { color: '#21262d' } }, x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } },
+      plugins: { legend: { labels: { color: '#8b949e' } } }
+    }
+  });
+}
+
+// ─────── TAIWAN STOCKS ───────
+function renderTwStocks() {
+  const tbody = document.getElementById('twHoldTable');
+  TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
+    tbody.innerHTML += `<tr>
+      <td><span class="ticker">${s.code}</span></td>
+      <td>${s.name}</td>
+      <td>${s.shares.toLocaleString()}</td>
+      <td style="font-family:monospace">$${s.avg.toFixed(0)}</td>
+      <td style="font-family:monospace">$${s.price.toFixed(0)}</td>
+      <td class="${pctCls(s.pct)}">${s.pct>0?'+':''}${s.pct.toFixed(2)}%</td>
+      <td>$${s.mv.toLocaleString()}</td>
+      <td>${recTag[s.rec]}</td>
+      <td style="color:var(--text2);max-width:200px;font-size:11px">${s.reason}</td>
+    </tr>`;
+  });
+
+  const wbody = document.getElementById('twWatchTable');
+  TW_WATCH.forEach(s => {
+    wbody.innerHTML += `<tr>
+      <td><span class="ticker">${s.code}</span></td>
+      <td>${s.name}</td>
+      <td style="font-family:monospace">~$${s.price}</td>
+      <td>${recTag[s.rec]}</td>
+      <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
+      <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
+    </tr>`;
+  });
+
+  // Top winners
+  const winners = [...TW_HOLD].sort((a,b) => b.pct - a.pct).slice(0,5);
+  const losers  = [...TW_HOLD].sort((a,b) => a.pct - b.pct).slice(0,5);
+
+  document.getElementById('twTopWinners').innerHTML = winners.map(s =>
+    `<div class="summary-row"><span>${s.name}</span><span class="up">+${s.pct.toFixed(1)}% · $${s.mv.toLocaleString()}</span></div>`
+  ).join('');
+  document.getElementById('twTopLosers').innerHTML = losers.map(s =>
+    `<div class="summary-row"><span>${s.name}</span><span class="down">${s.pct.toFixed(1)}% · ${recTag[s.rec]}</span></div>`
+  ).join('');
+}
+
+// ─────── US STOCKS ───────
+function renderUsStocks() {
+  const render = (data, tbodyId) => {
+    const tbody = document.getElementById(tbodyId);
+    data.forEach(s => {
+      // Apply advisorRec if rec is missing/HOLD with no reason
+      if (!s.reason || s.rec === 'HOLD') {
+        const a = advisorRec(s, true);
+        if (!s.reason) s.reason = a.reason;
+        if (s.rec === 'HOLD' && a.rec !== 'HOLD') s.rec = a.rec;
+      }
+      tbody.innerHTML += `<tr>
+        <td><span class="ticker">${s.sym}</span></td>
+        <td>${s.shares}</td>
+        <td style="font-family:monospace">$${s.avg.toFixed(2)}</td>
+        <td style="font-family:monospace">$${s.price.toFixed(2)}</td>
+        <td style="font-family:monospace">$${s.cost.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+        <td style="font-family:monospace">$${s.mv.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+        <td class="${pctCls(s.pnl)}" style="font-family:monospace">${s.pnl>=0?'+':''} $${s.pnl.toFixed(0)}</td>
+        <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
+        <td>${recTag[s.rec] || s.rec}</td>
+        <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
+      </tr>`;
+    });
+  };
+  render(US_MAIN, 'usMainTable');
+  render(US_ROY, 'usRoyTable');
+}
+
+// ─────── QQQ CHART ───────
+function initQQQChart() {
+  updateNasdaqDisplay(21408); // 初始顯示，刷新股價後即時更新
+  new Chart(document.getElementById('chartQQQAlloc'), {
+    type: 'doughnut',
+    data: {
+      labels: ['QQQ 60%', 'QLD 30%', 'TQQQ 10%'],
+      datasets: [{ data: [60, 30, 10],
+        backgroundColor: ['#58a6ff','#bc8cff','#f85149'], borderWidth: 0 }]
+    },
+    options: { plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
+  });
+}
+
+// ─────── BACKTEST ───────
+function initBacktestChart() {
+  // Projection chart
+  const years = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+  const base = 10156888;
+  const compound = (cagr, yr) => Math.round(base * Math.pow(1 + cagr/100, yr));
+
+  new Chart(document.getElementById('chartProjection'), {
+    type: 'line',
+    data: {
+      labels: years.map(y => y === 0 ? '現在' : `+${y}年`),
+      datasets: [
+        { label: '保守 8%',   data: years.map(y => compound(8,y)),  borderColor:'#8b949e', backgroundColor:'transparent', tension:0.4 },
+        { label: '穩健 11%',  data: years.map(y => compound(11,y)), borderColor:'#3fb950', backgroundColor:'rgba(63,185,80,.1)', fill:true, tension:0.4 },
+        { label: '積極 15%',  data: years.map(y => compound(15,y)), borderColor:'#bc8cff', backgroundColor:'transparent', tension:0.4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { ticks: { color:'#8b949e', callback: v => '$'+Math.round(v/1000000)+'M' }, grid:{ color:'#21262d' } },
+        x: { ticks: { color:'#8b949e' }, grid:{ color:'#21262d' } }
+      },
+      plugins: { legend: { labels: { color:'#8b949e' } } }
+    }
+  });
+
+  // Taiwan backtest table
+  const tbody = document.getElementById('twBacktestTable');
+  TW_BT.forEach(s => {
+    const c = s.cagr/100;
+    const yr5  = Math.round(s.mv * Math.pow(1+c,5));
+    const yr10 = Math.round(s.mv * Math.pow(1+c,10));
+    const yr15 = Math.round(s.mv * Math.pow(1+c,15));
+    tbody.innerHTML += `<tr>
+      <td><span class="ticker">${s.code}</span></td>
+      <td>${s.name}</td>
+      <td>$${s.mv.toLocaleString()}</td>
+      <td class="up">+${s.cagr}%</td>
+      <td class="up">$${yr5.toLocaleString()}</td>
+      <td class="up">$${yr10.toLocaleString()}</td>
+      <td class="up">$${yr15.toLocaleString()}</td>
+    </tr>`;
+  });
+
+  // US backtest table (USD, then convert note)
+  const US_BT = [
+    { sym:'QQQ',  name:'Nasdaq 100 ETF',   mv:7488,   cagr:17 },
+    { sym:'SPY',  name:'S&P 500 ETF',       mv:1943,   cagr:13 },
+    { sym:'NVDA', name:'NVIDIA',            mv:2631,   cagr:20 },
+    { sym:'MSFT', name:'Microsoft',         mv:3672,   cagr:15 },
+    { sym:'TSLA', name:'Tesla',             mv:5994,   cagr:12 },
+    { sym:'MAGS', name:'Magnificent 7 ETF', mv:3712,   cagr:18 },
+    { sym:'SMH',  name:'半導體 ETF',         mv:4214,   cagr:16 },
+    { sym:'BOXX', name:'短債替代',           mv:11957,  cagr:5  },
+    { sym:'SCHD', name:'美股高息 ETF',       mv:31,     cagr:11 },
+  ];
+  const ubody = document.getElementById('usBacktestTable');
+  US_BT.forEach(s => {
+    const c = s.cagr/100;
+    const yr5  = (s.mv * Math.pow(1+c,5)).toFixed(0);
+    const yr10 = (s.mv * Math.pow(1+c,10)).toFixed(0);
+    const yr15 = (s.mv * Math.pow(1+c,15)).toFixed(0);
+    const color = s.cagr >= 17 ? 'var(--purple)' : s.cagr >= 13 ? 'var(--green)' : 'var(--text2)';
+    ubody.innerHTML += `<tr>
+      <td><span class="ticker">${s.sym}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
+      <td style="font-family:monospace">$${Number(s.mv).toLocaleString()}</td>
+      <td style="color:${color};font-weight:600">+${s.cagr}%</td>
+      <td class="up" style="font-family:monospace">$${Number(yr5).toLocaleString()}</td>
+      <td class="up" style="font-family:monospace">$${Number(yr10).toLocaleString()}</td>
+      <td class="up" style="font-family:monospace">$${Number(yr15).toLocaleString()}</td>
+    </tr>`;
+  });
+  ubody.innerHTML += `<tr><td colspan="6" style="font-size:11px;color:var(--text2);padding-top:6px">單位 USD，以現市值為本金複利計算。CAGR 為歷史估算，不代表未來績效。</td></tr>`;
+}
+
+// ─────── HISTORY ───────
+function initHistoryCharts() {
+  // Yearly PnL bar
+  new Chart(document.getElementById('chartYearlyPnl'), {
+    type: 'bar',
+    data: {
+      labels: YEARLY.map(r => r.y),
+      datasets: [{ label: '實現損益', data: YEARLY.map(r => r.pnl), backgroundColor: '#58a6ff', borderRadius: 6 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
+      plugins: { legend:{ labels:{ color:'#8b949e' } } }
+    }
+  });
+
+  // Dividend bar
+  new Chart(document.getElementById('chartDividend'), {
+    type: 'bar',
+    data: {
+      labels: YEARLY.map(r => r.y),
+      datasets: [{ label: '股息', data: YEARLY.map(r => r.div), backgroundColor: '#3fb950', borderRadius: 6 }]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
+      plugins: { legend:{ labels:{ color:'#8b949e' } } }
+    }
+  });
+
+  // History table
+  const tbody = document.getElementById('historyTable');
+  YEARLY.forEach((r, i) => {
+    const prev = i > 0 ? YEARLY[i-1].total : null;
+    const growth = prev ? ((r.total-prev)/prev*100).toFixed(0)+'%' : '—';
+    tbody.innerHTML += `<tr>
+      <td>${r.y}</td>
+      <td class="up">$${r.pnl.toLocaleString()}</td>
+      <td class="up">$${r.div.toLocaleString()}</td>
+      <td class="${r.lend?'up':'neutral'}">${r.lend?'$'+r.lend:'—'}</td>
+      <td class="up" style="font-weight:600">$${r.total.toLocaleString()}</td>
+      <td class="up">${growth}</td>
+    </tr>`;
+  });
+
+  // Monthly chart
+  new Chart(document.getElementById('chartMonthly'), {
+    type: 'bar',
+    data: {
+      labels: MONTHLY.map(r => r.m.slice(5)),
+      datasets: [
+        { label: '總資產', data: MONTHLY.map(r => r.v), backgroundColor: '#58a6ff', borderRadius: 4 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+Math.round(v/10000)+'萬' }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
+      plugins: { legend:{ labels:{ color:'#8b949e' } } }
+    }
+  });
+}
+
+// ─────── INIT ───────
+initOverviewCharts();
+window._overviewInit = true;
+renderTwStocks();
+renderUsStocks();
+
+// 頁面載入時靜默抓 Nasdaq 現價（不顯示 loading 訊息）
+(async () => {
+  try {
+    const nasdaq = await fetchOnePrice('^IXIC');
+    if (nasdaq) updateNasdaqDisplay(nasdaq);
+  } catch(e) {}
+})();
+
+// ─────── GOOGLE SHEETS CONFIG ───────
+const SHEET_ID = '1hTju16nqdRegue7QHNE43amiUodgm6hv1amOX8uBxBk';
+const SHEET_GIDS = {
+  tw:      '593571516',   // 台股持股
+  us:      '1730614274',  // 美股持股
+  history: '361233489',   // 歷年損益/資產
+};
+
+// ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
+// 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
+async function fetchOnePrice(sym) {
+  const enc = encodeURIComponent(sym);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?range=1d&interval=1d`;
+  const proxies = [
+    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  ];
+  // 先試直連
+  try {
+    const r = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (r.ok) { const d = await r.json(); const p = d.chart?.result?.[0]?.meta?.regularMarketPrice; if (p) return p; }
+  } catch(e) {}
+  // 逐個 proxy 嘗試
+  for (const proxy of proxies) {
+    try {
+      const r = await fetch(proxy(url));
+      if (r.ok) { const d = await r.json(); const p = d.chart?.result?.[0]?.meta?.regularMarketPrice; if (p) return p; }
+    } catch(e) {}
+  }
+  return null;
+}
+
+async function refreshPrices() {
+  const btn = document.querySelector('.btn-refresh');
+  btn.textContent = '⏳ 更新中...'; btn.disabled = true;
+  showStatus('⏳ 正在抓取即時美股+Nasdaq...', 'loading');
+  try {
+    const usSym = [...new Set([...US_MAIN, ...US_ROY].map(s => s.sym))];
+    const allSym = [...usSym, '^IXIC'];
+
+    // 並行抓取所有股票
+    const prices = await Promise.all(allSym.map(sym => fetchOnePrice(sym)));
+    const priceMap = Object.fromEntries(allSym.map((sym, i) => [sym, prices[i]]).filter(([,p]) => p));
+
+    let updated = 0;
+    [...US_MAIN, ...US_ROY].forEach(s => {
+      const p = priceMap[s.sym];
+      if (!p) return;
+      s.price = p; s.mv = +(p * s.shares).toFixed(2);
+      s.pnl = +(s.mv - s.cost).toFixed(2);
+      s.pct = (p - s.avg) / s.avg * 100;
+      const a = advisorRec(s, true); s.rec = a.rec; s.reason = a.reason;
+      updated++;
+    });
+
+    const nasdaq = priceMap['^IXIC'];
+    if (nasdaq) updateNasdaqDisplay(nasdaq);
+
+    rerenderStockTables();
+    updateNavDate();
+    const failed = allSym.length - Object.keys(priceMap).length;
+    showStatus(`✅ 已更新 ${updated} 支即時股價${nasdaq ? `，Nasdaq ${nasdaq.toLocaleString()}` : ''}${failed ? `（${failed} 支失敗）` : ''}`, 'success');
+  } catch(e) {
+    showStatus('❌ 股價更新失敗：' + e.message, 'error');
+  } finally {
+    btn.textContent = '🔄 刷新股價'; btn.disabled = false;
+  }
+}
+
+function updateNasdaqDisplay(price) {
+  const sma = 22303; // SMA200 hardcoded — 每月更新一次
+  const entry = sma * 1.04;
+  const exit  = sma * 0.07;
+  const diff  = price - entry;
+  const diffPct = ((price - sma) / sma * 100).toFixed(1);
+  const signal = price >= entry ? 'BUY' : price <= exit ? 'SELL' : 'HOLD';
+
+  const el = id => document.getElementById(id);
+  if (el('nasdaqPrice'))  el('nasdaqPrice').textContent  = price.toLocaleString();
+  if (el('nasdaqSMA'))    el('nasdaqSMA').textContent    = sma.toLocaleString();
+  if (el('nasdaqEntry'))  el('nasdaqEntry').textContent  = Math.round(entry).toLocaleString();
+  if (el('nasdaqExit'))   el('nasdaqExit').textContent   = Math.round(exit).toLocaleString();
+  if (el('nasdaqDiff'))   el('nasdaqDiff').textContent   = `${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()} (${diff >= 0 ? '+' : ''}${((diff/entry)*100).toFixed(1)}%)`;
+  if (el('nasdaqVsSMA'))  el('nasdaqVsSMA').textContent  = `${diffPct >= 0 ? '+' : ''}${diffPct}%（${price >= sma ? '高於' : '低於'}SMA200）`;
+  if (el('nasdaqSignal')) el('nasdaqSignal').textContent = signal === 'BUY' ? '✅ 進場' : signal === 'SELL' ? '🔴 退場' : '⏸ 等待進場';
+
+  // Update QQQ shares calculation using live QQQ price
+  const qqqData = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
+  const qqqPrice = qqqData?.price || 576;
+  const qqqShares = (18000 / qqqPrice).toFixed(1);
+  if (el('qqqSharesCalc')) el('qqqSharesCalc').textContent = `≈ ${qqqShares} 股 @$${qqqPrice.toFixed(0)}`;
+
+  const panel = document.getElementById('signalPanel');
+  const text  = document.getElementById('signalText');
+  const desc  = document.getElementById('signalDesc');
+  if (panel) { panel.className = `signal-panel ${signal.toLowerCase()}`; }
+  if (text)  { text.className = `signal-big ${signal.toLowerCase()}`; text.textContent = `${signal} ◆`; }
+  if (desc)  { desc.textContent = signal === 'BUY' ? 'Nasdaq 突破 SMA200×1.04，啟動槓桿策略！' : signal === 'SELL' ? '退場訊號觸發，賣出 QLD/TQQQ' : `Nasdaq ${price.toLocaleString()} 低於進場門檻 ${Math.round(entry).toLocaleString()}，槓桿暫不啟動`; }
+}
+
+// ─────── 同步 Google Sheets（三張表）───────
+async function syncSheets() {
+  const btn = document.querySelector('.btn-sheets');
+  btn.textContent = '⏳ 同步中...'; btn.disabled = true;
+  showStatus('⏳ 正在讀取 Google Sheets（三張工作表）...', 'loading');
+
+  const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=`;
+  const results = [];
+
+  try {
+    const [twText, usText, histText] = await Promise.all([
+      fetch(base + SHEET_GIDS.tw).then(r => { if(!r.ok) throw new Error('台股表讀取失敗'); return r.text(); }),
+      fetch(base + SHEET_GIDS.us).then(r => { if(!r.ok) throw new Error('美股表讀取失敗'); return r.text(); }),
+      fetch(base + SHEET_GIDS.history).then(r => { if(!r.ok) throw new Error('歷年表讀取失敗'); return r.text(); }),
+    ]);
+
+    // ── 台股持股 ──
+    const twRows = parseCSV(twText);
+    if (twRows.length >= 2) {
+      const h = twRows[0].map(x => x.trim());
+      const idx = {
+        code:   findCol(h, ['代號','code','股票代號','ticker']),
+        name:   findCol(h, ['名稱','股票','name','股票名稱']),
+        shares: findCol(h, ['持有股數','shares','持股數','股數']),
+        avg:    findCol(h, ['均價','買入均價','avg','平均成本']),
+        price:  findCol(h, ['現價','price','市價']),
+        mv:     findCol(h, ['市值','mv']),
+        pct:    findCol(h, ['未實現損益率','總損益率','損益率']),
+        rec:    findCol(h, ['建議','rec','操作']),
+        reason: findCol(h, ['說明','備註','reason']),
+      };
+      if (idx.code < 0) throw new Error(`台股：找不到「代號」欄，目前欄位：${h.slice(0,10).join(', ')}`);
+      const newHold = [];
+      twRows.slice(1).forEach(row => {
+        const code = row[idx.code]?.trim();
+        if (!code) return;
+        const avg = parseNum(row[idx.avg]);
+        const price = parseNum(row[idx.price]) || avg;
+        const shares = parseNum(row[idx.shares]);
+        const mv = parseNum(row[idx.mv]) || Math.round(price * shares);
+        const pct = idx.pct >= 0 ? parseNum(row[idx.pct]) : (avg ? (price-avg)/avg*100 : 0);
+        const sheetRec = row[idx.rec]?.trim().toUpperCase();
+        const sheetReason = row[idx.reason]?.trim();
+        const tempStock = { code, pct };
+        const advisor = advisorRec(tempStock, false);
+        const rec    = (sheetRec && sheetRec !== 'HOLD') ? sheetRec : advisor.rec;
+        const reason = sheetReason || advisor.reason;
+        newHold.push({ code, shares, avg, price, mv, pct, name: row[idx.name]?.trim() || code, rec, reason });
+      });
+      if (newHold.length) { TW_HOLD.splice(0, TW_HOLD.length, ...newHold); results.push(`台股 ${newHold.length} 筆`); }
+    }
+
+    // ── 美股持股（第0行=日期，第1行=header）──
+    const usRows = parseCSV(usText);
+    // 找 header row（找到包含「股票」或「symbol」的那行）
+    let usHeaderIdx = usRows.findIndex(r => r.some(c => ['股票','symbol','sym','ticker'].some(k => c.trim().toLowerCase().includes(k))));
+    if (usHeaderIdx < 0) usHeaderIdx = 1; // fallback: 第2行
+    const uh = usRows[usHeaderIdx].map(x => x.trim());
+    const ui = {
+      sym:    findCol(uh, ['股票','symbol','sym','ticker','代號']),
+      shares: findCol(uh, ['持有股數','shares','股數','數量']),
+      avg:    findCol(uh, ['買入均價','均價','avg','平均成本']),
+      price:  findCol(uh, ['現價','price','市價']),
+      mv:     findCol(uh, ['市值','mv']),
+      cost:   findCol(uh, ['總成本','cost','成本']),
+      pnl:    findCol(uh, ['未實現損益','損益','pnl']),
+      pct:    findCol(uh, ['未實現損益率','損益率','pct']),
+    };
+    if (ui.sym >= 0) {
+      const newUs = [];
+      usRows.slice(usHeaderIdx + 1).forEach(row => {
+        const sym = row[ui.sym]?.trim();
+        if (!sym || sym === '') return;
+        const avg = parseNum(row[ui.avg]);
+        const price = parseNum(row[ui.price]) || avg;
+        const shares = parseNum(row[ui.shares]);
+        const mv = parseNum(row[ui.mv]) || +(price * shares).toFixed(2);
+        const cost = parseNum(row[ui.cost]) || +(avg * shares).toFixed(2);
+        const pnl = parseNum(row[ui.pnl]) || +(mv - cost).toFixed(2);
+        const pct = ui.pct >= 0 ? parseNum(row[ui.pct]) : (avg ? (price-avg)/avg*100 : 0);
+        const advisor = advisorRec({ sym, pct }, true);
+        newUs.push({ sym, name: sym, shares, avg, price, mv, cost, pnl, pct, rec: advisor.rec, reason: advisor.reason });
+      });
+      if (newUs.length) {
+        // Sheet "美股持股" = 複委託帳戶 (US_ROY)，Firstrade (US_MAIN) 保留原資料
+        US_ROY.splice(0, US_ROY.length, ...newUs);
+        results.push(`美股複委託 ${newUs.length} 筆`);
+      }
+    }
+
+    // ── 歷年損益/資產（提取月資產數列）──
+    const histRows = parseCSV(histText);
+    // header 在第2行（index 1），col7 起是月份
+    if (histRows.length > 1) {
+      const dateRow = histRows[1];
+      // 找「總資產」或「合計」列
+      const totalRow = histRows.find(r => ['總資產','合計','total','淨資產'].some(k => r.join('').toLowerCase().includes(k)));
+      if (totalRow) {
+        const newMonthly = [];
+        dateRow.forEach((cell, i) => {
+          const d = cell.trim();
+          if (!d.match(/^\d{4}\/\d{1,2}$/)) return;
+          const v = parseNum(totalRow[i]);
+          if (v > 0) newMonthly.push({ m: d.replace('/','-').padEnd(7,'0'), v });
+        });
+        if (newMonthly.length) {
+          MONTHLY.splice(0, MONTHLY.length, ...newMonthly.sort((a,b) => a.m.localeCompare(b.m)));
+          results.push(`歷年 ${newMonthly.length} 個月`);
+        }
+      }
+    }
+
+    rerenderStockTables();
+    updateNavDate();
+    showStatus(`✅ 同步完成：${results.join('、')}`, 'success');
+  } catch(e) {
+    showStatus('❌ 同步失敗：' + e.message, 'error');
+  } finally {
+    btn.textContent = '📊 同步試算表'; btn.disabled = false;
+  }
+}
+
+// ─────── HELPERS ───────
+function rerenderStockTables() {
+  document.getElementById('twHoldTable').innerHTML = '';
+  document.getElementById('twWatchTable').innerHTML = '';
+  renderTwStocks();
+  ['usMainTable','usRoyTable'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.innerHTML = '';
+  });
+  renderUsStocks();
+}
+
+function parseCSV(text) {
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) { if (c === '"' && text[i+1] === '"') { cell += '"'; i++; } else if (c === '"') inQ = false; else cell += c; }
+    else if (c === '"') inQ = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n') { row.push(cell); if (row.some(x => x)) rows.push(row); row = []; cell = ''; }
+    else if (c !== '\r') cell += c;
+  }
+  if (row.length) { row.push(cell); if (row.some(x => x)) rows.push(row); }
+  return rows;
+}
+
+function findCol(headers, names) {
+  for (const n of names) { const i = headers.findIndex(h => h.includes(n)); if (i >= 0) return i; }
+  return -1;
+}
+
+function parseNum(s) {
+  if (!s) return 0;
+  return parseFloat(String(s).replace(/[,$%\s]/g, '')) || 0;
+}
+
+function showStatus(msg, type) {
+  const bar = document.getElementById('syncStatus');
+  bar.textContent = msg; bar.className = 'sync-status ' + type; bar.style.display = 'block';
+  if (type !== 'loading') setTimeout(() => bar.style.display = 'none', 6000);
+}
+
+function updateNavDate() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  document.getElementById('navDate').textContent =
+    `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+// ─────── AI CHAT ───────
+function toggleChat() {
+  const p = document.getElementById('chatPanel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+  if (p.style.display === 'flex') document.getElementById('chatInput').focus();
+}
+function chatKeypress(e) { if (e.key === 'Enter') sendChat(); }
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML += `<div class="chat-bubble user">${q}</div>`;
+  msgs.innerHTML += `<div class="chat-typing" id="chatTyping">顧問們分析中...</div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+  setTimeout(() => {
+    document.getElementById('chatTyping')?.remove();
+    generateChatResponse(q).forEach(r => {
+      msgs.innerHTML += `<div class="chat-bubble agent">
+        <div class="chat-agent-name">${r.icon} ${r.agent}</div>
+        <div class="chat-agent-body" style="border-color:${r.color}">${r.msg}</div>
+      </div>`;
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 600);
+}
+
+function generateChatResponse(question) {
+  const q = question.toLowerCase();
+  const topWinner = [...TW_HOLD].sort((a,b) => b.pct - a.pct)[0];
+  const topLoser  = [...TW_HOLD].sort((a,b) => a.pct - b.pct)[0];
+  const twMV = TW_HOLD.reduce((s,h) => s + h.mv, 0);
+  const twCost = TW_HOLD.reduce((s,h) => s + (h.avg * h.shares), 0);
+  const twGain = twMV - twCost;
+  const responses = [];
+
+  const isQQQ = q.includes('qqq') || q.includes('nasdaq') || q.includes('槓桿') || q.includes('qld') || q.includes('tqqq');
+  const isRisk = q.includes('風險') || q.includes('停損') || q.includes('虧損') || q.includes('跌') || q.includes('虧');
+  const isDividend = q.includes('股息') || q.includes('配息') || q.includes('殖利率') || q.includes('股利');
+  const isBuy = q.includes('買') || q.includes('加碼') || q.includes('入場');
+  const isSell = q.includes('賣') || q.includes('出場') || q.includes('了結') || q.includes('獲利');
+  const isAlloc = q.includes('配置') || q.includes('比例') || q.includes('分散');
+  const isMacro = q.includes('總經') || q.includes('關稅') || q.includes('美國') || q.includes('fed') || q.includes('降息');
+
+  if (isQQQ) {
+    const sma = 22303, price = 21408, entry = Math.round(sma * 1.04), exit = Math.round(sma * 0.07);
+    responses.push({ agent: 'Ryan｜槓桿策略師', color: 'var(--green)', icon: '⚡',
+      msg: `目前訊號：<strong>HOLD ⏸</strong><br>Nasdaq ${price.toLocaleString()} < 進場門檻 ${entry.toLocaleString()}（SMA200×1.04），槓桿暫不啟動。<br>
+      建議：先補足 QQQ 至 $18,000（目前約 $7,488，還差 $10,512）。<br>
+      等 Nasdaq 突破 ${entry.toLocaleString()} → 買 QLD $9,000 + TQQQ $3,000。` });
+  }
+
+  if (isRisk || isAlloc) {
+    const worst = topLoser;
+    responses.push({ agent: 'Max｜風險管理師', color: 'var(--red)', icon: '🛡️',
+      msg: `🚨 三大緊急風險：<br>
+      ① 基富通基金 -44.67%（$96K 損失），建議立即贖回<br>
+      ② ${worst?.name} ${worst?.pct?.toFixed(1)}%，設硬停損<br>
+      ③ 台股 73% 過度集中，建議降至 60%<br>
+      ${isAlloc ? `目標配置：台股 55% | 美股 22% | 債券 10% | 現金 10% | 加密 3%` : ''}` });
+  }
+
+  if (isDividend) {
+    responses.push({ agent: 'Emma｜股息策略師', color: 'var(--purple)', icon: '💰',
+      msg: `股息核心三寶：<br>
+      • 00878 殖利率 5.58%，月配 → 繼續加碼<br>
+      • 006208 殖利率 ~4%，$77K/年最大貢獻者<br>
+      • 00713 殖利率 5.04%，低波動高息<br>
+      2025 年股息總收 $279,621，2026 目標 $320K+。<br>
+      建議：基富通虧損資金 → 轉入 00878 繼續定期定額。` });
+  }
+
+  if (isBuy || isSell) {
+    responses.push({ agent: 'Alex｜技術分析師', color: 'var(--blue)', icon: '📈',
+      msg: `${isBuy ? `加碼首選：<br>• 00878 月配息 ETF 逢低加碼<br>• QQQ 補足策略目標 $18,000<br>• MSFT -17% 技術面超賣，基本面買點` : ''}
+      ${isSell ? `獲利了結：<br>• ${topWinner?.name} +${topWinner?.pct?.toFixed(0)}% 可分批了結 20-30%<br>• 006208 +141% 設停利觸發點<br>• 00646 +71% 可先了結部分` : ''}` });
+  }
+
+  if (isMacro) {
+    responses.push({ agent: 'David｜宏觀策略師', color: 'var(--yellow)', icon: '🌏',
+      msg: `2026 宏觀主軸：<br>
+      • 美國關稅戰：科技出口限制持續壓制，個股選擇性持有<br>
+      • Fed：降息步伐放緩，高利率對成長股不利<br>
+      • AI 週期：半導體需求 2026-27 仍強，台積電地位穩固<br>
+      • 台幣 31.96，美元強勢 → 增加美元資產對沖地緣風險` });
+  }
+
+  if (responses.length === 0 || q.includes('建議') || q.includes('現在')) {
+    if (!responses.find(r => r.agent.includes('Sophia'))) {
+      responses.push({ agent: 'Sophia｜基本面分析師', color: 'var(--green)', icon: '💡',
+        msg: `組合總覽 $${(10156888).toLocaleString()} TWD<br>
+        台股未實現損益 +$1,203,110（+16.68%）<br>
+        最強持倉：台積電 +107%、006208 +141%<br>
+        最弱持倉：${topLoser?.name} ${topLoser?.pct?.toFixed(1)}%<br>
+        基本面建議：台積電、NVDA、MSFT 是長期核心，其餘虧損個股逐步汰換。` });
+    }
+  }
+
+  return responses.slice(0, 3); // 最多顯示 3 位顧問
+}
+</script>
+
+<!-- ── AI Chat Widget ── -->
+<button class="chat-fab" onclick="toggleChat()" title="AI 投資顧問">💬</button>
+<div id="chatPanel" class="chat-panel" style="display:none; flex-direction:column">
+  <div class="chat-header">
+    <span>🤖 AI 投資顧問團隊</span>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-bubble agent">
+      <div class="chat-agent-name">🤖 系統</div>
+      <div class="chat-agent-body" style="border-color:var(--blue)">
+        歡迎！六位 AI 顧問分析您的 $10.16M 投資組合。<br>
+        可以問：「我該加碼 QQQ 嗎？」、「風險最高的部位？」、「股息收入如何優化？」
+      </div>
+    </div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chatInput" placeholder="輸入投資問題..." onkeypress="chatKeypress(event)">
+    <button onclick="sendChat()">送出</button>
+  </div>
+</div>
+</body>
+</html>
