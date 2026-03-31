@@ -516,13 +516,13 @@
         <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
       </div>
       <div class="card">
-        <div class="card-title">📊 關鍵數值 <span class="badge">Nasdaq Composite ^IXIC</span></div>
-        <div class="summary-row"><span class="summary-key">Nasdaq 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">22,953</span></div>
-        <div class="summary-row"><span class="summary-key">Nasdaq SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">24,416</span></div>
-        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">23,195</span></div>
-        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.07）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">1,561</span></div>
-        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-1,787 (-7.7%)</span></div>
-        <div class="summary-row"><span class="summary-key">Nasdaq vs SMA200</span><span id="nasdaqVsSMA" class="down">-4.0%（低於SMA200）</span></div>
+        <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
+        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.07）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$41.59</span></div>
+        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
         <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
       </div>
     </div>
@@ -531,7 +531,7 @@
       <div class="card-title">💰 目前建議配置 <span class="badge">$30,000 USD · 訊號：等待</span></div>
       <div class="alert alert-warn" style="margin-bottom:12px">
         <div class="alert-icon">⏸</div>
-        <div>Nasdaq 100（22,953）目前低於進場門檻（25,393），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 Nasdaq 突破 25,393 再建 QLD/TQQQ。</div>
+        <div>QQQ（$558.28）目前低於進場門檻（$617.96），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 QQQ 突破 $617.96 再建 QLD/TQQQ。</div>
       </div>
       <div class="gauge-row">
         <div class="gauge-item">
@@ -985,9 +985,9 @@
       <div class="team-body">
         <div class="team-section">
           <div class="team-section-title">📊 當前訊號</div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>Nasdaq 100 = 22,953 &lt; SMA200×1.04（25,393）→ 槓桿不啟動</div></div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>Nasdaq 22,953 >> 退場線 1,709 → 無退場風險</div></div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>SMA200 = 24,416，現價低於 SMA200 達 -6%</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>QQQ $558.28 &lt; SMA200×1.04（$617.96）→ 槓桿不啟動</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>QQQ $558.28 >> 退場線 $41.59 → 無退場風險</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>QQQ SMA200 = $594.20，現價低於 SMA200 達 -6%</div></div>
         </div>
         <div class="team-section">
           <div class="team-section-title">💼 持倉現狀</div>
@@ -1381,7 +1381,7 @@ function renderUsStocks() {
 
 // ─────── QQQ CHART ───────
 function initQQQChart() {
-  updateNasdaqDisplay(22953); // 初始顯示，刷新股價後即時更新
+  updateNasdaqDisplay(558.28); // 初始顯示（QQQ 收盤價），刷新股價後即時更新
   new Chart(document.getElementById('chartQQQAlloc'), {
     type: 'doughnut',
     data: {
@@ -1598,7 +1598,7 @@ async function refreshPrices() {
       updated++;
     });
 
-    const nasdaq = priceMap['^IXIC'];
+    const nasdaq = priceMap['QQQ'];
     if (nasdaq) updateNasdaqDisplay(nasdaq);
 
     rerenderStockTables();
@@ -1613,7 +1613,7 @@ async function refreshPrices() {
 }
 
 function updateNasdaqDisplay(price) {
-  const sma = 24416; // SMA200 hardcoded — 每月更新一次（2026/03/30 實際計算值）
+  const sma = 594.20; // QQQ SMA200 — 每月更新一次（2026/03/30 實際計算值）
   const entry = sma * 1.04;
   const exit  = sma * 0.07;
   const diff  = price - entry;
@@ -1621,12 +1621,12 @@ function updateNasdaqDisplay(price) {
   const signal = price >= entry ? 'BUY' : price <= exit ? 'SELL' : 'HOLD';
 
   const el = id => document.getElementById(id);
-  if (el('nasdaqPrice'))  el('nasdaqPrice').textContent  = price.toLocaleString();
-  if (el('nasdaqSMA'))    el('nasdaqSMA').textContent    = sma.toLocaleString();
-  if (el('nasdaqEntry'))  el('nasdaqEntry').textContent  = Math.round(entry).toLocaleString();
-  if (el('nasdaqExit'))   el('nasdaqExit').textContent   = Math.round(exit).toLocaleString();
-  if (el('nasdaqDiff'))   el('nasdaqDiff').textContent   = `${diff >= 0 ? '+' : ''}${Math.round(diff).toLocaleString()} (${diff >= 0 ? '+' : ''}${((diff/entry)*100).toFixed(1)}%)`;
-  if (el('nasdaqVsSMA'))  el('nasdaqVsSMA').textContent  = `${diffPct >= 0 ? '+' : ''}${diffPct}%（${price >= sma ? '高於' : '低於'}SMA200）`;
+  if (el('nasdaqPrice'))  el('nasdaqPrice').textContent  = `$${price.toFixed(2)}`;
+  if (el('nasdaqSMA'))    el('nasdaqSMA').textContent    = `$${sma.toFixed(2)}`;
+  if (el('nasdaqEntry'))  el('nasdaqEntry').textContent  = `$${entry.toFixed(2)}`;
+  if (el('nasdaqExit'))   el('nasdaqExit').textContent   = `$${exit.toFixed(2)}`;
+  if (el('nasdaqDiff'))   el('nasdaqDiff').textContent   = `${diff >= 0 ? '+' : ''}$${Math.abs(diff).toFixed(2)} (${diff >= 0 ? '+' : ''}${((diff/entry)*100).toFixed(1)}%)`;
+  if (el('nasdaqVsSMA'))  el('nasdaqVsSMA').textContent  = `${diffPct >= 0 ? '+' : ''}${diffPct}%（${price >= sma ? '高於' : '低於'} SMA200）`;
   if (el('nasdaqSignal')) el('nasdaqSignal').textContent = signal === 'BUY' ? '✅ 進場' : signal === 'SELL' ? '🔴 退場' : '⏸ 等待進場';
 
   // Update QQQ shares calculation using live QQQ price
@@ -1640,7 +1640,7 @@ function updateNasdaqDisplay(price) {
   const desc  = document.getElementById('signalDesc');
   if (panel) { panel.className = `signal-panel ${signal.toLowerCase()}`; }
   if (text)  { text.className = `signal-big ${signal.toLowerCase()}`; text.textContent = `${signal} ◆`; }
-  if (desc)  { desc.textContent = signal === 'BUY' ? 'Nasdaq 突破 SMA200×1.04，啟動槓桿策略！' : signal === 'SELL' ? '退場訊號觸發，賣出 QLD/TQQQ' : `Nasdaq ${price.toLocaleString()} 低於進場門檻 ${Math.round(entry).toLocaleString()}，槓桿暫不啟動`; }
+  if (desc)  { desc.textContent = signal === 'BUY' ? 'QQQ 突破 SMA200×1.04，啟動槓桿策略！' : signal === 'SELL' ? '退場訊號觸發，賣出 QLD/TQQQ' : `QQQ $${price.toFixed(2)} 低於進場門檻 $${entry.toFixed(2)}，槓桿暫不啟動`; }
 }
 
 // ─────── 同步 Google Sheets（三張表）───────
@@ -1860,9 +1860,9 @@ function generateChatResponse(question) {
   const isMacro = q.includes('總經') || q.includes('關稅') || q.includes('美國') || q.includes('fed') || q.includes('降息');
 
   if (isQQQ) {
-    const sma = 24416, price = 22953, entry = Math.round(sma * 1.04), exit = Math.round(sma * 0.07);
+    const sma = 594.20, price = 558.28, entry = +(sma * 1.04).toFixed(2), exit = +(sma * 0.07).toFixed(2);
     responses.push({ agent: 'Ryan｜槓桿策略師', color: 'var(--green)', icon: '⚡',
-      msg: `目前訊號：<strong>HOLD ⏸</strong><br>Nasdaq ${price.toLocaleString()} < 進場門檻 ${entry.toLocaleString()}（SMA200×1.04），槓桿暫不啟動。<br>
+      msg: `目前訊號：<strong>HOLD ⏸</strong><br>QQQ $${price.toFixed(2)} < 進場門檻 $${entry.toFixed(2)}（SMA200×1.04），槓桿暫不啟動。<br>
       建議：先補足 QQQ 至 $18,000（目前約 $7,488，還差 $10,512）。<br>
       等 Nasdaq 突破 ${entry.toLocaleString()} → 買 QLD $9,000 + TQQQ $3,000。` });
   }
