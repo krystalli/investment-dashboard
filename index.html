@@ -4,6 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>投資組合儀表板</title>
+<script>
+// 密碼驗證（session 期間只需輸入一次）
+(function(){
+  const hash = s => s.split('').reduce((a,c) => Math.imul(31,a)+c.charCodeAt(0)|0, 0).toString(36);
+  const KEY = 'inv_auth', TARGET = hash('880316');
+  if (sessionStorage.getItem(KEY) === TARGET) return;
+  document.addEventListener('DOMContentLoaded', function() {
+    document.body.style.display = 'none';
+    const el = document.createElement('div');
+    el.id = 'lockScreen';
+    el.innerHTML = `<div style="position:fixed;inset:0;background:#0d1117;display:flex;align-items:center;justify-content:center;z-index:99999;font-family:-apple-system,sans-serif">
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:16px;padding:40px 36px;width:320px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+        <div style="font-size:36px;margin-bottom:12px">📊</div>
+        <div style="color:#e6edf3;font-size:18px;font-weight:700;margin-bottom:6px">投資儀表板</div>
+        <div style="color:#8b949e;font-size:13px;margin-bottom:24px">請輸入密碼</div>
+        <input id="pwInput" type="password" placeholder="密碼" autocomplete="current-password"
+          style="width:100%;padding:10px 14px;background:#21262d;border:1px solid #30363d;border-radius:8px;color:#e6edf3;font-size:16px;outline:none;box-sizing:border-box;text-align:center;letter-spacing:4px">
+        <div id="pwError" style="color:#f85149;font-size:12px;margin-top:8px;min-height:18px"></div>
+        <button id="pwBtn" style="margin-top:8px;width:100%;padding:10px;background:#1f6feb;color:white;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">進入</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+    document.body.style.display = '';
+    const input = document.getElementById('pwInput');
+    const btn   = document.getElementById('pwBtn');
+    const err   = document.getElementById('pwError');
+    function check() {
+      if (hash(input.value) === TARGET) {
+        sessionStorage.setItem(KEY, TARGET);
+        el.remove();
+      } else {
+        err.textContent = '密碼錯誤，請再試一次';
+        input.value = '';
+        input.focus();
+      }
+    }
+    btn.addEventListener('click', check);
+    input.addEventListener('keypress', e => e.key === 'Enter' && check());
+    setTimeout(() => input.focus(), 100);
+  });
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
   :root {
