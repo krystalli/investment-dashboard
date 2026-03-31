@@ -517,8 +517,8 @@
       </div>
       <div class="card">
         <div class="card-title">📊 關鍵數值 <span class="badge">Nasdaq Composite ^IXIC</span></div>
-        <div class="summary-row"><span class="summary-key">Nasdaq 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">21,408</span></div>
-        <div class="summary-row"><span class="summary-key">Nasdaq SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">22,303</span></div>
+        <div class="summary-row"><span class="summary-key">Nasdaq 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">22,953</span></div>
+        <div class="summary-row"><span class="summary-key">Nasdaq SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">24,416</span></div>
         <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">23,195</span></div>
         <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.07）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">1,561</span></div>
         <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-1,787 (-7.7%)</span></div>
@@ -531,14 +531,14 @@
       <div class="card-title">💰 目前建議配置 <span class="badge">$30,000 USD · 訊號：等待</span></div>
       <div class="alert alert-warn" style="margin-bottom:12px">
         <div class="alert-icon">⏸</div>
-        <div>Nasdaq（21,408）目前低於進場門檻（23,195），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 Nasdaq 突破 23,195 再建 QLD/TQQQ。</div>
+        <div>Nasdaq 100（22,953）目前低於進場門檻（25,393），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 Nasdaq 突破 25,393 再建 QLD/TQQQ。</div>
       </div>
       <div class="gauge-row">
         <div class="gauge-item">
           <div class="gauge-pct" style="color:var(--blue)">60%</div>
           <div class="gauge-name">QQQ ✅ 持有</div>
           <div class="gauge-amount">$18,000</div>
-          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 31.3 股 @$576</div>
+          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
         </div>
         <div class="gauge-item" style="opacity:0.4">
           <div class="gauge-pct" style="color:var(--purple)">30%</div>
@@ -985,13 +985,13 @@
       <div class="team-body">
         <div class="team-section">
           <div class="team-section-title">📊 當前訊號</div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--yellow)"></div><div>Nasdaq 21,408 &lt; SMA200×1.04（23,195）→ 槓桿不啟動</div></div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>Nasdaq 21,408 >> 退場線 1,561 → 無退場風險</div></div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>SMA200 = 22,303，現價低於 SMA200 達 -4%</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>Nasdaq 100 = 22,953 &lt; SMA200×1.04（25,393）→ 槓桿不啟動</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--green)"></div><div>Nasdaq 22,953 >> 退場線 1,709 → 無退場風險</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--red)"></div><div>SMA200 = 24,416，現價低於 SMA200 達 -6%</div></div>
         </div>
         <div class="team-section">
           <div class="team-section-title">💼 持倉現狀</div>
-          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>QQQ 13股（$7,488）距目標 $18,000 仍差 $10,512</div></div>
+          <div class="team-bullet"><div class="team-dot" style="background:var(--blue)"></div><div>QQQ 13股（$7,258）距目標 $18,000 仍差 $10,742</div></div>
           <div class="team-bullet"><div class="team-dot" style="background:var(--text2)"></div><div>QLD 0股 — 條件未達，不建倉</div></div>
           <div class="team-bullet"><div class="team-dot" style="background:var(--text2)"></div><div>TQQQ 0股 — 條件未達，不建倉</div></div>
         </div>
@@ -1088,7 +1088,7 @@ const US_MAIN = [
   { sym:'MSFT', shares:10,     avg:443.59, price:367.17, cost:4435.90,  mv:3671.70,  pnl:-764.20,  pct:-17.23, rec:'BUY',   reason:'Azure AI成長強勁，-17%是絕佳買點，考慮加碼' },
   { sym:'MU',   shares:7,      avg:379.36, price:356.67, cost:2655.52,  mv:2496.69,  pnl:-158.83,  pct:-5.98,  rec:'HOLD',  reason:'HBM記憶體需求看好，短期庫存修正，持有' },
   { sym:'NVDA', shares:6,      avg:186.47, price:172.53, cost:1118.82,  mv:1035.18,  pnl:-83.64,   pct:-7.48,  rec:'BUY',   reason:'AI GPU龍頭，-7.5%是買點，逢低分批加碼' },
-  { sym:'QQQ',  shares:13,     avg:592.00, price:576.03, cost:7696.00,  mv:7488.39,  pnl:-207.61,  pct:-2.70,  rec:'ADD',   reason:'核心指數部位，距策略目標$18K還差，優先補足' },
+  { sym:'QQQ',  shares:13,     avg:592.00, price:558.28, cost:7696.00,  mv:7257.64,  pnl:-438.36,  pct:-5.70,  rec:'ADD',   reason:'核心指數部位，距策略目標$18K還差，優先補足' },
   { sym:'SCHD', shares:1,      avg:31.10,  price:30.69,  cost:31.10,    mv:30.69,    pnl:-0.41,    pct:-1.32,  rec:'ADD',   reason:'美股高股息ETF，殖利率3.5%，考慮加碼至$2K+' },
   { sym:'SMH',  shares:11,     avg:394.99, price:383.12, cost:4344.89,  mv:4214.32,  pnl:-130.57,  pct:-3.01,  rec:'HOLD',  reason:'半導體ETF，AI需求旺，短期波動持有' },
   { sym:'SPY',  shares:3,      avg:658.80, price:647.82, cost:1976.40,  mv:1943.46,  pnl:-32.94,   pct:-1.67,  rec:'HOLD',  reason:'S&P500核心，長期持有不動' },
@@ -1381,7 +1381,7 @@ function renderUsStocks() {
 
 // ─────── QQQ CHART ───────
 function initQQQChart() {
-  updateNasdaqDisplay(21408); // 初始顯示，刷新股價後即時更新
+  updateNasdaqDisplay(22953); // 初始顯示，刷新股價後即時更新
   new Chart(document.getElementById('chartQQQAlloc'), {
     type: 'doughnut',
     data: {
@@ -1440,7 +1440,7 @@ function initBacktestChart() {
 
   // US backtest table (USD, then convert note)
   const US_BT = [
-    { sym:'QQQ',  name:'Nasdaq 100 ETF',   mv:7488,   cagr:17 },
+    { sym:'QQQ',  name:'Nasdaq 100 ETF',   mv:7258,   cagr:17 },
     { sym:'SPY',  name:'S&P 500 ETF',       mv:1943,   cagr:13 },
     { sym:'NVDA', name:'NVIDIA',            mv:2631,   cagr:20 },
     { sym:'MSFT', name:'Microsoft',         mv:3672,   cagr:15 },
@@ -1613,7 +1613,7 @@ async function refreshPrices() {
 }
 
 function updateNasdaqDisplay(price) {
-  const sma = 22303; // SMA200 hardcoded — 每月更新一次
+  const sma = 24416; // SMA200 hardcoded — 每月更新一次（2026/03/30 實際計算值）
   const entry = sma * 1.04;
   const exit  = sma * 0.07;
   const diff  = price - entry;
@@ -1860,7 +1860,7 @@ function generateChatResponse(question) {
   const isMacro = q.includes('總經') || q.includes('關稅') || q.includes('美國') || q.includes('fed') || q.includes('降息');
 
   if (isQQQ) {
-    const sma = 22303, price = 21408, entry = Math.round(sma * 1.04), exit = Math.round(sma * 0.07);
+    const sma = 24416, price = 22953, entry = Math.round(sma * 1.04), exit = Math.round(sma * 0.07);
     responses.push({ agent: 'Ryan｜槓桿策略師', color: 'var(--green)', icon: '⚡',
       msg: `目前訊號：<strong>HOLD ⏸</strong><br>Nasdaq ${price.toLocaleString()} < 進場門檻 ${entry.toLocaleString()}（SMA200×1.04），槓桿暫不啟動。<br>
       建議：先補足 QQQ 至 $18,000（目前約 $7,488，還差 $10,512）。<br>
