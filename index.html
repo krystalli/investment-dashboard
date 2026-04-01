@@ -1844,76 +1844,204 @@ function sendChat() {
 
 function generateChatResponse(question) {
   const q = question.toLowerCase();
-  const topWinner = [...TW_HOLD].sort((a,b) => b.pct - a.pct)[0];
-  const topLoser  = [...TW_HOLD].sort((a,b) => a.pct - b.pct)[0];
-  const twMV = TW_HOLD.reduce((s,h) => s + h.mv, 0);
-  const twCost = TW_HOLD.reduce((s,h) => s + (h.avg * h.shares), 0);
-  const twGain = twMV - twCost;
-  const responses = [];
+  const USD_TWD = 31.96;
 
-  const isQQQ = q.includes('qqq') || q.includes('nasdaq') || q.includes('槓桿') || q.includes('qld') || q.includes('tqqq');
-  const isRisk = q.includes('風險') || q.includes('停損') || q.includes('虧損') || q.includes('跌') || q.includes('虧');
+  // ── 即時從持倉資料計算 ──
+  const allUS = [...US_MAIN, ...US_ROY];
+  const twMV    = TW_HOLD.reduce((s,h) => s + (h.mv||0), 0);
+  const twCost  = TW_HOLD.reduce((s,h) => s + (h.avg||0)*(h.shares||0), 0);
+  const twGain  = twMV - twCost;
+  const twGainPct = twCost ? (twGain/twCost*100).toFixed(1) : '0';
+  const usMV    = allUS.reduce((s,h) => s + (h.mv||0), 0);
+  const usCost  = allUS.reduce((s,h) => s + (h.cost||0), 0);
+  const usGain  = usMV - usCost;
+  const usMV_twd= Math.round(usMV * USD_TWD);
+  const mainMV  = US_MAIN.reduce((s,h) => s+(h.mv||0), 0);
+  const royMV   = US_ROY.reduce((s,h) => s+(h.mv||0), 0);
+  const twByGain= [...TW_HOLD].sort((a,b) => b.pct-a.pct);
+  const twByLoss= [...TW_HOLD].sort((a,b) => a.pct-b.pct);
+  const usByGain= [...allUS].sort((a,b) => b.pct-a.pct);
+  const usByLoss= [...allUS].sort((a,b) => a.pct-b.pct);
+  const qqqPos  = allUS.find(s => s.sym==='QQQ');
+  const qqqSMA  = 594.20, qqqPrice = qqqPos?.price||558.28;
+  const qqqEntry= +(qqqSMA*1.04).toFixed(2), qqqExit=+(qqqSMA*0.07).toFixed(2);
+
+  // ── 意圖偵測 ──
+  const isUS       = q.includes('美股') || q.includes('firstrade') || q.includes('複委託');
+  const isTW       = q.includes('台股') || q.includes('台灣');
+  const isTotal    = q.includes('總共') || q.includes('總計') || q.includes('合計') || q.includes('多少') || q.includes('幾台幣') || q.includes('幾美金');
+  const isQQQ      = q.includes('qqq') || q.includes('槓桿') || q.includes('qld') || q.includes('tqqq');
+  const isRisk     = q.includes('風險') || q.includes('停損') || q.includes('最虧') || q.includes('虧最多') || q.includes('最差') || q.includes('最壞');
+  const isBest     = q.includes('最賺') || q.includes('賺最多') || q.includes('最強') || q.includes('漲最多') || q.includes('最好');
   const isDividend = q.includes('股息') || q.includes('配息') || q.includes('殖利率') || q.includes('股利');
-  const isBuy = q.includes('買') || q.includes('加碼') || q.includes('入場');
-  const isSell = q.includes('賣') || q.includes('出場') || q.includes('了結') || q.includes('獲利');
-  const isAlloc = q.includes('配置') || q.includes('比例') || q.includes('分散');
-  const isMacro = q.includes('總經') || q.includes('關稅') || q.includes('美國') || q.includes('fed') || q.includes('降息');
+  const isAlloc    = q.includes('配置') || q.includes('比例') || q.includes('分散') || q.includes('占比');
+  const isBuy      = q.includes('買') || q.includes('加碼') || q.includes('入場');
+  const isSell     = q.includes('賣') || q.includes('出場') || q.includes('了結') || q.includes('獲利了結');
+  const isMacro    = q.includes('總經') || q.includes('關稅') || q.includes('fed') || q.includes('降息') || q.includes('匯率');
 
+  // 偵測問的是哪支個股
+  const hitTW = TW_HOLD.find(s => q.includes(s.code) || (s.name && q.includes(s.name)));
+  const hitUS  = allUS.find(s => q.includes(s.sym?.toLowerCase()));
+
+  const $ = n => n?.toLocaleString('en',{maximumFractionDigits:0});
+  const sgn = n => n>=0?'+':'';
+  const r = [];
+
+  // ── 1. 美股持倉總計 ──
+  if (isUS && isTotal) {
+    r.push({ agent:'Max｜風險管理師', color:'var(--red)', icon:'🛡️', msg:
+      `美股持倉總計（即時計算）：<br>
+      💰 市值：<strong>$${$(usMV)} USD ≈ TWD $${$(usMV_twd)}</strong><br>
+      📊 總成本：$${$(usCost)} USD<br>
+      ${usGain>=0?'📈':'📉'} 未實現損益：${sgn(usGain)}$${usGain.toFixed(0)} USD（${sgn(usGain)}${usCost?(usGain/usCost*100).toFixed(1):0}%）<br>
+      ├ Firstrade：$${$(mainMV)} USD<br>
+      └ 複委託：$${$(royMV)} USD<br>
+      🔄 匯率：${USD_TWD} TWD/USD` });
+    return r;
+  }
+
+  // ── 2. 台股持倉總計 ──
+  if (isTW && isTotal) {
+    r.push({ agent:'Alex｜技術分析師', color:'var(--blue)', icon:'📈', msg:
+      `台股持倉總計（即時計算）：<br>
+      💰 市值：<strong>TWD $${$(twMV)}</strong><br>
+      📊 總成本：$${$(twCost)}<br>
+      ${twGain>=0?'📈':'📉'} 未實現損益：${sgn(twGain)}$${$(twGain)}（${sgn(twGain)}${twGainPct}%）<br>
+      📁 共 ${TW_HOLD.length} 支 ─ 最強：${twByGain[0]?.name} ${sgn(twByGain[0]?.pct)}${twByGain[0]?.pct?.toFixed(1)}%，最弱：${twByLoss[0]?.name} ${twByLoss[0]?.pct?.toFixed(1)}%` });
+    return r;
+  }
+
+  // ── 3. 問特定台股個股 ──
+  if (hitTW) {
+    const s = hitTW, ar = advisorRec(s, false);
+    r.push({ agent:'Alex｜技術分析師', color:'var(--blue)', icon:'📈', msg:
+      `<strong>${s.name}（${s.code}）</strong><br>
+      持股 ${$(s.shares)} 股 ／ 均價 $${s.avg?.toFixed(2)} ／ 現價 $${s.price?.toFixed(2)}<br>
+      市值：$${$(s.mv)} TWD<br>
+      損益：${sgn(s.pct)}${s.pct?.toFixed(2)}%<br>
+      建議：${recTag[ar.rec]||ar.rec} — ${ar.reason}` });
+    return r;
+  }
+
+  // ── 4. 問特定美股個股 ──
+  if (hitUS) {
+    const s = hitUS, ar = advisorRec(s, true);
+    r.push({ agent:'Sophia｜基本面分析師', color:'var(--green)', icon:'💡', msg:
+      `<strong>${s.sym}</strong><br>
+      持股 ${s.shares} 股 ／ 均價 $${s.avg?.toFixed(2)} ／ 現價 $${s.price?.toFixed(2)}<br>
+      市值：$${s.mv?.toFixed(0)} USD（≈ TWD $${$(Math.round((s.mv||0)*USD_TWD))}）<br>
+      損益：${sgn(s.pct)}${s.pct?.toFixed(2)}%（${sgn(s.pnl)}$${s.pnl?.toFixed(0)}）<br>
+      建議：${recTag[ar.rec]||ar.rec} — ${ar.reason}` });
+    return r;
+  }
+
+  // ── 5. 最虧 ──
+  if (isRisk && !isAlloc) {
+    r.push({ agent:'Max｜風險管理師', color:'var(--red)', icon:'🛡️', msg:
+      `🚨 最大虧損部位（即時計算）：<br>
+      <strong>台股：</strong><br>
+      ${twByLoss.slice(0,3).map(s=>`• ${s.name} ${s.pct?.toFixed(1)}%，市值 $${$(s.mv)}`).join('<br>')}<br>
+      <strong>美股：</strong><br>
+      ${usByLoss.filter(s=>s.pct<0).slice(0,3).map(s=>`• ${s.sym} ${s.pct?.toFixed(1)}%，$${s.mv?.toFixed(0)}`).join('<br>')}` });
+    return r;
+  }
+
+  // ── 6. 最賺 ──
+  if (isBest) {
+    r.push({ agent:'Alex｜技術分析師', color:'var(--blue)', icon:'📈', msg:
+      `🏆 最大獲利部位（即時計算）：<br>
+      <strong>台股：</strong><br>
+      ${twByGain.slice(0,3).map(s=>`• ${s.name} +${s.pct?.toFixed(1)}%，市值 $${$(s.mv)}`).join('<br>')}<br>
+      <strong>美股：</strong><br>
+      ${usByGain.filter(s=>s.pct>0).slice(0,3).map(s=>`• ${s.sym} +${s.pct?.toFixed(1)}%，$${s.mv?.toFixed(0)}`).join('<br>')}` });
+    return r;
+  }
+
+  // ── 7. QQQ 策略 ──
   if (isQQQ) {
-    const sma = 594.20, price = 558.28, entry = +(sma * 1.04).toFixed(2), exit = +(sma * 0.07).toFixed(2);
-    responses.push({ agent: 'Ryan｜槓桿策略師', color: 'var(--green)', icon: '⚡',
-      msg: `目前訊號：<strong>HOLD ⏸</strong><br>QQQ $${price.toFixed(2)} < 進場門檻 $${entry.toFixed(2)}（SMA200×1.04），槓桿暫不啟動。<br>
-      建議：先補足 QQQ 至 $18,000（目前約 $7,488，還差 $10,512）。<br>
-      等 Nasdaq 突破 ${entry.toLocaleString()} → 買 QLD $9,000 + TQQQ $3,000。` });
+    const curMV = qqqPos?.mv||0, gap = 18000-curMV;
+    r.push({ agent:'Ryan｜槓桿策略師', color:'var(--green)', icon:'⚡', msg:
+      `<strong>QQQ 策略現況</strong><br>
+      QQQ 現價：$${qqqPrice.toFixed(2)} ／ SMA200：$${qqqSMA}<br>
+      持倉：${qqqPos?.shares||0} 股，市值 $${$(curMV)} USD<br>
+      目標 $18,000 → 尚差 $${gap.toFixed(0)}<br><br>
+      訊號：${qqqPrice>=qqqEntry?'✅ 進場！建 QLD+TQQQ':'⏸ HOLD — 等 QQQ 突破 $'+qqqEntry}<br>
+      退場線：$${qqqExit}（目前遠低於現價，無風險）` });
+    return r;
   }
 
-  if (isRisk || isAlloc) {
-    const worst = topLoser;
-    responses.push({ agent: 'Max｜風險管理師', color: 'var(--red)', icon: '🛡️',
-      msg: `🚨 三大緊急風險：<br>
-      ① 基富通基金 -44.67%（$96K 損失），建議立即贖回<br>
-      ② ${worst?.name} ${worst?.pct?.toFixed(1)}%，設硬停損<br>
-      ③ 台股 73% 過度集中，建議降至 60%<br>
-      ${isAlloc ? `目標配置：台股 55% | 美股 22% | 債券 10% | 現金 10% | 加密 3%` : ''}` });
-  }
-
+  // ── 8. 股息 ──
   if (isDividend) {
-    responses.push({ agent: 'Emma｜股息策略師', color: 'var(--purple)', icon: '💰',
-      msg: `股息核心三寶：<br>
-      • 00878 殖利率 5.58%，月配 → 繼續加碼<br>
-      • 006208 殖利率 ~4%，$77K/年最大貢獻者<br>
-      • 00713 殖利率 5.04%，低波動高息<br>
-      2025 年股息總收 $279,621，2026 目標 $320K+。<br>
-      建議：基富通虧損資金 → 轉入 00878 繼續定期定額。` });
+    const DIV_YLD = {'00878':5.58,'006208':4.0,'00713':5.04,'00900':7.0,'00937B':3.0,'00725B':3.0};
+    const divItems = TW_HOLD.filter(s => DIV_YLD[s.code]);
+    const total = divItems.reduce((sum,s)=>sum+s.mv*(DIV_YLD[s.code]/100),0);
+    r.push({ agent:'Emma｜股息策略師', color:'var(--purple)', icon:'💰', msg:
+      `💰 股息估算（依現市值計算）：<br>
+      ${divItems.map(s=>{
+        const y=DIV_YLD[s.code], d=Math.round(s.mv*y/100);
+        return `• ${s.name} ${y}% → 約 $${$(d)}/年`;
+      }).join('<br>')}<br>
+      <strong>預估年股息總計：$${$(Math.round(total))} TWD</strong>` });
+    return r;
   }
 
-  if (isBuy || isSell) {
-    responses.push({ agent: 'Alex｜技術分析師', color: 'var(--blue)', icon: '📈',
-      msg: `${isBuy ? `加碼首選：<br>• 00878 月配息 ETF 逢低加碼<br>• QQQ 補足策略目標 $18,000<br>• MSFT -17% 技術面超賣，基本面買點` : ''}
-      ${isSell ? `獲利了結：<br>• ${topWinner?.name} +${topWinner?.pct?.toFixed(0)}% 可分批了結 20-30%<br>• 006208 +141% 設停利觸發點<br>• 00646 +71% 可先了結部分` : ''}` });
+  // ── 9. 配置 ──
+  if (isAlloc) {
+    const tot = twMV + usMV_twd;
+    r.push({ agent:'Max｜風險管理師', color:'var(--red)', icon:'🛡️', msg:
+      `📊 資產配置（即時計算）：<br>
+      🇹🇼 台股：$${$(twMV)} TWD（${(twMV/tot*100).toFixed(1)}%）<br>
+      🇺🇸 美股：$${$(usMV_twd)} TWD（${(usMV_twd/tot*100).toFixed(1)}%）<br>
+      總計：$${$(tot)} TWD<br><br>
+      目標配置：台股 55% ／ 美股 22% ／ 債券 10% ／ 現金 10%<br>
+      ${(twMV/tot*100)>60?'⚠️ 台股比例偏高，建議逐步降至 60% 以下':'✅ 比例接近合理範圍'}` });
+    return r;
   }
 
+  // ── 10. 宏觀 ──
   if (isMacro) {
-    responses.push({ agent: 'David｜宏觀策略師', color: 'var(--yellow)', icon: '🌏',
-      msg: `2026 宏觀主軸：<br>
-      • 美國關稅戰：科技出口限制持續壓制，個股選擇性持有<br>
-      • Fed：降息步伐放緩，高利率對成長股不利<br>
-      • AI 週期：半導體需求 2026-27 仍強，台積電地位穩固<br>
-      • 台幣 31.96，美元強勢 → 增加美元資產對沖地緣風險` });
+    r.push({ agent:'David｜宏觀策略師', color:'var(--yellow)', icon:'🌏', msg:
+      `🌐 2026 宏觀環境：<br>
+      • 美國關稅戰：科技出口限制仍在，個股謹慎<br>
+      • Fed：降息步伐放緩<br>
+      • AI 週期：半導體 2026-27 仍強<br>
+      • 台幣匯率 ${USD_TWD}，美元強勢<br>
+      → 建議：提升美元資產比例對沖地緣風險` });
+    return r;
   }
 
-  if (responses.length === 0 || q.includes('建議') || q.includes('現在')) {
-    if (!responses.find(r => r.agent.includes('Sophia'))) {
-      responses.push({ agent: 'Sophia｜基本面分析師', color: 'var(--green)', icon: '💡',
-        msg: `組合總覽 $${(10156888).toLocaleString()} TWD<br>
-        台股未實現損益 +$1,203,110（+16.68%）<br>
-        最強持倉：台積電 +107%、006208 +141%<br>
-        最弱持倉：${topLoser?.name} ${topLoser?.pct?.toFixed(1)}%<br>
-        基本面建議：台積電、NVDA、MSFT 是長期核心，其餘虧損個股逐步汰換。` });
-    }
+  // ── 11. 買進/賣出 ──
+  if (isBuy) {
+    const opp = twByLoss.filter(s=>['etf-tw','div-etf'].includes(STOCK_PROFILES[s.code]?.type)).slice(0,2);
+    r.push({ agent:'Alex｜技術分析師', color:'var(--blue)', icon:'📈', msg:
+      `加碼機會（從現有持倉計算）：<br>
+      ${opp.map(s=>`• ${s.name} ${s.pct.toFixed(1)}%，現價 $${s.price}，逢低布局`).join('<br>')}<br>
+      • QQQ 補足至 $18,000（差 $${(18000-(qqqPos?.mv||0)).toFixed(0)} USD）<br>
+      • MSFT ${US_MAIN.find(s=>s.sym==='MSFT')?.pct?.toFixed(1)||'-17'}%，基本面強` });
+    return r;
+  }
+  if (isSell) {
+    const sell = twByGain.filter(s=>s.pct>30).slice(0,3);
+    r.push({ agent:'Alex｜技術分析師', color:'var(--blue)', icon:'📈', msg:
+      `可考慮了結（漲幅 >30%，即時計算）：<br>
+      ${sell.map(s=>`• ${s.name} +${s.pct.toFixed(1)}%，市值 $${$(s.mv)}`).join('<br>')||'目前無高獲利標的超過 30%'}<br>
+      建議各了結 15-25%，保留核心部位` });
+    return r;
   }
 
-  return responses.slice(0, 3); // 最多顯示 3 位顧問
+  // ── Default: 即時組合概況 ──
+  r.push({ agent:'Sophia｜基本面分析師', color:'var(--green)', icon:'💡', msg:
+    `📊 組合概況（即時計算）：<br>
+    台股 $${$(twMV)} TWD（${sgn(twGain)}${twGainPct}%）<br>
+    美股 $${$(usMV)} USD ≈ TWD $${$(usMV_twd)}<br>
+    最強：${twByGain[0]?.name} +${twByGain[0]?.pct?.toFixed(1)}%<br>
+    最弱：${twByLoss[0]?.name} ${twByLoss[0]?.pct?.toFixed(1)}%<br>
+    <em>可問：「美股總共多少台幣」、「00878 現在怎樣」、「最虧的股票」、「股息估計多少」</em>` });
+  r.push({ agent:'Max｜風險管理師', color:'var(--red)', icon:'🛡️', msg:
+    `🚨 需立即關注：<br>
+    • ${twByLoss[0]?.name} ${twByLoss[0]?.pct?.toFixed(1)}% — ${advisorRec(twByLoss[0],false).reason}<br>
+    • ${twByLoss[1]?.name} ${twByLoss[1]?.pct?.toFixed(1)}% — ${advisorRec(twByLoss[1],false).reason}` });
+  return r.slice(0,3);
 }
 </script>
 
