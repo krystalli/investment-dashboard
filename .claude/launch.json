@@ -1,6 +1,11 @@
 {
-  "preview": {
-    "command": "python3 -m http.server 8080",
-    "url": "http://localhost:8080"
-  }
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8080"],
+      "port": 8080
+    }
+  ]
 }
