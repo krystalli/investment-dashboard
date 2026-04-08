@@ -1835,7 +1835,7 @@ function toggleApiKeyPanel() {
   if (!isOpen) {
     const key = localStorage.getItem('inv_gemini_key') || '';
     document.getElementById('apiKeyInput').value = key ? '••••••••' + key.slice(-4) : '';
-    document.getElementById('apiKeyInput').placeholder = key ? '已設定 API Key' : '輸入 Google Gemini API Key...';
+    document.getElementById('apiKeyInput').placeholder = key ? '已設定 API Key' : '輸入 Groq API Key...';
     document.getElementById('apiKeyInput').focus();
   }
 }
@@ -1845,7 +1845,7 @@ function saveApiKey() {
     localStorage.setItem('inv_gemini_key', val);
     updateGearStatus();
     document.getElementById('apiKeyPanel').style.display = 'none';
-    addSystemMsg('✅ API Key 已儲存，現在使用 Gemini AI 回答問題。');
+    addSystemMsg('✅ API Key 已儲存，現在使用 Groq AI 回答問題。');
   }
 }
 function clearApiKey() {
@@ -1935,13 +1935,19 @@ ${fmt(US_ROY, true)}
 }
 
 async function callGeminiAPI(question, apiKey) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
-      system_instruction: { parts: [{ text: buildPortfolioContext() }] },
-      contents: [{ role: 'user', parts: [{ text: question }] }]
+      model: 'llama-3.3-70b-versatile',
+      max_tokens: 1024,
+      messages: [
+        { role: 'system', content: buildPortfolioContext() },
+        { role: 'user', content: question }
+      ]
     })
   });
   if (!res.ok) {
@@ -1949,7 +1955,7 @@ async function callGeminiAPI(question, apiKey) {
     throw new Error(err.error?.message || `HTTP ${res.status}`);
   }
   const data = await res.json();
-  return data.candidates[0].content.parts[0].text.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  return data.choices[0].message.content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
 }
 
 function generateChatResponse(question) {
