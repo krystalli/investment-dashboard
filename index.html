@@ -169,6 +169,13 @@
   .chat-input-row input:focus { border-color: var(--accent); }
   .chat-input-row button { background: var(--accent); color: white; border: none; border-radius: 8px; padding: 8px 14px; font-size: 13px; cursor: pointer; white-space: nowrap; }
   .chat-typing { color: var(--text2); font-size: 12px; padding: 4px 8px; }
+  .chat-gear { background: none; border: none; color: var(--text2); font-size: 15px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .chat-gear:hover { color: var(--text); }
+  .chat-apikey-panel { padding: 8px 12px; border-top: 1px solid var(--border); background: var(--surface2); display: none; gap: 6px; align-items: center; }
+  .chat-apikey-panel input { flex: 1; padding: 6px 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 12px; outline: none; font-family: monospace; }
+  .chat-apikey-panel input:focus { border-color: var(--accent); }
+  .chat-apikey-panel button { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .chat-apikey-panel button.clear { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
 
   hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
@@ -1817,29 +1824,138 @@ function updateNavDate() {
 function toggleChat() {
   const p = document.getElementById('chatPanel');
   p.style.display = p.style.display === 'none' ? 'flex' : 'none';
-  if (p.style.display === 'flex') document.getElementById('chatInput').focus();
+  if (p.style.display === 'flex') { updateGearStatus(); document.getElementById('chatInput').focus(); }
 }
 function chatKeypress(e) { if (e.key === 'Enter') sendChat(); }
 
-function sendChat() {
+function toggleApiKeyPanel() {
+  const panel = document.getElementById('apiKeyPanel');
+  const isOpen = panel.style.display === 'flex';
+  panel.style.display = isOpen ? 'none' : 'flex';
+  if (!isOpen) {
+    const key = localStorage.getItem('inv_claude_key') || '';
+    document.getElementById('apiKeyInput').value = key ? '••••••••' + key.slice(-4) : '';
+    document.getElementById('apiKeyInput').placeholder = key ? '已設定 API Key' : '輸入 Anthropic API Key...';
+    document.getElementById('apiKeyInput').focus();
+  }
+}
+function saveApiKey() {
+  const val = document.getElementById('apiKeyInput').value.trim();
+  if (val && !val.startsWith('••••')) {
+    localStorage.setItem('inv_claude_key', val);
+    updateGearStatus();
+    document.getElementById('apiKeyPanel').style.display = 'none';
+    addSystemMsg('✅ API Key 已儲存，現在使用 Claude AI 回答問題。');
+  }
+}
+function clearApiKey() {
+  localStorage.removeItem('inv_claude_key');
+  document.getElementById('apiKeyInput').value = '';
+  document.getElementById('apiKeyInput').placeholder = '輸入 Anthropic API Key...';
+  updateGearStatus();
+  addSystemMsg('🗑️ API Key 已清除，切換回規則引擎模式。');
+}
+function updateGearStatus() {
+  const gear = document.getElementById('chatGear');
+  if (gear) gear.style.color = localStorage.getItem('inv_claude_key') ? 'var(--green)' : '';
+}
+function addSystemMsg(text) {
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML += `<div class="chat-bubble agent">
+    <div class="chat-agent-name">🤖 系統</div>
+    <div class="chat-agent-body" style="border-color:var(--blue)">${text}</div>
+  </div>`;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+async function sendChat() {
   const input = document.getElementById('chatInput');
   const q = input.value.trim();
   if (!q) return;
   input.value = '';
   const msgs = document.getElementById('chatMessages');
-  msgs.innerHTML += `<div class="chat-bubble user">${q}</div>`;
-  msgs.innerHTML += `<div class="chat-typing" id="chatTyping">顧問們分析中...</div>`;
+  msgs.innerHTML += `<div class="chat-bubble user">${escHtml(q)}</div>`;
+  const tid = 'ct_' + Date.now();
+  msgs.innerHTML += `<div class="chat-typing" id="${tid}">顧問們分析中...</div>`;
   msgs.scrollTop = msgs.scrollHeight;
-  setTimeout(() => {
-    document.getElementById('chatTyping')?.remove();
-    generateChatResponse(q).forEach(r => {
+
+  const apiKey = localStorage.getItem('inv_claude_key');
+  if (apiKey) {
+    try {
+      const reply = await callClaudeAPI(q, apiKey);
+      document.getElementById(tid)?.remove();
       msgs.innerHTML += `<div class="chat-bubble agent">
-        <div class="chat-agent-name">${r.icon} ${r.agent}</div>
-        <div class="chat-agent-body" style="border-color:${r.color}">${r.msg}</div>
+        <div class="chat-agent-name">🤖 Claude｜AI 投資顧問</div>
+        <div class="chat-agent-body" style="border-color:var(--accent)">${reply}</div>
       </div>`;
-    });
-    msgs.scrollTop = msgs.scrollHeight;
-  }, 600);
+    } catch (e) {
+      document.getElementById(tid)?.remove();
+      msgs.innerHTML += `<div class="chat-bubble agent">
+        <div class="chat-agent-name">⚠️ 系統</div>
+        <div class="chat-agent-body" style="border-color:var(--red)">API 呼叫失敗：${escHtml(e.message)}</div>
+      </div>`;
+    }
+  } else {
+    setTimeout(() => {
+      document.getElementById(tid)?.remove();
+      generateChatResponse(q).forEach(r => {
+        msgs.innerHTML += `<div class="chat-bubble agent">
+          <div class="chat-agent-name">${r.icon} ${r.agent}</div>
+          <div class="chat-agent-body" style="border-color:${r.color}">${r.msg}</div>
+        </div>`;
+      });
+      msgs.scrollTop = msgs.scrollHeight;
+    }, 600);
+    return;
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function buildPortfolioContext() {
+  const fmt = (arr, isUS) => arr.map(h => isUS
+    ? `${h.sym}: ${h.shares}股 均價$${h.avg} 現價$${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}% 市值$${h.mv?.toFixed(0)} 建議:${h.rec} ${h.reason}`
+    : `${h.name}(${h.code}): ${h.shares}股 均價${h.avg} 現價${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}% 市值${h.mv} 建議:${h.rec} ${h.reason}`
+  ).join('\n');
+  return `你是一位專業的投資顧問，負責分析以下投資人的持倉並回答問題。請用繁體中文回答，語氣專業但親切，回答要具體且有根據。
+
+【台股持倉】
+${fmt(TW_HOLD, false)}
+
+【美股 Firstrade】
+${fmt(US_MAIN, true)}
+
+【美股 複委託(Roy)】
+${fmt(US_ROY, true)}
+
+請根據以上持倉資料回答投資人的問題。如果問題不在資料範圍內，也可以提供一般性的投資建議。回答請盡量簡潔、有重點，可使用適當的 emoji 和換行增加可讀性。`;
+}
+
+async function callClaudeAPI(question, apiKey) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: buildPortfolioContext(),
+      messages: [{ role: 'user', content: question }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content[0].text.replace(/\n/g, '<br>');
 }
 
 function generateChatResponse(question) {
@@ -2050,7 +2166,15 @@ function generateChatResponse(question) {
 <div id="chatPanel" class="chat-panel" style="display:none; flex-direction:column">
   <div class="chat-header">
     <span>🤖 AI 投資顧問團隊</span>
-    <button class="chat-close" onclick="toggleChat()">✕</button>
+    <div style="display:flex;align-items:center;gap:4px">
+      <button id="chatGear" class="chat-gear" onclick="toggleApiKeyPanel()" title="設定 Claude API Key">⚙️</button>
+      <button class="chat-close" onclick="toggleChat()">✕</button>
+    </div>
+  </div>
+  <div id="apiKeyPanel" class="chat-apikey-panel">
+    <input id="apiKeyInput" type="password" placeholder="輸入 Anthropic API Key..." onkeypress="if(event.key==='Enter')saveApiKey()">
+    <button onclick="saveApiKey()">儲存</button>
+    <button class="clear" onclick="clearApiKey()">清除</button>
   </div>
   <div class="chat-messages" id="chatMessages">
     <div class="chat-bubble agent">
