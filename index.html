@@ -1824,37 +1824,47 @@ async function syncSheets() {
     // ── 歷年損益/資產（直式格式：每行一個類別，小計行為月份合計）──
     const histRows = parseCSV(histText);
     if (histRows.length > 1) {
-      // 尋找 header 行，確定欄位位置
-      let dateCol = 1, catCol = 2, mvCol = 4;
-      const hIdx = histRows.findIndex(r => r.some(c => ['類別','日期'].some(k => c.trim().includes(k))));
-      if (hIdx >= 0) {
-        const h = histRows[hIdx].map(c => c.trim());
-        const fi = (names) => { for (const n of names) { const i = h.findIndex(c => c.includes(n)); if (i >= 0) return i; } return -1; };
-        const dc = fi(['日期','date']); if (dc >= 0) dateCol = dc;
-        const cc = fi(['類別','category']); if (cc >= 0) catCol = cc;
-        const mc = fi(['市值','mv']); if (mc >= 0) mvCol = mc;
-      }
+      // 不依賴固定欄位位置：直接掃描每行內容
+      // 日期：符合 YYYY/M 或 YYYY/MM 的格子
+      // 類別：包含「小計」或已知分類名稱的格子
+      // 市值：同行中最大的正數（通常是 E 欄，但不固定）
+      const isDateCell = c => /^\d{4}\/\d{1,2}$/.test(c?.trim());
+      const isSmalCell = c => c?.trim() === '小計';
+      const catKey = cat => {
+        const k = cat.toLowerCase();
+        if (k.includes('firstrade')) return 'firstrade';
+        if (k.includes('幣安') || k.includes('binance')) return 'binance';
+        if (k.includes('銀行') || k.includes('bank')) return 'bank';
+        if (k.includes('複委託') || k.includes('sub')) return 'subbroker';
+        if (k.includes('股票')) return 'stocks';
+        return null;
+      };
 
-      // 解析月份群組：追蹤當前日期，遇到「小計」行記錄月份總值
       let curDate = null;
-      const monthGroups = {}; // date → { small: v, cats: {} }
+      const monthGroups = {}; // "YYYY/M" → { small: v, cats: {} }
       histRows.forEach(row => {
-        const d = row[dateCol]?.trim();
-        const cat = row[catCol]?.trim();
-        const mv = parseNum(row[mvCol]);
-        if (d && /^\d{4}\/\d{1,2}$/.test(d)) { curDate = d; }
-        if (!curDate || !cat) return;
+        // 找日期格（任意欄）
+        for (const c of row) { if (isDateCell(c)) { curDate = c.trim(); break; } }
+        if (!curDate) return;
         if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, cats: {} };
-        if (cat === '小計') {
-          if (mv > 0) monthGroups[curDate].small = mv;
-        } else if (mv > 0) {
-          const k = cat.toLowerCase();
-          const key = k.includes('firstrade') ? 'firstrade'
-                    : k.includes('幣安') || k.includes('binance') ? 'binance'
-                    : k.includes('銀行') || k.includes('bank') ? 'bank'
-                    : k.includes('複委託') || k.includes('sub') ? 'subbroker'
-                    : k.includes('股票') ? 'stocks' : null;
-          if (key) monthGroups[curDate].cats[key] = (monthGroups[curDate].cats[key] || 0) + mv;
+
+        // 找最大正數（市值，排除小數點太多的百分率格子）
+        const bigNum = row.reduce((max, c) => {
+          const n = parseNum(c);
+          return (n > 100000 && n > max) ? n : max;  // 市值通常 > 10萬
+        }, 0);
+
+        if (row.some(isSmalCell)) {
+          if (bigNum > 0) monthGroups[curDate].small = bigNum;
+        } else {
+          // 找分類名稱格
+          for (const c of row) {
+            const key = catKey(c?.trim() || '');
+            if (key && bigNum > 0) {
+              monthGroups[curDate].cats[key] = (monthGroups[curDate].cats[key] || 0) + bigNum;
+              break;
+            }
+          }
         }
       });
 
@@ -1871,7 +1881,7 @@ async function syncSheets() {
         const curM2 = `${now2.getFullYear()}/${String(now2.getMonth()+1).padStart(2,'0')}`;
         if (!MONTHLY.some(r => r.m === curM2)) appendCurrentMonth();
         try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
-        results.push(`歷年 ${MONTHLY.length} 個月`);
+        results.push(`歷年 ${newMonthly.length} 個月`);
       }
 
       // 取最新月份的分類資產值 → SHEET_ALLOC
