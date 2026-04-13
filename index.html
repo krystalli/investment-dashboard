@@ -762,7 +762,8 @@ const MONTHLY = [
   { m:'2026/02', v:9854532 },
   { m:'2026/03', v:10156888 },
 ];
-// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入），並補上當月估算值
+// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入）
+// appendCurrentMonth() 在 US_ROY 宣告後才呼叫，避免 TDZ 錯誤
 (function() {
   try {
     const saved = localStorage.getItem('inv_monthly_data');
@@ -773,7 +774,6 @@ const MONTHLY = [
       }
     }
   } catch(e) {}
-  appendCurrentMonth();
 })();
 
 function calcCurrentTotal() {
@@ -874,6 +874,8 @@ const US_ROY = [
   { sym:'NVDA', shares:3.5,    avg:185.60, price:171.24, cost:649.59,   mv:599.34,   pnl:-50.25,   pct:-7.74,  rec:'HOLD',  reason:'NVDA持倉補倉，合併看待' },
   { sym:'SPY',  shares:6.474,  avg:618.95, price:655.09, cost:4007.08,  mv:4241.05,  pnl:233.97,   pct:5.84,   rec:'HOLD',  reason:'+5.84%穩健，S&P500長期持有' },
 ];
+// 補上當月估算值（TW_HOLD / US_MAIN / US_ROY 已初始化，不會觸發 TDZ）
+appendCurrentMonth();
 
 // Backtest data for Taiwan stocks
 const TW_BT = [
