@@ -1596,6 +1596,7 @@ function initHistoryCharts() {
 }
 
 // ─────── INIT ───────
+let SHEET_ALLOC = { stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0, ready: false };
 initOverviewCharts();
 window._overviewInit = true;
 renderTwStocks();
@@ -1616,9 +1617,6 @@ const SHEET_GIDS = {
   us:      '1730614274',  // 美股持股
   history: '361233489',   // 歷年損益/資產
 };
-// 由 syncSheets() 從歷年資料工作表解析最新月份的資產分類
-let SHEET_ALLOC = { stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0, ready: false };
-
 // ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
 async function fetchOnePrice(sym) {
