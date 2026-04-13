@@ -1030,7 +1030,7 @@ const MONTHLY = [
   { m:'2026/02', v:9854532 },
   { m:'2026/03', v:10156888 },
 ];
-// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入）
+// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入），並補上當月估算值
 (function() {
   try {
     const saved = localStorage.getItem('inv_monthly_data');
@@ -1041,7 +1041,27 @@ const MONTHLY = [
       }
     }
   } catch(e) {}
+  appendCurrentMonth();
 })();
+
+function calcCurrentTotal() {
+  const USD_TWD = 31.96;
+  const twMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  return Math.round(twMV + usMV);
+}
+
+function appendCurrentMonth() {
+  const now = new Date();
+  const m = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  const exists = MONTHLY.find(r => r.m === m);
+  const v = calcCurrentTotal();
+  if (exists) {
+    exists.v = v; // 更新當月最新估算
+  } else {
+    MONTHLY.push({ m, v });
+  }
+}
 
 const YEARLY = [
   { y:2020, pnl:9498,   div:100,    lend:0,    total:9598 },
@@ -1818,8 +1838,9 @@ async function syncSheets() {
         });
         if (newMonthly.length) {
           MONTHLY.splice(0, MONTHLY.length, ...newMonthly.sort((a,b) => a.m.localeCompare(b.m)));
+          appendCurrentMonth();
           try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
-          results.push(`歷年 ${newMonthly.length} 個月`);
+          results.push(`歷年 ${MONTHLY.length} 個月（含當月估算）`);
         }
       }
     }
