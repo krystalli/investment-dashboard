@@ -1254,15 +1254,30 @@ function renderMonthlyTable() {
 
 function renderAllocDetail() {
   const USD_TWD = 31.96;
-  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
-  const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  const total  = twMV + mainMV + royMV;
-  const rows = [
-    { label: '台灣股票', mv: twMV,   color: 'var(--blue)' },
-    { label: 'Firstrade 美股', mv: mainMV, color: 'var(--purple)' },
-    { label: '複委託', mv: royMV,  color: 'var(--green)' },
-  ];
+  let rows, total;
+  if (SHEET_ALLOC.ready) {
+    // 使用試算表同步的最新月份分類數據
+    const { stocks, subbroker, bank, binance, firstrade } = SHEET_ALLOC;
+    total = stocks + subbroker + bank + binance + firstrade;
+    rows = [
+      { label: '股票',      mv: stocks,    color: 'var(--blue)' },
+      { label: '複委託',    mv: subbroker, color: 'var(--green)' },
+      { label: '銀行',      mv: bank,      color: 'var(--yellow)' },
+      { label: '幣安',      mv: binance,   color: 'var(--orange)' },
+      { label: 'Firstrade', mv: firstrade, color: 'var(--purple)' },
+    ].filter(r => r.mv > 0);
+  } else {
+    // 未同步時：以持股計算三大類
+    const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+    const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    total = twMV + mainMV + royMV;
+    rows = [
+      { label: '股票',      mv: twMV,   color: 'var(--blue)' },
+      { label: '複委託',    mv: royMV,  color: 'var(--green)' },
+      { label: 'Firstrade', mv: mainMV, color: 'var(--purple)' },
+    ];
+  }
   const el = document.getElementById('allocDetail');
   if (!el) return;
   el.innerHTML = rows.map(r => {
@@ -1316,18 +1331,26 @@ function renderAllocAdvice() {
 
 function buildAllocData() {
   const USD_TWD = 31.96;
-  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
-  const usMV   = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  const total  = twMV + usMV;
-  const pct = v => +(v / total * 100).toFixed(2);
-  return {
-    labels: ['台股', 'Firstrade', '複委託'],
-    datasets: [{ data: [pct(twMV), pct(mainMV), pct(royMV)],
-      backgroundColor: ['#58a6ff','#bc8cff','#3fb950'],
-      borderWidth: 0 }]
-  };
+  let labels, values, colors;
+  if (SHEET_ALLOC.ready) {
+    const { stocks, subbroker, bank, binance, firstrade } = SHEET_ALLOC;
+    const total = stocks + subbroker + bank + binance + firstrade;
+    const pct = v => +(v / total * 100).toFixed(2);
+    labels = []; values = []; colors = [];
+    [['股票',stocks,'#58a6ff'],['複委託',subbroker,'#3fb950'],['銀行',bank,'#f0c040'],['幣安',binance,'#f0883e'],['Firstrade',firstrade,'#bc8cff']]
+      .filter(([,v]) => v > 0)
+      .forEach(([l,v,c]) => { labels.push(l); values.push(pct(v)); colors.push(c); });
+  } else {
+    const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+    const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const total  = twMV + mainMV + royMV;
+    const pct = v => +(v / total * 100).toFixed(2);
+    labels = ['股票', '複委託', 'Firstrade'];
+    values = [pct(twMV), pct(royMV), pct(mainMV)];
+    colors = ['#58a6ff', '#3fb950', '#bc8cff'];
+  }
+  return { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] };
 }
 
 function buildGrowthData() {
@@ -1578,11 +1601,11 @@ window._overviewInit = true;
 renderTwStocks();
 renderUsStocks();
 
-// 頁面載入時靜默抓 Nasdaq 現價（不顯示 loading 訊息）
+// 頁面載入時靜默抓 QQQ 現價（不顯示 loading 訊息）
 (async () => {
   try {
-    const nasdaq = await fetchOnePrice('^IXIC');
-    if (nasdaq) updateNasdaqDisplay(nasdaq);
+    const qqq = await fetchOnePrice('QQQ');
+    if (qqq) updateNasdaqDisplay(qqq);
   } catch(e) {}
 })();
 
@@ -1593,6 +1616,8 @@ const SHEET_GIDS = {
   us:      '1730614274',  // 美股持股
   history: '361233489',   // 歷年損益/資產
 };
+// 由 syncSheets() 從歷年資料工作表解析最新月份的資產分類
+let SHEET_ALLOC = { stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0, ready: false };
 
 // ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
@@ -1798,27 +1823,61 @@ async function syncSheets() {
       if (royData.length) { US_ROY.splice(0, US_ROY.length, ...royData); results.push(`複委託 ${royData.length} 筆`); }
     }
 
-    // ── 歷年損益/資產（提取月資產數列）──
+    // ── 歷年損益/資產（直式格式：每行一個類別，小計行為月份合計）──
     const histRows = parseCSV(histText);
-    // header 在第2行（index 1），col7 起是月份
     if (histRows.length > 1) {
-      const dateRow = histRows[1];
-      // 找「總資產」或「合計」列
-      const totalRow = histRows.find(r => ['總資產','合計','total','淨資產'].some(k => r.join('').toLowerCase().includes(k)));
-      if (totalRow) {
-        const newMonthly = [];
-        dateRow.forEach((cell, i) => {
-          const d = cell.trim();
-          if (!d.match(/^\d{4}\/\d{1,2}$/)) return;
-          const v = parseNum(totalRow[i]);
-          if (v > 0) newMonthly.push({ m: d.replace('/','-').padEnd(7,'0'), v });
-        });
-        if (newMonthly.length) {
-          MONTHLY.splice(0, MONTHLY.length, ...newMonthly.sort((a,b) => a.m.localeCompare(b.m)));
-          appendCurrentMonth();
-          try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
-          results.push(`歷年 ${MONTHLY.length} 個月（含當月估算）`);
+      // 尋找 header 行，確定欄位位置
+      let dateCol = 1, catCol = 2, mvCol = 4;
+      const hIdx = histRows.findIndex(r => r.some(c => ['類別','日期'].some(k => c.trim().includes(k))));
+      if (hIdx >= 0) {
+        const h = histRows[hIdx].map(c => c.trim());
+        const fi = (names) => { for (const n of names) { const i = h.findIndex(c => c.includes(n)); if (i >= 0) return i; } return -1; };
+        const dc = fi(['日期','date']); if (dc >= 0) dateCol = dc;
+        const cc = fi(['類別','category']); if (cc >= 0) catCol = cc;
+        const mc = fi(['市值','mv']); if (mc >= 0) mvCol = mc;
+      }
+
+      // 解析月份群組：追蹤當前日期，遇到「小計」行記錄月份總值
+      let curDate = null;
+      const monthGroups = {}; // date → { small: v, cats: {} }
+      histRows.forEach(row => {
+        const d = row[dateCol]?.trim();
+        const cat = row[catCol]?.trim();
+        const mv = parseNum(row[mvCol]);
+        if (d && /^\d{4}\/\d{1,2}$/.test(d)) { curDate = d; }
+        if (!curDate || !cat) return;
+        if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, cats: {} };
+        if (cat === '小計') {
+          if (mv > 0) monthGroups[curDate].small = mv;
+        } else if (mv > 0) {
+          const k = cat.toLowerCase();
+          const key = k.includes('firstrade') ? 'firstrade'
+                    : k.includes('幣安') || k.includes('binance') ? 'binance'
+                    : k.includes('銀行') || k.includes('bank') ? 'bank'
+                    : k.includes('複委託') || k.includes('sub') ? 'subbroker'
+                    : k.includes('股票') ? 'stocks' : null;
+          if (key) monthGroups[curDate].cats[key] = (monthGroups[curDate].cats[key] || 0) + mv;
         }
+      });
+
+      // 從小計行建構 MONTHLY 資料
+      const newMonthly = Object.entries(monthGroups)
+        .filter(([, g]) => g.small > 0)
+        .map(([d, g]) => ({ m: d.replace('/', '-').padEnd(7, '0'), v: g.small }))
+        .sort((a, b) => a.m.localeCompare(b.m));
+      if (newMonthly.length) {
+        MONTHLY.splice(0, MONTHLY.length, ...newMonthly);
+        appendCurrentMonth();
+        try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
+        results.push(`歷年 ${MONTHLY.length} 個月（含當月估算）`);
+      }
+
+      // 取最新月份的分類資產值 → SHEET_ALLOC
+      const sortDate = d => { const [y, m] = d.split('/').map(Number); return y * 100 + m; };
+      const latestDate = Object.keys(monthGroups).sort((a, b) => sortDate(b) - sortDate(a))[0];
+      if (latestDate && monthGroups[latestDate].cats) {
+        const c = monthGroups[latestDate].cats;
+        SHEET_ALLOC = { stocks: c.stocks||0, subbroker: c.subbroker||0, bank: c.bank||0, binance: c.binance||0, firstrade: c.firstrade||0, ready: true };
       }
     }
 
