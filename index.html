@@ -1340,6 +1340,7 @@ function rerenderCharts() {
   renderMonthlyTable();
   renderAllocDetail();
   renderAllocAdvice();
+  renderTeamPage();
   if (window._allocChart) { window._allocChart.data = buildAllocData(); window._allocChart.update(); }
   if (window._growthChart) { window._growthChart.data = buildGrowthData(); window._growthChart.update(); }
   if (window._monthlyChart) {
