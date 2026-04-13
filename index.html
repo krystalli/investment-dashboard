@@ -1693,11 +1693,19 @@ async function syncSheets() {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=`;
   const results = [];
 
+  const fetchWithTimeout = (url, ms = 15000) => {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { signal: ctrl.signal })
+      .then(r => { clearTimeout(id); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+      .catch(e => { clearTimeout(id); throw new Error(e.name === 'AbortError' ? '請求逾時（15秒）' : e.message); });
+  };
+
   try {
     const [twText, usText, histText] = await Promise.all([
-      fetch(base + SHEET_GIDS.tw).then(r => { if(!r.ok) throw new Error('台股表讀取失敗'); return r.text(); }),
-      fetch(base + SHEET_GIDS.us).then(r => { if(!r.ok) throw new Error('美股表讀取失敗'); return r.text(); }),
-      fetch(base + SHEET_GIDS.history).then(r => { if(!r.ok) throw new Error('歷年表讀取失敗'); return r.text(); }),
+      fetchWithTimeout(base + SHEET_GIDS.tw).catch(e => { throw new Error('台股表：' + e.message); }),
+      fetchWithTimeout(base + SHEET_GIDS.us).catch(e => { throw new Error('美股表：' + e.message); }),
+      fetchWithTimeout(base + SHEET_GIDS.history).catch(e => { throw new Error('歷年表：' + e.message); }),
     ]);
 
     // ── 台股持股 ──
