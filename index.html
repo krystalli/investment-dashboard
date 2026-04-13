@@ -245,7 +245,6 @@
     <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
     <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
     <button class="nav-tab" onclick="showPage('team')">AI投資團隊</button>
-    <button class="nav-tab" onclick="showPage('crypto')">幣安</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -1088,9 +1087,15 @@ function renderTeamPage() {
   const allUS  = [...US_MAIN, ...US_ROY];
   const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
   const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
-  const total  = twMV + usMV;
+  // 加入幣安（優先用 SHEET_ALLOC，否則用 CRYPTO 陣列估算）
+  const binanceMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance
+    : CRYPTO.reduce((s,c) => s+(c.mv||0), 0) * USD_TWD;
+  const bankMV = SHEET_ALLOC.ready ? SHEET_ALLOC.bank : 0;
+  const total  = twMV + usMV + binanceMV + bankMV;
   const twPct  = (twMV/total*100).toFixed(1);
   const usPct  = (usMV/total*100).toFixed(1);
+  const binPct = (binanceMV/total*100).toFixed(1);
+  const bankPct = (bankMV/total*100).toFixed(1);
 
   // 排序
   const twByLoss = [...TW_HOLD].sort((a,b) => a.pct-b.pct);
@@ -1154,6 +1159,7 @@ function renderTeamPage() {
   const maxConc = [
     b(twPct>70?'var(--red)':'var(--orange)', `台股 ${twPct}% ${twPct>70?'遠超':'超過'}合理上限 60%，${twPct>70?'台海/景氣衝擊致命':'建議逐步調降'}`),
     b('var(--yellow)', `美股部位 ${usPct}%，${usPct<25?'仍偏低，可持續增加':'配置合理，繼續持有'}`),
+    b(+binPct>5?'var(--red)':'var(--green)', `幣安加密貨幣 ${binPct}%（$${Math.round(binanceMV).toLocaleString()} TWD）${+binPct>5?'，超過建議上限5%，高波動資產應控管':'，佔比合理'}`),
     b('var(--orange)', '所有虧損持倉應設硬停損，不輕易追平均成本')
   ].join('');
   const maxAction = [
@@ -1211,8 +1217,8 @@ function renderTeamPage() {
 
   document.getElementById('teamContent').innerHTML = `
     <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi-card"><div class="kpi-label">總資產（估）</div><div class="kpi-value">$${(total/1e6).toFixed(2)}M</div><div class="kpi-sub neutral">TWD ${curM}</div></div>
-      <div class="kpi-card"><div class="kpi-label">組合評級</div><div class="kpi-value" style="color:var(--yellow)">${twPct>70?'中高風險':'中等風險'}</div><div class="kpi-sub neutral">台股 ${twPct}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">總資產（估）</div><div class="kpi-value">$${(total/1e6).toFixed(2)}M</div><div class="kpi-sub neutral">TWD ${curM}｜含幣安 ${binPct}%</div></div>
+      <div class="kpi-card"><div class="kpi-label">組合評級</div><div class="kpi-value" style="color:var(--yellow)">${twPct>70?'中高風險':'中等風險'}</div><div class="kpi-sub neutral">台股 ${twPct}% · 幣安 ${binPct}%</div></div>
       <div class="kpi-card"><div class="kpi-label">最需關注</div><div class="kpi-value down" style="font-size:16px">${urgentStock?urgentStock.name:'無緊急警示'}</div><div class="kpi-sub down">${urgentStock?urgentStock.pct.toFixed(1)+'% '+urgentStock.reason.slice(0,15):'所有部位風險可控'}</div></div>
       <div class="kpi-card"><div class="kpi-label">最大獲利</div><div class="kpi-value up" style="font-size:16px">${bestStock?.name} +${bestStock?.pct.toFixed(0)}%</div><div class="kpi-sub up">核心持倉</div></div>
     </div>
@@ -1227,7 +1233,7 @@ function renderTeamPage() {
       ${card('💰','rgba(188,140,255,.15)','Emma — 股息策略師','被動收入 · 殖利率 · 股息再投入',
         `<span class="team-verdict" style="background:rgba(63,185,80,.15);color:var(--green)">✅ 穩健收益</span>`,
         sec('💎 股息核心持倉',emmaCoreDiv)+sec('📊 股息進度',emmaProgress)+sec('🎯 股息優化',emmaOpt))}
-      ${card('🌏','rgba(227,179,65,.15)','David — 宏觀策略師','總體經濟 · 匯率 · 地緣政治',
+      ${card('🌏','rgba(227,179,65,.15)','David — 宏觀策略師','總體經濟 · 匯率 · 地緣政治 · 加密市場',
         `<span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">📡 審慎觀察</span>`,
         sec('🌐 宏觀環境',
           b('var(--red)','美國關稅戰持續，科技股出口受限壓制')+
@@ -1237,6 +1243,10 @@ function renderTeamPage() {
           b('var(--green)','台積電戰略重要性↑，美日歐設廠，長期股價撐盤')+
           b('var(--green)','AI 半導體需求 2026-27 仍強勁，台灣供應鏈受益')+
           b('var(--yellow)','中國景氣未如預期，減少對陸依賴標的正確'))+
+        sec('🪙 加密市場',
+          b('var(--orange)',`幣安持倉 ${binPct}%（$${Math.round(binanceMV).toLocaleString()} TWD），注意高波動與監管風險`)+
+          b('var(--green)','BTC 2024 減半效應仍在，長期主力幣種核心持有')+
+          b('var(--yellow)','穩定幣 USDT 保留作待機資金，等待市場修正進場'))+
         sec('💡 策略含意',
           b('var(--blue)',`加大美元資產至 ${Math.round(40-usPct)}%+，對沖台幣地緣政治風險`)+
           b('var(--blue)','持有 QQQ/SPY 作為美元計價資產核心')+
@@ -1273,40 +1283,80 @@ function renderMonthlyTable() {
 
 function renderAllocDetail() {
   const USD_TWD = 31.96;
-  let rows, total;
+  let rows, total, totalCost;
   if (SHEET_ALLOC.ready) {
-    // 使用試算表同步的最新月份分類數據
-    const { stocks, subbroker, bank, binance, firstrade } = SHEET_ALLOC;
-    total = stocks + subbroker + bank + binance + firstrade;
+    const { stocks, subbroker, bank, binance, firstrade,
+            stocks_c, subbroker_c, bank_c, binance_c, firstrade_c } = SHEET_ALLOC;
+    total     = stocks + subbroker + bank + binance + firstrade;
+    totalCost = stocks_c + subbroker_c + bank_c + binance_c + firstrade_c;
     rows = [
-      { label: '股票',      mv: stocks,    color: 'var(--blue)' },
-      { label: '複委託',    mv: subbroker, color: 'var(--green)' },
-      { label: '銀行',      mv: bank,      color: 'var(--yellow)' },
-      { label: '幣安',      mv: binance,   color: 'var(--orange)' },
-      { label: 'Firstrade', mv: firstrade, color: 'var(--purple)' },
+      { label: '股票',      mv: stocks,    cost: stocks_c,    color: 'var(--blue)' },
+      { label: '複委託',    mv: subbroker, cost: subbroker_c, color: 'var(--green)' },
+      { label: '銀行',      mv: bank,      cost: bank_c,      color: 'var(--yellow)' },
+      { label: '幣安',      mv: binance,   cost: binance_c,   color: 'var(--orange)' },
+      { label: 'Firstrade', mv: firstrade, cost: firstrade_c, color: 'var(--purple)' },
     ].filter(r => r.mv > 0);
   } else {
-    // 未同步時：以持股計算三大類
+    // 未同步：以持股估算
     const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+    const twCost = TW_HOLD.reduce((s, h) => s + ((h.avg || 0) * (h.shares || 0)), 0);
     const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const mainC  = US_MAIN.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
     const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-    total = twMV + mainMV + royMV;
+    const royC   = US_ROY.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
+    total     = twMV + mainMV + royMV;
+    totalCost = twCost + mainC + royC;
     rows = [
-      { label: '股票',      mv: twMV,   color: 'var(--blue)' },
-      { label: '複委託',    mv: royMV,  color: 'var(--green)' },
-      { label: 'Firstrade', mv: mainMV, color: 'var(--purple)' },
+      { label: '股票',      mv: twMV,   cost: twCost, color: 'var(--blue)' },
+      { label: '複委託',    mv: royMV,  cost: royC,   color: 'var(--green)' },
+      { label: 'Firstrade', mv: mainMV, cost: mainC,  color: 'var(--purple)' },
     ];
   }
   const el = document.getElementById('allocDetail');
   if (!el) return;
-  el.innerHTML = rows.map(r => {
-    const p = (r.mv / total * 100).toFixed(1);
-    const cls = r.mv > 0 ? 'up' : 'neutral';
-    return `<div class="progress-wrap">
-      <div class="progress-label"><span>${r.label}</span><span class="${cls}">${p}% · $${Math.round(r.mv).toLocaleString()}</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${r.color}"></div></div>
-    </div>`;
+  const fmt = n => '$' + Math.round(n).toLocaleString();
+  const pnlCls = n => n >= 0 ? 'up' : 'down';
+  const pnlFmt = (mv, cost) => {
+    if (!cost) return '—';
+    const d = mv - cost;
+    return `<span class="${pnlCls(d)}">${d >= 0 ? '+' : ''}${fmt(d)}</span>`;
+  };
+  const pctFmt = (mv, cost) => {
+    if (!cost) return '—';
+    const p = (mv - cost) / cost * 100;
+    return `<span class="${pnlCls(p)}">${p >= 0 ? '+' : ''}${p.toFixed(1)}%</span>`;
+  };
+  const rowsHtml = rows.map(r => {
+    const alloPct = (r.mv / total * 100).toFixed(1);
+    return `<tr>
+      <td><span style="color:${r.color};margin-right:5px">●</span>${r.label}</td>
+      <td style="font-family:monospace">${r.cost > 0 ? fmt(r.cost) : '—'}</td>
+      <td style="font-family:monospace">${fmt(r.mv)}</td>
+      <td style="font-family:monospace">${pnlFmt(r.mv, r.cost)}</td>
+      <td>${pctFmt(r.mv, r.cost)}</td>
+      <td><span style="color:var(--text2)">${alloPct}%</span></td>
+    </tr>`;
   }).join('');
+  const totPnl  = totalCost > 0 ? pnlFmt(total, totalCost) : '—';
+  const totPct  = totalCost > 0 ? pctFmt(total, totalCost) : '—';
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>類別</th><th>成本</th><th>市值</th><th>損益</th><th>損益率</th><th>佔比</th></tr></thead>
+      <tbody>
+        ${rowsHtml}
+        <tr style="font-weight:600;border-top:2px solid var(--border)">
+          <td>小計</td>
+          <td style="font-family:monospace">${totalCost > 0 ? fmt(totalCost) : '—'}</td>
+          <td style="font-family:monospace">${fmt(total)}</td>
+          <td style="font-family:monospace">${totPnl}</td>
+          <td>${totPct}</td>
+          <td>100%</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+    ${!SHEET_ALLOC.ready ? '<div style="font-size:11px;color:var(--text2);margin-top:8px">* 尚未同步試算表，成本欄資料為估算值</div>' : ''}`;
 }
 
 function renderAllocAdvice() {
@@ -1744,7 +1794,11 @@ function initHistoryCharts() {
 }
 
 // ─────── INIT ───────
-let SHEET_ALLOC = { stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0, ready: false };
+let SHEET_ALLOC = {
+  stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0,
+  stocks_c: 0, subbroker_c: 0, bank_c: 0, binance_c: 0, firstrade_c: 0,
+  ready: false
+};
 initOverviewCharts();
 window._overviewInit = true;
 renderTwStocks();
@@ -1903,9 +1957,12 @@ async function syncSheets() {
       };
       if (idx.code < 0) throw new Error(`台股：找不到「代號」欄，目前欄位：${h.slice(0,10).join(', ')}`);
       const newHold = [];
+      // 台股代號：4~6 位數字，可選一個英文字母結尾（如 00878、2330、00937B）
+      const isValidTWCode = c => /^[0-9]{4,6}[A-Za-z]?$/.test(c);
       twRows.slice(1).forEach(row => {
         const code = row[idx.code]?.trim();
         if (!code) return;
+        if (!isValidTWCode(code)) return;  // 過濾 房貸/信貸/配息SUM/代號 等非股票行
         const avg = parseNum(row[idx.avg]);
         const price = parseNum(row[idx.price]) || avg;
         const shares = parseNum(row[idx.shares]);
@@ -1943,6 +2000,8 @@ async function syncSheets() {
         if (isUsHeader(rows[i])) break; // 遇到第二個 header 停止
         const sym = rows[i][ui.sym]?.trim();
         if (!sym) continue;
+        // 過濾含中文字元的非股票行（如「富邦複委托」）
+        if (/[\u4e00-\u9fff\uff00-\uffef]/.test(sym)) continue;
         const avg = parseNum(rows[i][ui.avg]);
         const price = parseNum(rows[i][ui.price]) || avg;
         const shares = parseNum(rows[i][ui.shares]);
@@ -1989,27 +2048,28 @@ async function syncSheets() {
       };
 
       let curDate = null;
-      const monthGroups = {}; // "YYYY/M" → { small: v, cats: {} }
+      const monthGroups = {}; // "YYYY/M" → { small: 0, small_c: 0, cats: {}, cats_c: {} }
       histRows.forEach(row => {
         // 找日期格（任意欄）
         for (const c of row) { if (isDateCell(c)) { curDate = c.trim(); break; } }
         if (!curDate) return;
-        if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, cats: {} };
+        if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, small_c: 0, cats: {}, cats_c: {} };
 
-        // 找最大正數（市值，排除小數點太多的百分率格子）
-        const bigNum = row.reduce((max, c) => {
-          const n = parseNum(c);
-          return (n > 100000 && n > max) ? n : max;  // 市值通常 > 10萬
-        }, 0);
+        // 找所有大數字（市值/成本通常 > 5萬）並排序：最小=成本，最大=市值
+        const largeNums = row.map(c => parseNum(c)).filter(n => n > 50000).sort((a,b) => a-b);
+        const bigMV   = largeNums.length > 0 ? largeNums[largeNums.length - 1] : 0;
+        const bigCost = largeNums.length > 1 ? largeNums[0] : 0;  // 有兩個大數時較小者為成本
 
         if (row.some(isSmalCell)) {
-          if (bigNum > 0) monthGroups[curDate].small = bigNum;
+          if (bigMV > 0) monthGroups[curDate].small = bigMV;
+          if (bigCost > 0) monthGroups[curDate].small_c = bigCost;
         } else {
           // 找分類名稱格
           for (const c of row) {
             const key = catKey(c?.trim() || '');
-            if (key && bigNum > 0) {
-              monthGroups[curDate].cats[key] = (monthGroups[curDate].cats[key] || 0) + bigNum;
+            if (key && bigMV > 0) {
+              monthGroups[curDate].cats[key] = bigMV;
+              if (bigCost > 0) monthGroups[curDate].cats_c[key] = bigCost;
               break;
             }
           }
@@ -2036,8 +2096,13 @@ async function syncSheets() {
       const sortDate = d => { const [y, m] = d.split('/').map(Number); return y * 100 + m; };
       const latestDate = Object.keys(monthGroups).sort((a, b) => sortDate(b) - sortDate(a))[0];
       if (latestDate && monthGroups[latestDate].cats) {
-        const c = monthGroups[latestDate].cats;
-        SHEET_ALLOC = { stocks: c.stocks||0, subbroker: c.subbroker||0, bank: c.bank||0, binance: c.binance||0, firstrade: c.firstrade||0, ready: true };
+        const c  = monthGroups[latestDate].cats;
+        const cc = monthGroups[latestDate].cats_c || {};
+        SHEET_ALLOC = {
+          stocks: c.stocks||0, subbroker: c.subbroker||0, bank: c.bank||0, binance: c.binance||0, firstrade: c.firstrade||0,
+          stocks_c: cc.stocks||0, subbroker_c: cc.subbroker||0, bank_c: cc.bank||0, binance_c: cc.binance||0, firstrade_c: cc.firstrade||0,
+          ready: true
+        };
       }
     }
 
