@@ -1768,9 +1768,9 @@ async function syncSheets() {
         newUs.push({ sym, name: sym, shares, avg, price, mv, cost, pnl, pct, rec: advisor.rec, reason: advisor.reason });
       });
       if (newUs.length) {
-        // Sheet "美股持股" = 複委託帳戶 (US_ROY)，Firstrade (US_MAIN) 保留原資料
-        US_ROY.splice(0, US_ROY.length, ...newUs);
-        results.push(`美股複委託 ${newUs.length} 筆`);
+        // "美股持股" = Firstrade (US_MAIN)，用 GOOGLEFINANCE 即時現價
+        US_MAIN.splice(0, US_MAIN.length, ...newUs);
+        results.push(`美股 Firstrade ${newUs.length} 筆`);
       }
     }
 
