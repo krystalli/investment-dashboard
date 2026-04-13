@@ -1736,42 +1736,51 @@ async function syncSheets() {
       if (newHold.length) { TW_HOLD.splice(0, TW_HOLD.length, ...newHold); results.push(`台股 ${newHold.length} 筆`); }
     }
 
-    // ── 美股持股（第0行=日期，第1行=header）──
+    // ── 美股持股（上半部 = Firstrade, 下半部 = 複委託，各有自己的 header）──
     const usRows = parseCSV(usText);
-    // 找 header row（找到包含「股票」或「symbol」的那行）
-    let usHeaderIdx = usRows.findIndex(r => r.some(c => ['股票','symbol','sym','ticker'].some(k => c.trim().toLowerCase().includes(k))));
-    if (usHeaderIdx < 0) usHeaderIdx = 1; // fallback: 第2行
-    const uh = usRows[usHeaderIdx].map(x => x.trim());
-    const ui = {
-      sym:    findCol(uh, ['股票','symbol','sym','ticker','代號']),
-      shares: findCol(uh, ['持有股數','shares','股數','數量']),
-      avg:    findCol(uh, ['買入均價','均價','avg','平均成本']),
-      price:  findCol(uh, ['現價','price','市價']),
-      mv:     findCol(uh, ['市值','mv']),
-      cost:   findCol(uh, ['總成本','cost','成本']),
-      pnl:    findCol(uh, ['未實現損益','損益','pnl']),
-      pct:    findCol(uh, ['未實現損益率','損益率','pct']),
-    };
-    if (ui.sym >= 0) {
-      const newUs = [];
-      usRows.slice(usHeaderIdx + 1).forEach(row => {
-        const sym = row[ui.sym]?.trim();
-        if (!sym || sym === '') return;
-        const avg = parseNum(row[ui.avg]);
-        const price = parseNum(row[ui.price]) || avg;
-        const shares = parseNum(row[ui.shares]);
-        const mv = parseNum(row[ui.mv]) || +(price * shares).toFixed(2);
-        const cost = parseNum(row[ui.cost]) || +(avg * shares).toFixed(2);
-        const pnl = parseNum(row[ui.pnl]) || +(mv - cost).toFixed(2);
-        const pct = ui.pct >= 0 ? parseNum(row[ui.pct]) : (avg ? (price-avg)/avg*100 : 0);
+    const isUsHeader = r => r.some(c => ['股票','symbol','sym','ticker'].some(k => c.trim().toLowerCase().includes(k)));
+    const parseUsTable = (rows, startIdx) => {
+      const h = rows[startIdx].map(x => x.trim());
+      const ui = {
+        sym:    findCol(h, ['股票','symbol','sym','ticker','代號']),
+        shares: findCol(h, ['持有股數','shares','股數','數量']),
+        avg:    findCol(h, ['買入均價','均價','avg','平均成本']),
+        price:  findCol(h, ['現價','price','市價']),
+        mv:     findCol(h, ['市值','mv']),
+        cost:   findCol(h, ['總成本','cost','成本']),
+        pnl:    findCol(h, ['未實現損益','損益','pnl']),
+        pct:    findCol(h, ['未實現損益率','損益率','pct']),
+      };
+      if (ui.sym < 0) return [];
+      const result = [];
+      for (let i = startIdx + 1; i < rows.length; i++) {
+        if (isUsHeader(rows[i])) break; // 遇到第二個 header 停止
+        const sym = rows[i][ui.sym]?.trim();
+        if (!sym) continue;
+        const avg = parseNum(rows[i][ui.avg]);
+        const price = parseNum(rows[i][ui.price]) || avg;
+        const shares = parseNum(rows[i][ui.shares]);
+        const mv = parseNum(rows[i][ui.mv]) || +(price * shares).toFixed(2);
+        const cost = parseNum(rows[i][ui.cost]) || +(avg * shares).toFixed(2);
+        const pnl = parseNum(rows[i][ui.pnl]) || +(mv - cost).toFixed(2);
+        const pct = ui.pct >= 0 ? parseNum(rows[i][ui.pct]) : (avg ? (price-avg)/avg*100 : 0);
         const advisor = advisorRec({ sym, pct }, true);
-        newUs.push({ sym, name: sym, shares, avg, price, mv, cost, pnl, pct, rec: advisor.rec, reason: advisor.reason });
-      });
-      if (newUs.length) {
-        // "美股持股" = Firstrade (US_MAIN)，用 GOOGLEFINANCE 即時現價
-        US_MAIN.splice(0, US_MAIN.length, ...newUs);
-        results.push(`美股 Firstrade ${newUs.length} 筆`);
+        result.push({ sym, name: sym, shares, avg, price, mv, cost, pnl, pct, rec: advisor.rec, reason: advisor.reason });
       }
+      return result;
+    };
+
+    // 找兩個 header 的位置
+    const headerIdxs = [];
+    usRows.forEach((r, i) => { if (isUsHeader(r)) headerIdxs.push(i); });
+
+    if (headerIdxs.length >= 1) {
+      const mainData = parseUsTable(usRows, headerIdxs[0]);
+      if (mainData.length) { US_MAIN.splice(0, US_MAIN.length, ...mainData); results.push(`Firstrade ${mainData.length} 筆`); }
+    }
+    if (headerIdxs.length >= 2) {
+      const royData = parseUsTable(usRows, headerIdxs[1]);
+      if (royData.length) { US_ROY.splice(0, US_ROY.length, ...royData); results.push(`複委託 ${royData.length} 筆`); }
     }
 
     // ── 歷年損益/資產（提取月資產數列）──
