@@ -1030,6 +1030,18 @@ const MONTHLY = [
   { m:'2026/02', v:9854532 },
   { m:'2026/03', v:10156888 },
 ];
+// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入）
+(function() {
+  try {
+    const saved = localStorage.getItem('inv_monthly_data');
+    if (saved) {
+      const arr = JSON.parse(saved);
+      if (Array.isArray(arr) && arr.length > 0) {
+        MONTHLY.splice(0, MONTHLY.length, ...arr);
+      }
+    }
+  } catch(e) {}
+})();
 
 const YEARLY = [
   { y:2020, pnl:9498,   div:100,    lend:0,    total:9598 },
@@ -1289,31 +1301,80 @@ function initOverviewCharts() {
     </tr>`;
   });
 
-  // Allocation Pie
-  new Chart(document.getElementById('chartAlloc'), {
+  // Allocation Pie（動態從持倉計算）
+  window._allocChart = new Chart(document.getElementById('chartAlloc'), {
     type: 'doughnut',
-    data: {
-      labels: ['台股', 'Firstrade', '銀行', 'Binance', '複委託', '定期定額', '基富通'],
-      datasets: [{ data: [73.45, 12.31, 5.74, 3.35, 2.46, 1.54, 1.15],
-        backgroundColor: ['#58a6ff','#bc8cff','#8b949e','#d29922','#3fb950','#3b82f6','#f85149'],
-        borderWidth: 0 }]
-    },
+    data: buildAllocData(),
     options: { plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
   });
 
   // Growth Line
-  new Chart(document.getElementById('chartGrowth'), {
+  window._growthChart = new Chart(document.getElementById('chartGrowth'), {
     type: 'line',
-    data: {
-      labels: MONTHLY.map(r => r.m.slice(5)),
-      datasets: [{ label: '總資產', data: MONTHLY.map(r => r.v),
-        borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 4 }]
-    },
+    data: buildGrowthData(),
     options: { responsive: true, maintainAspectRatio: false,
       scales: { y: { ticks: { color: '#8b949e', callback: v => '$'+v.toLocaleString() }, grid: { color: '#21262d' } }, x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } } },
       plugins: { legend: { labels: { color: '#8b949e' } } }
     }
   });
+}
+
+function buildAllocData() {
+  const USD_TWD = 31.96;
+  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV   = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const total  = twMV + usMV;
+  const pct = v => +(v / total * 100).toFixed(2);
+  return {
+    labels: ['台股', 'Firstrade', '複委託'],
+    datasets: [{ data: [pct(twMV), pct(mainMV), pct(royMV)],
+      backgroundColor: ['#58a6ff','#bc8cff','#3fb950'],
+      borderWidth: 0 }]
+  };
+}
+
+function buildGrowthData() {
+  return {
+    labels: MONTHLY.map(r => r.m),
+    datasets: [{ label: '總資產', data: MONTHLY.map(r => r.v),
+      borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+  };
+}
+
+function rerenderCharts() {
+  // 重繪 overview 圖表（sync 後呼叫）
+  if (window._allocChart) {
+    window._allocChart.data = buildAllocData();
+    window._allocChart.update();
+  }
+  if (window._growthChart) {
+    window._growthChart.data = buildGrowthData();
+    window._growthChart.update();
+  }
+  // 重繪 monthlyTable
+  const tbody = document.getElementById('monthlyTable');
+  if (tbody) {
+    tbody.innerHTML = '';
+    MONTHLY.forEach((r, i) => {
+      const prev = i > 0 ? MONTHLY[i-1].v : null;
+      const diff = prev ? r.v - prev : null;
+      const pct  = prev ? ((r.v - prev) / prev * 100).toFixed(1) : null;
+      tbody.innerHTML += `<tr>
+        <td>${r.m}</td>
+        <td>$${r.v.toLocaleString()}</td>
+        <td class="${diff >= 0 ? 'up' : 'down'}">${diff ? fmt(diff) : '—'}</td>
+        <td class="${diff >= 0 ? 'up' : 'down'}">${pct ? (diff>=0?'+':'')+pct+'%' : '—'}</td>
+      </tr>`;
+    });
+  }
+  // 重繪 history bar chart
+  if (window._monthlyChart) {
+    window._monthlyChart.data.labels = MONTHLY.map(r => r.m);
+    window._monthlyChart.data.datasets[0].data = MONTHLY.map(r => r.v);
+    window._monthlyChart.update();
+  }
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -1520,7 +1581,7 @@ function initHistoryCharts() {
   });
 
   // Monthly chart
-  new Chart(document.getElementById('chartMonthly'), {
+  window._monthlyChart = new Chart(document.getElementById('chartMonthly'), {
     type: 'bar',
     data: {
       labels: MONTHLY.map(r => r.m.slice(5)),
@@ -1757,12 +1818,14 @@ async function syncSheets() {
         });
         if (newMonthly.length) {
           MONTHLY.splice(0, MONTHLY.length, ...newMonthly.sort((a,b) => a.m.localeCompare(b.m)));
+          try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
           results.push(`歷年 ${newMonthly.length} 個月`);
         }
       }
     }
 
     rerenderStockTables();
+    rerenderCharts();
     updateNavDate();
     showStatus(`✅ 同步完成：${results.join('、')}`, 'success');
   } catch(e) {
