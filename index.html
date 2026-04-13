@@ -245,6 +245,7 @@
     <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
     <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
     <button class="nav-tab" onclick="showPage('team')">AI投資團隊</button>
+    <button class="nav-tab" onclick="showPage('crypto')">幣安</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -527,37 +528,8 @@
   <div class="card">
     <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標</div>
     <table>
-      <thead><tr><th>商品</th><th>目前持股</th><th>目前市值</th><th>策略目標</th><th>缺口</th><th>動作</th></tr></thead>
-      <tbody>
-        <tr>
-          <td><span class="ticker">QQQ</span></td>
-          <td>13 股</td>
-          <td>$7,488</td>
-          <td>$18,000</td>
-          <td class="down">-$10,512</td>
-          <td><span class="tag tag-green">分批加碼 ≈18股</span></td>
-        </tr>
-        <tr>
-          <td><span class="ticker">QLD</span></td>
-          <td>0 股</td>
-          <td>$0</td>
-          <td>$9,000</td>
-          <td class="down">-$9,000</td>
-          <td><span class="tag tag-green">考慮買入</span></td>
-        </tr>
-        <tr>
-          <td><span class="ticker">TQQQ</span></td>
-          <td>0 股</td>
-          <td>$0</td>
-          <td>$3,000</td>
-          <td class="down">-$3,000</td>
-          <td><span class="tag tag-yellow">謹慎評估</span></td>
-        </tr>
-        <tr>
-          <td colspan="5" style="color:var(--text2);font-size:11px">* 其他美股持倉（NVDA、TSLA等）計入美股整體，不納入此$30k策略計算</td>
-          <td></td>
-        </tr>
-      </tbody>
+      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
+      <tbody id="qqqHoldingsBody"></tbody>
     </table>
   </div>
 </div>
@@ -746,6 +718,44 @@
   <div id="teamContent"></div>
 </div>
 
+<!-- ═══ PAGE: CRYPTO ═══ -->
+<div id="page-crypto" class="page">
+  <!-- KPI 摘要 -->
+  <div class="kpi-grid" id="cryptoKpi"></div>
+
+  <!-- 持倉表格 -->
+  <div class="card">
+    <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
+    <table>
+      <thead><tr><th>代號</th><th>名稱</th><th>數量</th><th>均價</th><th>現價</th><th>成本(USD)</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>建議</th></tr></thead>
+      <tbody id="cryptoTable"></tbody>
+    </table>
+  </div>
+
+  <!-- 配置說明 -->
+  <div class="card">
+    <div class="card-title">📋 幣安持倉說明</div>
+    <div class="alert alert-warn" style="margin-bottom:12px">
+      <div class="alert-icon">⚠️</div>
+      <div>虛擬貨幣波動極大，請定期更新持倉資料。目前市值數據來自<strong>同步試算表</strong>（SHEET_ALLOC.binance），個別幣種請手動更新 CRYPTO 陣列。</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">🔑 持倉策略</div>
+        <div class="summary-row"><span class="summary-key">核心倉位</span><span>BTC + ETH 長期持有</span></div>
+        <div class="summary-row"><span class="summary-key">穩定幣</span><span>USDT 作備用資金</span></div>
+        <div class="summary-row"><span class="summary-key">佔比目標</span><span>幣安佔總資產 5% 以內</span></div>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600">🚨 風險提示</div>
+        <div class="summary-row"><span class="summary-key">流動性</span><span style="color:var(--yellow)">部分幣種流動性較低</span></div>
+        <div class="summary-row"><span class="summary-key">監管風險</span><span style="color:var(--orange)">各國政策不確定性</span></div>
+        <div class="summary-row"><span class="summary-key">建議停損</span><span style="color:var(--red)">單幣虧損 -40% 檢視</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ─────── DATA ───────
 const MONTHLY = [
@@ -849,6 +859,14 @@ const TW_WATCH = [
   { code:'00929', name:'復華台灣科技優息',price:22,rec:'BUY',reason:'科技+高息，填補AI主題部位',                  risk:'集中科技，波動較大' },
   { code:'6669',  name:'緯穎',     price:3420, rec:'BUY',   reason:'AI伺服器ODM龍頭，已賣出但可考慮低點買回',      risk:'客戶集中(微軟)' },
   { code:'2385',  name:'群光',     price:121,  rec:'WATCH', reason:'光學元件，已獲利出場，等待再次布局時機',        risk:'產業週期影響大' },
+];
+
+// Binance crypto holdings
+const CRYPTO = [
+  { sym:'BTC',  name:'Bitcoin',   shares:0,  avg:0, price:0, cost:0, mv:0, pct:0, rec:'HOLD', reason:'數位黃金，長期核心持倉' },
+  { sym:'ETH',  name:'Ethereum',  shares:0,  avg:0, price:0, cost:0, mv:0, pct:0, rec:'HOLD', reason:'智能合約龍頭，DeFi/NFT 生態' },
+  { sym:'BNB',  name:'BNB',       shares:0,  avg:0, price:0, cost:0, mv:0, pct:0, rec:'HOLD', reason:'幣安生態幣，交易費折扣' },
+  { sym:'USDT', name:'Tether',    shares:0,  avg:1, price:1, cost:0, mv:0, pct:0, rec:'HOLD', reason:'穩定幣，持有等待機會' },
 ];
 
 // US stocks - Main account
@@ -1445,6 +1463,63 @@ function renderUsStocks() {
   render(US_ROY, 'usRoyTable');
 }
 
+// ─────── CRYPTO ───────
+function renderCrypto() {
+  const USD_TWD = 31.96;
+  // KPI 摘要
+  const totalMV_usd = CRYPTO.reduce((s,c) => s+(c.mv||0), 0);
+  const totalCost_usd = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
+  const totalPnl = totalMV_usd - totalCost_usd;
+  const totalPct = totalCost_usd ? (totalPnl/totalCost_usd*100).toFixed(1) : '—';
+  // 若有試算表同步資料，優先使用
+  const sheetMV_twd = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+  const sheetMV_usd = sheetMV_twd ? (sheetMV_twd/USD_TWD).toFixed(0) : null;
+
+  const kpi = document.getElementById('cryptoKpi');
+  if (kpi) kpi.innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">幣安總市值(TWD)</div>
+      <div class="kpi-value">${sheetMV_twd ? '$'+sheetMV_twd.toLocaleString() : '—'}</div>
+      <div class="kpi-sub neutral">${sheetMV_twd ? '來自試算表同步' : '請先同步試算表'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">幣安總市值(USD)</div>
+      <div class="kpi-value">${sheetMV_usd ? '$'+Number(sheetMV_usd).toLocaleString() : (totalMV_usd?'$'+totalMV_usd.toLocaleString():'—')}</div>
+      <div class="kpi-sub neutral">匯率 ${USD_TWD}</div></div>
+    <div class="kpi-card"><div class="kpi-label">持倉損益</div>
+      <div class="kpi-value ${totalPnl>=0?'up':'down'}">${totalCost_usd?((totalPnl>=0?'+':'')+totalPct+'%'):'—'}</div>
+      <div class="kpi-sub ${totalPnl>=0?'up':'down'}">${totalCost_usd?(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl).toLocaleString()+' USD':'—'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">佔總資產</div>
+      <div class="kpi-value neutral">${sheetMV_twd&&MONTHLY.length?(sheetMV_twd/MONTHLY[MONTHLY.length-1].v*100).toFixed(1)+'%':'—'}</div>
+      <div class="kpi-sub neutral">幣安 / 總資產</div></div>`;
+
+  // 持倉表格
+  const tbody = document.getElementById('cryptoTable');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const badge = document.getElementById('cryptoSyncBadge');
+  if (badge) badge.textContent = sheetMV_twd ? `試算表總值 $${sheetMV_twd.toLocaleString()} TWD` : '同步後更新';
+
+  CRYPTO.forEach(c => {
+    const pnlCls = c.pct >= 0 ? 'up' : 'down';
+    tbody.innerHTML += `<tr>
+      <td><span class="ticker">${c.sym}</span></td>
+      <td>${c.name}</td>
+      <td style="font-family:monospace">${c.shares||'—'}</td>
+      <td style="font-family:monospace">${c.avg?'$'+c.avg.toLocaleString():'—'}</td>
+      <td style="font-family:monospace">${c.price?'$'+c.price.toLocaleString():'—'}</td>
+      <td style="font-family:monospace">${c.cost?'$'+c.cost.toLocaleString():'—'}</td>
+      <td style="font-family:monospace">${c.mv?'$'+c.mv.toLocaleString():'—'}</td>
+      <td class="${pnlCls}" style="font-family:monospace">${c.cost&&c.mv?(c.mv-c.cost>=0?'+':'')+' $'+Math.round(c.mv-c.cost).toLocaleString():'—'}</td>
+      <td class="${pnlCls}">${c.pct?(c.pct>=0?'+':'')+c.pct.toFixed(2)+'%':'—'}</td>
+      <td>${(c.rec==='HOLD'?'<span class="rec-hold">◆ 持有</span>':c.rec==='BUY'?'<span class="rec-buy">▲ 買進</span>':'<span class="rec-sell">▼ 賣出</span>')}</td>
+    </tr>`;
+  });
+
+  if (!CRYPTO.some(c => c.mv > 0)) {
+    tbody.innerHTML += `<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px">
+      請更新 CRYPTO 陣列中的持倉資料，或同步試算表查看總值
+    </td></tr>`;
+  }
+}
+
 // ─────── QQQ CHART ───────
 function initQQQChart() {
   updateNasdaqDisplay(558.28); // 初始顯示（QQQ 收盤價），刷新股價後即時更新
@@ -1457,6 +1532,77 @@ function initQQQChart() {
     },
     options: { plugins: { legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
   });
+  renderQQQHoldings();
+}
+
+function renderQQQHoldings() {
+  const tbody = document.getElementById('qqqHoldingsBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const SMA200 = 594.20;
+  const allUS = [...US_MAIN, ...US_ROY];
+
+  // Merge QQQ from both accounts
+  const qqqEntries = allUS.filter(s => s.sym === 'QQQ');
+  const qldEntry   = allUS.find(s => s.sym === 'QLD');
+  const tqqqEntry  = allUS.find(s => s.sym === 'TQQQ');
+
+  const targets = { QQQ: 18000, QLD: 9000, TQQQ: 3000 };
+
+  // Compute merged QQQ figures
+  const qqqShares = qqqEntries.reduce((s, e) => s + e.shares, 0);
+  const qqqCost   = qqqEntries.reduce((s, e) => s + e.cost, 0);
+  const qqqMV     = qqqEntries.reduce((s, e) => s + e.mv, 0);
+  const qqqPrice  = qqqEntries.length ? qqqEntries[0].price : 0;
+  const qqqAvg    = qqqShares ? qqqCost / qqqShares : 0;
+  const qqqPct    = qqqCost ? ((qqqMV - qqqCost) / qqqCost * 100) : 0;
+
+  const leverOK = qqqPrice >= SMA200 * 1.04;
+
+  const rows = [
+    { sym: 'QQQ',  shares: qqqShares, avg: qqqAvg, price: qqqPrice, mv: qqqMV, pct: qqqPct, cost: qqqCost },
+    { sym: 'QLD',  ...(qldEntry  || { shares: 0, avg: 0, price: 0, mv: 0, pct: 0, cost: 0 }) },
+    { sym: 'TQQQ', ...(tqqqEntry || { shares: 0, avg: 0, price: 0, mv: 0, pct: 0, cost: 0 }) },
+  ];
+
+  rows.forEach(r => {
+    const target  = targets[r.sym];
+    const gap     = r.mv - target;
+    const pctCls  = r.pct >= 0 ? 'up' : 'down';
+
+    let action;
+    if (r.sym === 'QQQ') {
+      action = gap >= 0 ? '<span class="rec-hold">◆ 持有</span>' : '<span class="rec-buy">▲ 分批加碼</span>';
+    } else if (!leverOK) {
+      action = '<span class="rec-hold">⏸ 等待訊號</span>';
+    } else {
+      action = gap >= 0 ? '<span class="rec-hold">◆ 持有</span>' : '<span class="rec-buy">▲ 考慮買入</span>';
+    }
+
+    const sharesDisp = r.shares ? r.shares : '—';
+    const avgDisp    = r.avg    ? '$' + r.avg.toFixed(2)                    : '—';
+    const priceDisp  = r.price  ? '$' + r.price.toFixed(2)                  : '—';
+    const mvDisp     = r.mv     ? '$' + r.mv.toLocaleString(undefined, {maximumFractionDigits:0}) : '—';
+    const pctDisp    = r.cost   ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(2) + '%' : '—';
+    const gapDisp    = r.mv     ? (gap >= 0 ? '+$' : '-$') + Math.abs(Math.round(gap)).toLocaleString() : '-$' + target.toLocaleString();
+
+    tbody.innerHTML += `<tr>
+      <td><span class="ticker">${r.sym}</span></td>
+      <td style="font-family:monospace">${sharesDisp}</td>
+      <td style="font-family:monospace">${avgDisp}</td>
+      <td style="font-family:monospace">${priceDisp}</td>
+      <td style="font-family:monospace">${mvDisp}</td>
+      <td class="${pctCls}">${pctDisp}</td>
+      <td style="font-family:monospace">$${target.toLocaleString()}</td>
+      <td class="${gap >= 0 ? 'up' : 'down'}" style="font-family:monospace">${gapDisp}</td>
+      <td>${action}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML += `<tr><td colspan="9" style="color:var(--text2);font-size:11px">
+    * QQQ 合併 US_MAIN + US_ROY 兩帳戶；SMA200=${SMA200}，leverOK=${leverOK}（需 QQQ 現價 ≥ SMA200×1.04=${(SMA200*1.04).toFixed(2)}）
+  </td></tr>`;
 }
 
 // ─────── BACKTEST ───────
