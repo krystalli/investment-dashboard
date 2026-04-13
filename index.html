@@ -1056,6 +1056,7 @@ function showPage(id) {
   if (id === 'qqq' && !window._qqqInit) { initQQQChart(); window._qqqInit = true; }
   if (id === 'backtest' && !window._btInit) { initBacktestChart(); window._btInit = true; }
   if (id === 'team') { renderTeamPage(); }
+  if (id === 'crypto') { renderCrypto(); window._cryptoInit = true; }
 }
 
 // ─────── OVERVIEW ───────
@@ -1391,6 +1392,7 @@ function rerenderCharts() {
     window._monthlyChart.data.datasets[0].data = MONTHLY.map(r => r.v);
     window._monthlyChart.update();
   }
+  if (window._cryptoInit) renderCrypto();
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -2062,6 +2064,7 @@ function rerenderStockTables() {
     const el = document.getElementById(id); if (el) el.innerHTML = '';
   });
   renderUsStocks();
+  if (window._qqqInit) renderQQQHoldings();
 }
 
 function parseCSV(text) {
