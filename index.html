@@ -1702,11 +1702,16 @@ async function syncSheets() {
   };
 
   try {
-    const [twText, usText, histText] = await Promise.all([
-      fetchWithTimeout(base + SHEET_GIDS.tw).catch(e => { throw new Error('台股表：' + e.message); }),
-      fetchWithTimeout(base + SHEET_GIDS.us).catch(e => { throw new Error('美股表：' + e.message); }),
-      fetchWithTimeout(base + SHEET_GIDS.history).catch(e => { throw new Error('歷年表：' + e.message); }),
-    ]);
+    showStatus('⏳ 讀取台股持股...', 'loading');
+    const twText = await fetchWithTimeout(base + SHEET_GIDS.tw).catch(e => { throw new Error('台股表：' + e.message); });
+
+    showStatus('⏳ 讀取美股持股...', 'loading');
+    const usText = await fetchWithTimeout(base + SHEET_GIDS.us).catch(e => { throw new Error('美股表：' + e.message); });
+
+    showStatus('⏳ 讀取歷年損益...', 'loading');
+    const histText = await fetchWithTimeout(base + SHEET_GIDS.history).catch(e => { throw new Error('歷年表：' + e.message); });
+
+    showStatus('⏳ 解析資料中...', 'loading');
 
     // ── 台股持股 ──
     const twRows = parseCSV(twText);
