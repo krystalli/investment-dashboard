@@ -1858,16 +1858,20 @@ async function syncSheets() {
         }
       });
 
-      // 從小計行建構 MONTHLY 資料
+      // 從小計行建構 MONTHLY 資料（月份格式統一為 YYYY/MM）
+      const fmtMonth = d => { const [yr, mo] = d.split('/'); return `${yr}/${mo.padStart(2,'0')}`; };
       const newMonthly = Object.entries(monthGroups)
         .filter(([, g]) => g.small > 0)
-        .map(([d, g]) => ({ m: d.replace('/', '-').padEnd(7, '0'), v: g.small }))
+        .map(([d, g]) => ({ m: fmtMonth(d), v: g.small }))
         .sort((a, b) => a.m.localeCompare(b.m));
       if (newMonthly.length) {
         MONTHLY.splice(0, MONTHLY.length, ...newMonthly);
-        appendCurrentMonth();
+        // 只在當月尚無試算表小計時才用持股估算補上當月
+        const now2 = new Date();
+        const curM2 = `${now2.getFullYear()}/${String(now2.getMonth()+1).padStart(2,'0')}`;
+        if (!MONTHLY.some(r => r.m === curM2)) appendCurrentMonth();
         try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
-        results.push(`歷年 ${MONTHLY.length} 個月（含當月估算）`);
+        results.push(`歷年 ${MONTHLY.length} 個月`);
       }
 
       // 取最新月份的分類資產值 → SHEET_ALLOC
@@ -1882,6 +1886,9 @@ async function syncSheets() {
     rerenderStockTables();
     rerenderCharts();
     updateNavDate();
+    // 用試算表同步的 QQQ 現價更新策略頁（GOOGLEFINANCE 即時）
+    const syncedQQQ = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
+    if (syncedQQQ?.price) updateNasdaqDisplay(syncedQQQ.price);
     showStatus(`✅ 同步完成：${results.join('、')}`, 'success');
   } catch(e) {
     showStatus('❌ 同步失敗：' + e.message, 'error');
