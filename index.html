@@ -295,88 +295,21 @@
       <div class="chart-wrap"><canvas id="chartAlloc"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">📈 資產成長走勢 <span class="badge">Apr 2025 - Mar 2026</span></div>
+      <div class="card-title">📈 資產成長走勢 <span class="badge" id="growthBadge"></span></div>
       <div class="chart-wrap"><canvas id="chartGrowth"></canvas></div>
     </div>
   </div>
 
   <div class="card">
     <div class="card-title">💼 資產配置明細</div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>台灣股票</span><span class="up">73.45% · $7,648,566</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:73.45%;background:var(--blue)"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>Firstrade 美股</span><span class="neutral">12.31% · $1,250,000</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:12.31%;background:var(--purple)"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>銀行存款</span><span class="neutral">5.74% · $597,828</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:5.74%;background:var(--text2)"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>Binance 加密</span><span class="down">3.35% · $349,126</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:3.35%;background:var(--orange)"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>複委託</span><span class="up">2.46% · $255,737</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:2.46%;background:var(--green)"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>定期定額</span><span class="up">1.54% · $160,782</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:1.54%;background:#3b82f6"></div></div>
-    </div>
-    <div class="progress-wrap">
-      <div class="progress-label"><span>基富通</span><span class="down">1.15% · $119,232</span></div>
-      <div class="progress-bar"><div class="progress-fill" style="width:1.15%;background:var(--red)"></div></div>
-    </div>
+    <div id="allocDetail"></div>
   </div>
 
   <!-- 配置建議 -->
-  <div class="card">
-    <div class="card-title">🎯 配置建議 — 基於現況損益</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-      <div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">現況問題</div>
-        <div class="alert alert-danger" style="margin-bottom:8px">
-          <div class="alert-icon">🔴</div>
-          <div><strong>台股過度集中 73%</strong> — 系統風險高，台海/景氣衝擊將重傷組合</div>
-        </div>
-        <div class="alert alert-danger" style="margin-bottom:8px">
-          <div class="alert-icon">🔴</div>
-          <div><strong>基富通 -44.67%</strong> — $96,250 損失持續擴大，建議認賠止血</div>
-        </div>
-        <div class="alert alert-warn" style="margin-bottom:8px">
-          <div class="alert-icon">⚠️</div>
-          <div><strong>Binance -30%</strong> — $153,877 損失，加密市場波動難控</div>
-        </div>
-        <div class="alert alert-warn">
-          <div class="alert-icon">⚠️</div>
-          <div><strong>現金偏低 5.74%</strong> — 應對市場黑天鵝緩衝不足</div>
-        </div>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">建議目標配置</div>
-        <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12px">
-          <div class="summary-row"><span class="summary-key">台股 ETF（0050/006208）</span><span class="up">目標 55%</span></div>
-          <div class="summary-row"><span class="summary-key">美股（QQQ/SPY/個股）</span><span style="color:var(--purple)">目標 22%</span></div>
-          <div class="summary-row"><span class="summary-key">債券（複委託/公司債）</span><span style="color:var(--blue)">目標 10%</span></div>
-          <div class="summary-row"><span class="summary-key">現金</span><span style="color:var(--text2)">目標 10%</span></div>
-          <div class="summary-row"><span class="summary-key">加密貨幣</span><span class="down">目標 3%（減碼）</span></div>
-        </div>
-        <div style="margin-top:10px;font-size:12px;background:var(--surface2);border-radius:8px;padding:12px">
-          <div style="font-weight:600;margin-bottom:6px;color:var(--yellow)">⚡ 立即行動</div>
-          <div class="bullet">基富通全數贖回 → 轉 QQQ/SPY</div>
-          <div class="bullet">台積電/006208 各了結 20% → 提升現金至 8%</div>
-          <div class="bullet">Binance 逐步減碼 50% → 降低尾部風險</div>
-          <div class="bullet">QQQ 補足至 $18,000（策略目標）</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="card" id="allocAdvice"></div>
 
   <div class="card">
-    <div class="card-title">📅 逐月資產 (2025-2026)</div>
+    <div class="card-title">📅 逐月資產 <span class="badge" id="monthlyRangeBadge"></span></div>
     <table>
       <thead><tr><th>月份</th><th>總資產</th><th>月增減</th><th>月增率</th></tr></thead>
       <tbody id="monthlyTable"></tbody>
@@ -1307,19 +1240,9 @@ function showPage(id) {
 
 // ─────── OVERVIEW ───────
 function initOverviewCharts() {
-  // Monthly table
-  const tbody = document.getElementById('monthlyTable');
-  MONTHLY.forEach((r, i) => {
-    const prev = i > 0 ? MONTHLY[i-1].v : null;
-    const diff = prev ? r.v - prev : null;
-    const pct = prev ? ((r.v-prev)/prev*100).toFixed(1) : null;
-    tbody.innerHTML += `<tr>
-      <td>${r.m}</td>
-      <td>$${r.v.toLocaleString()}</td>
-      <td class="${diff >= 0 ? 'up' : 'down'}">${diff ? fmt(diff) : '—'}</td>
-      <td class="${diff >= 0 ? 'up' : 'down'}">${pct ? (diff>=0?'+':'')+pct+'%' : '—'}</td>
-    </tr>`;
-  });
+  renderMonthlyTable();
+  renderAllocDetail();
+  renderAllocAdvice();
 
   // Allocation Pie（動態從持倉計算）
   window._allocChart = new Chart(document.getElementById('chartAlloc'), {
@@ -1337,6 +1260,93 @@ function initOverviewCharts() {
       plugins: { legend: { labels: { color: '#8b949e' } } }
     }
   });
+}
+
+function renderMonthlyTable() {
+  const tbody = document.getElementById('monthlyTable');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  MONTHLY.forEach((r, i) => {
+    const prev = i > 0 ? MONTHLY[i-1].v : null;
+    const diff = prev ? r.v - prev : null;
+    const pct  = prev ? ((r.v - prev) / prev * 100).toFixed(1) : null;
+    tbody.innerHTML += `<tr>
+      <td>${r.m}</td>
+      <td>$${r.v.toLocaleString()}</td>
+      <td class="${diff >= 0 ? 'up' : 'down'}">${diff ? fmt(diff) : '—'}</td>
+      <td class="${diff >= 0 ? 'up' : 'down'}">${pct ? (diff>=0?'+':'')+pct+'%' : '—'}</td>
+    </tr>`;
+  });
+  // 更新標題 badge
+  if (MONTHLY.length >= 2) {
+    const first = MONTHLY[0].m, last = MONTHLY[MONTHLY.length-1].m;
+    const el = document.getElementById('monthlyRangeBadge');
+    if (el) el.textContent = `${first} ～ ${last}`;
+    const gb = document.getElementById('growthBadge');
+    if (gb) gb.textContent = `${first} ～ ${last}`;
+  }
+}
+
+function renderAllocDetail() {
+  const USD_TWD = 31.96;
+  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const total  = twMV + mainMV + royMV;
+  const rows = [
+    { label: '台灣股票', mv: twMV,   color: 'var(--blue)' },
+    { label: 'Firstrade 美股', mv: mainMV, color: 'var(--purple)' },
+    { label: '複委託', mv: royMV,  color: 'var(--green)' },
+  ];
+  const el = document.getElementById('allocDetail');
+  if (!el) return;
+  el.innerHTML = rows.map(r => {
+    const p = (r.mv / total * 100).toFixed(1);
+    const cls = r.mv > 0 ? 'up' : 'neutral';
+    return `<div class="progress-wrap">
+      <div class="progress-label"><span>${r.label}</span><span class="${cls}">${p}% · $${Math.round(r.mv).toLocaleString()}</span></div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${p}%;background:${r.color}"></div></div>
+    </div>`;
+  }).join('');
+}
+
+function renderAllocAdvice() {
+  const USD_TWD = 31.96;
+  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const total  = twMV + mainMV + royMV;
+  const twPct  = (twMV / total * 100).toFixed(1);
+  const usPct  = ((mainMV + royMV) / total * 100).toFixed(1);
+
+  // 找最差台股和最差美股
+  const worstTW = [...TW_HOLD].sort((a,b) => a.pct - b.pct)[0];
+  const allUS   = [...US_MAIN, ...US_ROY];
+  const worstUS = allUS.sort((a,b) => a.pct - b.pct)[0];
+
+  const issues = [];
+  if (twPct > 70) issues.push(`<div class="alert alert-danger" style="margin-bottom:8px"><div class="alert-icon">🔴</div><div><strong>台股過度集中 ${twPct}%</strong> — 系統風險高，建議逐步降至 60% 以下</div></div>`);
+  else if (twPct > 60) issues.push(`<div class="alert alert-warn" style="margin-bottom:8px"><div class="alert-icon">⚠️</div><div><strong>台股佔比 ${twPct}%</strong> — 偏高，可逐步調整</div></div>`);
+  if (worstTW && worstTW.pct < -30) issues.push(`<div class="alert alert-danger" style="margin-bottom:8px"><div class="alert-icon">🔴</div><div><strong>${worstTW.name} ${worstTW.pct.toFixed(1)}%</strong> — 深度虧損，評估是否停損</div></div>`);
+  if (worstUS && worstUS.pct < -15) issues.push(`<div class="alert alert-warn" style="margin-bottom:8px"><div class="alert-icon">⚠️</div><div><strong>${worstUS.sym} ${worstUS.pct.toFixed(1)}%</strong> — 美股最弱部位，留意風險</div></div>`);
+
+  const el = document.getElementById('allocAdvice');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="card-title">🎯 配置建議 — 基於現況損益</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">現況問題</div>
+        ${issues.length ? issues.join('') : '<div class="alert alert-info"><div class="alert-icon">✅</div><div>目前配置無明顯警示</div></div>'}
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">現況 vs 建議目標</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12px">
+          <div class="summary-row"><span class="summary-key">台股</span><span class="${twPct>60?'down':'up'}">${twPct}% → 目標 55~60%</span></div>
+          <div class="summary-row"><span class="summary-key">美股（Firstrade+複委託）</span><span class="${usPct<20?'down':'up'}">${usPct}% → 目標 30~35%</span></div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function buildAllocData() {
@@ -1364,32 +1374,11 @@ function buildGrowthData() {
 }
 
 function rerenderCharts() {
-  // 重繪 overview 圖表（sync 後呼叫）
-  if (window._allocChart) {
-    window._allocChart.data = buildAllocData();
-    window._allocChart.update();
-  }
-  if (window._growthChart) {
-    window._growthChart.data = buildGrowthData();
-    window._growthChart.update();
-  }
-  // 重繪 monthlyTable
-  const tbody = document.getElementById('monthlyTable');
-  if (tbody) {
-    tbody.innerHTML = '';
-    MONTHLY.forEach((r, i) => {
-      const prev = i > 0 ? MONTHLY[i-1].v : null;
-      const diff = prev ? r.v - prev : null;
-      const pct  = prev ? ((r.v - prev) / prev * 100).toFixed(1) : null;
-      tbody.innerHTML += `<tr>
-        <td>${r.m}</td>
-        <td>$${r.v.toLocaleString()}</td>
-        <td class="${diff >= 0 ? 'up' : 'down'}">${diff ? fmt(diff) : '—'}</td>
-        <td class="${diff >= 0 ? 'up' : 'down'}">${pct ? (diff>=0?'+':'')+pct+'%' : '—'}</td>
-      </tr>`;
-    });
-  }
-  // 重繪 history bar chart
+  renderMonthlyTable();
+  renderAllocDetail();
+  renderAllocAdvice();
+  if (window._allocChart) { window._allocChart.data = buildAllocData(); window._allocChart.update(); }
+  if (window._growthChart) { window._growthChart.data = buildGrowthData(); window._growthChart.update(); }
   if (window._monthlyChart) {
     window._monthlyChart.data.labels = MONTHLY.map(r => r.m);
     window._monthlyChart.data.datasets[0].data = MONTHLY.map(r => r.v);
