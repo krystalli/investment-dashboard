@@ -225,9 +225,9 @@
   .team-verdict { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; white-space: nowrap; }
   .team-body { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
   @media(max-width:700px) { .team-body { grid-template-columns: 1fr; } }
-  .team-section { padding: 16px 20px; border-right: 1px solid var(--border); }
+  .team-section { padding: 18px 20px; border-right: 1px solid var(--border); }
   .team-section:last-child { border-right: none; }
-  .team-section-title { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; font-weight: 600; }
+  .team-section-title { font-size: 12px; letter-spacing: .2px; margin-bottom: 12px; font-weight: 700; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
   .team-bullet { font-size: 13px; line-height: 1.6; padding: 5px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
   .team-bullet:last-child { border-bottom: none; }
   .team-dot { flex-shrink: 0; margin-top: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
@@ -2463,25 +2463,46 @@ ${usStr}
   市值約 NT$${Math.round(binMV).toLocaleString()}（BTC/ETH/BNB/USDT，詳情請手動更新）`;
 }
 
-// 解析並渲染 AI 回應文字（支援序號/bullet/段落標題）
-function fmtAiSection(text, accentColor) {
-  if (!text) return '<span style="color:var(--text2)">暫無分析</span>';
-  return text.split('\n').map(l => {
-    l = l.trim(); if (!l) return '<div style="height:6px"></div>';
-    // 段落標題：短句 + 以 : 或 ： 結尾，或以 emoji 開頭
-    if ((l.length < 25 && /[：:]$/.test(l)) || /^[📊💡🎯⚠️🔴🟡🟢📉🛡💰🌏⚡🔑]/.test(l) && /[：:]/.test(l)) {
-      return `<div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.4px;margin:10px 0 5px;padding-top:8px;border-top:1px solid var(--border)">${l}</div>`;
-    }
-    // 序號列表：1. 2. 3.
-    const num = l.match(/^(\d+)[.)]\s+(.+)/);
-    if (num) {
-      const body = num[2].replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-      return `<div style="display:flex;gap:8px;margin:5px 0;line-height:1.6"><span style="min-width:20px;height:20px;border-radius:50%;background:${accentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${num[1]}</span><span style="font-size:13px">${body}</span></div>`;
-    }
-    // 一般 bullet
-    const body = l.replace(/^[-•·▸]\s*/,'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
-    return `<div class="team-bullet"><div class="team-dot" style="background:${accentColor};opacity:.7"></div><div style="font-size:13px;line-height:1.6">${body}</div></div>`;
-  }).join('');
+// 解析 AI 回應文字，按三個段落分欄渲染（對應 .team-body 的 3-col grid）
+function fmtAiSection(text, ac) {
+  const SECTIONS = [
+    { key:'📊', label:'📊 持倉分析' },
+    { key:'💡', label:'💡 新投資機會' },
+    { key:'🎯', label:'🎯 本週操作重點' },
+  ];
+  // 切分三段落
+  const buckets = { '📊':[], '💡':[], '🎯':[] };
+  let cur = '📊';
+  (text||'').split('\n').forEach(raw => {
+    const l = raw.trim(); if (!l) return;
+    if (l.startsWith('📊')) { cur='📊'; return; }
+    if (l.startsWith('💡')) { cur='💡'; return; }
+    if (l.startsWith('🎯')) { cur='🎯'; return; }
+    buckets[cur].push(l);
+  });
+
+  const renderLines = lines => {
+    if (!lines.length) return '<span style="color:var(--text2);font-size:12px">—</span>';
+    return lines.map(l => {
+      const num = l.match(/^(\d+)[.)]\s+(.+)/);
+      if (num) {
+        const body = num[2].replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+        return `<div style="display:flex;gap:8px;margin:8px 0;align-items:flex-start;line-height:1.65">
+          <span style="flex-shrink:0;min-width:20px;height:20px;border-radius:50%;background:${ac};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">${num[1]}</span>
+          <span style="font-size:13px">${body}</span></div>`;
+      }
+      const body = l.replace(/^[-•·▸]\s*/,'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+      return `<div style="display:flex;gap:8px;margin:7px 0;align-items:flex-start;line-height:1.65">
+        <span style="flex-shrink:0;color:${ac};font-size:12px;margin-top:1px">▸</span>
+        <span style="font-size:13px">${body}</span></div>`;
+    }).join('');
+  };
+
+  return SECTIONS.map(s => `
+    <div class="team-section">
+      <div class="team-section-title" style="color:${ac}">${s.label}</div>
+      ${renderLines(buckets[s.key])}
+    </div>`).join('');
 }
 
 async function runTeamAIAnalysis() {
