@@ -2416,36 +2416,72 @@ async function callGeminiAPI(question, apiKey) {
 // ─────── AI 投資團隊深度分析 ───────
 function buildTeamAnalysisContext() {
   const USD_TWD = 31.96;
-  const allUS = [...US_MAIN, ...US_ROY];
-  const twMV  = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
-  const usMV  = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
-  const binMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
-  const total = twMV + usMV + binMV;
+  const allUS  = [...US_MAIN, ...US_ROY];
+  const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
+  const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
+  const binMV  = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+  const bankMV = SHEET_ALLOC.ready ? SHEET_ALLOC.bank : 0;
+  const total  = twMV + usMV + binMV + bankMV;
   const latest = MONTHLY[MONTHLY.length-1];
+  const prev   = MONTHLY[MONTHLY.length-2];
   const qqqPos = allUS.find(s => s.sym==='QQQ');
   const qqqSMA = 594.20;
 
-  const twStr = TW_HOLD.map(h =>
-    `  ${h.name}(${h.code}): 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()}`).join('\n');
-  const usStr = allUS.map(h =>
-    `  ${h.sym}: 均價$${h.avg} 現價$${h.price} 損益${h.pct?.toFixed(1)}% 市值$${(h.mv||0).toFixed(0)}`).join('\n');
-  const twPct = total ? (twMV/total*100).toFixed(0) : 0;
-  const usPct = total ? (usMV/total*100).toFixed(0) : 0;
-  const binPct = total ? (binMV/total*100).toFixed(0) : 0;
+  // 台股持倉（確實持有）
+  const twHoldStr = TW_HOLD.length
+    ? TW_HOLD.map(h => `  ${h.name}(${h.code}): ${h.shares}股 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()} [${h.rec}]`).join('\n')
+    : '  （無資料，請先同步試算表）';
 
-  return `【投資組合概況】
-總資產估計：NT$${(total/1e6).toFixed(2)}M（台股${twPct}% / 美股${usPct}% / 幣安${binPct}%）
-最新月度紀錄：${latest?.m || '未知'} NT$${(latest?.v||0).toLocaleString()}
-QQQ現價：$${qqqPos?.price||'N/A'} vs SMA200 $${qqqSMA}（${qqqPos?.price ? (qqqPos.price>qqqSMA?'高於':'低於')+' '+(Math.abs((qqqPos.price-qqqSMA)/qqqSMA*100)).toFixed(1)+'%' : 'N/A'}）
-今日日期：${new Date().toLocaleDateString('zh-TW')}
+  // 台股觀察清單（未持有，評估是否買入）
+  const twWatchStr = TW_WATCH.length
+    ? TW_WATCH.map(w => `  ${w.name}(${w.code}): 現價估${w.price} 建議:${w.rec} 理由:${w.reason} 風險:${w.risk}`).join('\n')
+    : '  （空）';
 
-【台股持倉 ${TW_HOLD.length} 檔】
-${twStr || '  （無資料）'}
+  // 美股持倉
+  const usStr = allUS.length
+    ? allUS.map(h => `  ${h.sym}: ${h.shares}股 均價$${h.avg} 現價$${h.price} 損益${h.pct?.toFixed(1)}% 市值$${(h.mv||0).toFixed(0)} [${h.rec}]`).join('\n')
+    : '  （無資料）';
 
-【美股持倉 ${allUS.length} 檔（USD）】
-${usStr || '  （無資料）'}
+  const mom = (latest && prev) ? ` 較上月${latest.v>=prev.v?'↑':'↓'}$${Math.abs(latest.v-prev.v).toLocaleString()}` : '';
 
-【幣安/加密資產】市值約 NT$${Math.round(binMV).toLocaleString()}`;
+  return `=== 投資人即時資料（分析須以此為準）===
+分析日期：${new Date().toLocaleDateString('zh-TW')}
+總資產：NT$${(total/1e6).toFixed(2)}M（台股${total?(twMV/total*100).toFixed(0):0}% 美股${total?(usMV/total*100).toFixed(0):0}% 幣安${total?(binMV/total*100).toFixed(0):0}% 銀行${total?(bankMV/total*100).toFixed(0):0}%）
+最新月度：${latest?.m||'N/A'} NT$${(latest?.v||0).toLocaleString()}${mom}
+QQQ現價：$${qqqPos?.price||'N/A'} / SMA200：$${qqqSMA}（${qqqPos?.price?(qqqPos.price>qqqSMA?'高於':'低於')+' '+Math.abs(((qqqPos.price-qqqSMA)/qqqSMA*100)).toFixed(1)+'%':'N/A'}）
+
+--- 台股持倉（★ 用戶確實持有，請只討論以下股票的持倉，不得提及清單外的台股）---
+${twHoldStr}
+
+--- 台股觀察清單（尚未持有，可評估是否買入）---
+${twWatchStr}
+
+--- 美股持倉（USD）---
+${usStr}
+
+--- 幣安加密資產 ---
+  市值約 NT$${Math.round(binMV).toLocaleString()}（BTC/ETH/BNB/USDT，詳情請手動更新）`;
+}
+
+// 解析並渲染 AI 回應文字（支援序號/bullet/段落標題）
+function fmtAiSection(text, accentColor) {
+  if (!text) return '<span style="color:var(--text2)">暫無分析</span>';
+  return text.split('\n').map(l => {
+    l = l.trim(); if (!l) return '<div style="height:6px"></div>';
+    // 段落標題：短句 + 以 : 或 ： 結尾，或以 emoji 開頭
+    if ((l.length < 25 && /[：:]$/.test(l)) || /^[📊💡🎯⚠️🔴🟡🟢📉🛡💰🌏⚡🔑]/.test(l) && /[：:]/.test(l)) {
+      return `<div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:.4px;margin:10px 0 5px;padding-top:8px;border-top:1px solid var(--border)">${l}</div>`;
+    }
+    // 序號列表：1. 2. 3.
+    const num = l.match(/^(\d+)[.)]\s+(.+)/);
+    if (num) {
+      const body = num[2].replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+      return `<div style="display:flex;gap:8px;margin:5px 0;line-height:1.6"><span style="min-width:20px;height:20px;border-radius:50%;background:${accentColor};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${num[1]}</span><span style="font-size:13px">${body}</span></div>`;
+    }
+    // 一般 bullet
+    const body = l.replace(/^[-•·▸]\s*/,'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>');
+    return `<div class="team-bullet"><div class="team-dot" style="background:${accentColor};opacity:.7"></div><div style="font-size:13px;line-height:1.6">${body}</div></div>`;
+  }).join('');
 }
 
 async function runTeamAIAnalysis() {
@@ -2463,20 +2499,41 @@ async function runTeamAIAnalysis() {
   }
 
   btn.disabled = true; btn.textContent = '⏳ AI 分析中...';
-  result.innerHTML = '<div style="color:var(--text2);padding:12px 0;font-size:13px">🧠 AI 正在分析您的投資組合，通常需要 10–20 秒...</div>';
+  result.innerHTML = `<div style="color:var(--text2);padding:16px 0;font-size:13px;text-align:center">
+    🧠 六位 AI 顧問正在分析您的投資組合，通常需要 15–25 秒…
+  </div>`;
 
-  const prompt = `你是一個由6位投資顧問組成的AI分析團隊，請根據以下即時投資組合資料，用繁體中文為每位顧問提供3-5條具體且有數據支撐的分析建議。
+  const prompt = `你是一個由6位專業投資顧問組成的AI分析團隊。
 
-嚴格以下列JSON格式回覆，不要加 markdown code block，只輸出JSON：
+⚠️ 鐵則（違反視為嚴重錯誤）：
+1. 台股「持倉清單」之外的台股股票，絕對不出現在持倉分析中（例如若持倉無鴻海，絕對不提鴻海）
+2. 台股「觀察清單」是尚未持有的標的，可評估是否值得買入
+3. 每條分析必須附具體數字（損益%、目標價、佔比、時間等）
+4. 每位顧問需有：持倉分析 + 新投資機會 + 本週操作建議三個區塊
+
+回覆格式：僅輸出以下JSON，不加任何其他文字或markdown：
 {"alex":"...","sophia":"...","max":"...","emma":"...","david":"...","ryan":"..."}
 
-各顧問職責（請依此撰寫各自角色的分析）：
-- alex：技術分析師（近期圖表訊號、支撐壓力位、具體進出場建議）
-- sophia：基本面分析師（持倉股票估值、財報亮點、產業趨勢）
-- max：風險管理師（集中度警示、停損建議、下行風險量化）
-- emma：股息策略師（配息標的分析、殖利率估算、再投入策略）
-- david：宏觀策略師（Fed政策影響、匯率風險、地緣政治、加密市場觀點）
-- ryan：QQQ槓桿策略師（SMA200訊號解讀、QQQ/QLD/TQQQ具體配置建議）
+每位顧問的文字格式（用\\n換行）：
+📊 持倉分析：
+1. [具體分析現有持股]
+2. ...
+3. ...
+
+💡 新投資機會：
+1. [從觀察清單或市場推薦1-2個值得買入的標的，說明理由和目標價]
+2. ...
+
+🎯 本週操作重點：
+1. [最優先的1-2個具體行動]
+
+各顧問角色：
+- alex：技術分析師（趨勢、支撐壓力、進出場訊號）
+- sophia：基本面（估值、財報、產業競爭力）
+- max：風險管理（集中度、停損、下行風險）
+- emma：股息策略（殖利率、配息、再投入）
+- david：宏觀（Fed、匯率、地緣政治、加密市場）
+- ryan：QQQ/槓桿（SMA200、QQQ/QLD/TQQQ配置）
 
 ${buildTeamAnalysisContext()}`;
 
@@ -2486,8 +2543,8 @@ ${buildTeamAnalysisContext()}`;
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 2048,
-        temperature: 0.7,
+        max_tokens: 3000,
+        temperature: 0.6,
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -2495,45 +2552,51 @@ ${buildTeamAnalysisContext()}`;
     const data = await res.json();
     const raw = data.choices[0].message.content.trim();
 
-    // 嘗試解析 JSON（移除可能的 ```json 包裝）
+    // 解析 JSON（去除可能的 markdown wrapper）
     const jsonStr = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
     let advice;
     try { advice = JSON.parse(jsonStr); }
     catch(e) {
-      // JSON 解析失敗：直接顯示原始回應
-      result.innerHTML = `<div class="card-title" style="margin-bottom:8px">🤖 AI 分析報告</div>
-        <div style="font-size:13px;line-height:1.8">${raw.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:8px">⏱ ${new Date().toLocaleString('zh-TW')}</div>`;
+      result.innerHTML = `<div class="card-title" style="margin-bottom:12px">🤖 AI 分析報告</div>
+        <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${raw.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:12px">⏱ ${new Date().toLocaleString('zh-TW')}</div>`;
       btn.disabled=false; btn.textContent='🔮 重新分析'; return;
     }
 
     const advisors = [
-      {key:'alex',  icon:'📈', name:'Alex',   role:'技術分析師',   color:'rgba(88,166,255,.15)',  border:'var(--blue)'},
-      {key:'sophia',icon:'💡', name:'Sophia', role:'基本面分析師', color:'rgba(63,185,80,.15)',   border:'var(--green)'},
-      {key:'max',   icon:'🛡️', name:'Max',    role:'風險管理師',   color:'rgba(248,81,73,.15)',   border:'var(--red)'},
-      {key:'emma',  icon:'💰', name:'Emma',   role:'股息策略師',   color:'rgba(188,140,255,.15)', border:'var(--purple)'},
-      {key:'david', icon:'🌏', name:'David',  role:'宏觀策略師',   color:'rgba(227,179,65,.15)',  border:'var(--yellow)'},
-      {key:'ryan',  icon:'⚡', name:'Ryan',   role:'槓桿策略師',   color:'rgba(63,185,80,.15)',   border:'var(--orange)'},
+      {key:'alex',  icon:'📈', name:'Alex',   role:'技術分析師',   bg:'rgba(88,166,255,.12)',  ac:'#58a6ff'},
+      {key:'sophia',icon:'💡', name:'Sophia', role:'基本面分析師', bg:'rgba(63,185,80,.12)',   ac:'#3fb950'},
+      {key:'max',   icon:'🛡️', name:'Max',    role:'風險管理師',   bg:'rgba(248,81,73,.12)',   ac:'#f85149'},
+      {key:'emma',  icon:'💰', name:'Emma',   role:'股息策略師',   bg:'rgba(188,140,255,.12)', ac:'#bc8cff'},
+      {key:'david', icon:'🌏', name:'David',  role:'宏觀策略師',   bg:'rgba(227,179,65,.12)',  ac:'#e3b341'},
+      {key:'ryan',  icon:'⚡', name:'Ryan',   role:'槓桿策略師',   bg:'rgba(63,185,80,.12)',   ac:'#f0883e'},
     ];
-    const mkLine = t => `<div class="team-bullet"><div class="team-dot" style="background:var(--accent)"></div><div>${t}</div></div>`;
-    const fmtText = t => (t||'暫無分析').split('\n').map(l => l.trim() ? mkLine(l.replace(/^[-•·]\s*/,'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')) : '').join('');
 
     result.innerHTML = `
-      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">🕐 ${new Date().toLocaleString('zh-TW')} · Groq llama-3.3-70b-versatile · 基於即時持倉</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:6px">
+        <span>🕐 ${new Date().toLocaleString('zh-TW')}</span>
+        <span style="opacity:.4">·</span>
+        <span>Groq llama-3.3-70b-versatile</span>
+        <span style="opacity:.4">·</span>
+        <span>基於即時持倉 + 市場觀察清單</span>
+      </div>
       <div class="team-grid">
         ${advisors.map(a => `
-          <div class="team-card">
+          <div class="team-card" style="border-top:3px solid ${a.ac}">
             <div class="team-card-header">
-              <div class="team-avatar-lg" style="background:${a.color}">${a.icon}</div>
-              <div class="team-meta"><div class="team-name">${a.name} — ${a.role}</div><div class="team-role">AI 即時分析</div></div>
+              <div class="team-avatar-lg" style="background:${a.bg};font-size:20px">${a.icon}</div>
+              <div class="team-meta">
+                <div class="team-name">${a.name}</div>
+                <div class="team-role">${a.role} · AI 即時分析</div>
+              </div>
             </div>
-            <div class="team-body" style="border-left:3px solid ${a.border};padding-left:10px">
-              ${fmtText(advice[a.key])}
+            <div class="team-body">
+              ${fmtAiSection(advice[a.key], a.ac)}
             </div>
           </div>`).join('')}
       </div>`;
 
-    if (hint) hint.textContent = `上次分析：${new Date().toLocaleTimeString('zh-TW')}`;
+    if (hint) { hint.textContent = `上次：${new Date().toLocaleTimeString('zh-TW')}`; hint.style.color='var(--green)'; }
   } catch(e) {
     result.innerHTML = `<div class="alert alert-danger"><div class="alert-icon">❌</div><div>分析失敗：${escHtml(e.message)}。請確認 API Key 是否正確。</div></div>`;
   } finally {
