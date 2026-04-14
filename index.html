@@ -259,18 +259,18 @@
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">總資產 (TWD)</div>
-      <div class="kpi-value">$10,156,888</div>
-      <div class="kpi-sub up">↑ $302,357 本月</div>
+      <div class="kpi-value" id="kpiTotal">$10,156,888</div>
+      <div class="kpi-sub up" id="kpiTotalSub">↑ $302,357 本月</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">年度報酬</div>
-      <div class="kpi-value up">+41.2%</div>
-      <div class="kpi-sub neutral">Apr 2025 → Mar 2026</div>
+      <div class="kpi-value up" id="kpiYearReturn">+41.2%</div>
+      <div class="kpi-sub neutral" id="kpiYearReturnSub">Apr 2025 → Mar 2026</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">台股未實現損益</div>
-      <div class="kpi-value up">+$1,203,110</div>
-      <div class="kpi-sub up">+16.68%</div>
+      <div class="kpi-value up" id="kpiTwPnl">+$1,203,110</div>
+      <div class="kpi-sub up" id="kpiTwPnlPct">+16.68%</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">累計實現損益</div>
@@ -278,13 +278,13 @@
       <div class="kpi-sub neutral">2020 至今</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">現金</div>
-      <div class="kpi-value neutral">5.74%</div>
-      <div class="kpi-sub neutral">$597,828</div>
+      <div class="kpi-label">銀行存款</div>
+      <div class="kpi-value neutral" id="kpiBankPct">5.74%</div>
+      <div class="kpi-sub neutral" id="kpiBankVal">$597,828</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">美股 + 加密</div>
-      <div class="kpi-value neutral">15.65%</div>
+      <div class="kpi-value neutral" id="kpiUsPct">15.65%</div>
       <div class="kpi-sub neutral">Firstrade + Binance</div>
     </div>
   </div>
@@ -771,18 +771,19 @@ const MONTHLY = [
   { m:'2026/02', v:9854532 },
   { m:'2026/03', v:10156888 },
 ];
-// 載入時優先使用 localStorage 儲存的歷史資料（由 sync 寫入）
+// 載入時優先使用 localStorage 儲存的同步資料
 // appendCurrentMonth() 在 US_ROY 宣告後才呼叫，避免 TDZ 錯誤
 (function() {
-  try {
-    const saved = localStorage.getItem('inv_monthly_data');
-    if (saved) {
-      const arr = JSON.parse(saved);
-      if (Array.isArray(arr) && arr.length > 0) {
-        MONTHLY.splice(0, MONTHLY.length, ...arr);
-      }
-    }
-  } catch(e) {}
+  const load = (key, target) => {
+    try {
+      const s = localStorage.getItem(key);
+      if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length > 0) target.splice(0, target.length, ...a); }
+    } catch(e) {}
+  };
+  load('inv_monthly_data', MONTHLY);
+  load('inv_tw_hold',      TW_HOLD);
+  load('inv_us_main',      US_MAIN);
+  load('inv_us_roy',       US_ROY);
 })();
 
 function calcCurrentTotal() {
@@ -1281,6 +1282,69 @@ function renderMonthlyTable() {
   }
 }
 
+function renderOverviewKPIs() {
+  const USD_TWD = 31.96;
+  const set = (id, text, cls) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    if (cls !== undefined) el.className = cls;
+  };
+
+  // ── 總資產 + 月增減（從 MONTHLY 最新兩筆）──
+  if (MONTHLY.length > 0) {
+    const last = MONTHLY[MONTHLY.length - 1];
+    const prev = MONTHLY[MONTHLY.length - 2];
+    set('kpiTotal', '$' + last.v.toLocaleString());
+    if (prev) {
+      const diff = last.v - prev.v;
+      const sign = diff >= 0 ? '↑' : '↓';
+      set('kpiTotalSub', `${sign} $${Math.abs(diff).toLocaleString()} 上月`, 'kpi-sub ' + (diff >= 0 ? 'up' : 'down'));
+    }
+
+    // ── 年度報酬（最新月 vs 12個月前）──
+    const [ly, lm] = last.m.split('/').map(Number);
+    const yPrev = new Date(ly, lm - 13);  // 12個月前
+    const yPrevKey = `${yPrev.getFullYear()}/${String(yPrev.getMonth()+1).padStart(2,'0')}`;
+    const yearAgo = MONTHLY.find(r => r.m === yPrevKey) || MONTHLY[0];
+    if (yearAgo && yearAgo !== last) {
+      const ret = ((last.v - yearAgo.v) / yearAgo.v * 100).toFixed(1);
+      set('kpiYearReturn', (ret >= 0 ? '+' : '') + ret + '%', 'kpi-value ' + (ret >= 0 ? 'up' : 'down'));
+      set('kpiYearReturnSub', `${yearAgo.m} → ${last.m}`);
+    }
+  }
+
+  // ── 台股未實現損益（從持股計算）──
+  if (TW_HOLD.length > 0) {
+    const twPnl  = TW_HOLD.reduce((s, h) => s + ((h.price || h.avg) - h.avg) * (h.shares || 0), 0);
+    const twCost = TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+    const sign = twPnl >= 0;
+    set('kpiTwPnl', (sign ? '+' : '') + '$' + Math.abs(Math.round(twPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    if (twCost > 0) {
+      const pct = (twPnl / twCost * 100).toFixed(2);
+      set('kpiTwPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+    }
+  }
+
+  // ── 銀行 / 美股+加密 佔比（優先用 SHEET_ALLOC）──
+  if (SHEET_ALLOC.ready) {
+    const total = SHEET_ALLOC.stocks + SHEET_ALLOC.subbroker + SHEET_ALLOC.bank + SHEET_ALLOC.binance + SHEET_ALLOC.firstrade;
+    if (total > 0) {
+      const bankPct = (SHEET_ALLOC.bank / total * 100).toFixed(1);
+      const usPct   = ((SHEET_ALLOC.firstrade + SHEET_ALLOC.subbroker + SHEET_ALLOC.binance) / total * 100).toFixed(1);
+      set('kpiBankPct', bankPct + '%', 'kpi-value neutral');
+      set('kpiBankVal', '$' + Math.round(SHEET_ALLOC.bank).toLocaleString(), 'kpi-sub neutral');
+      set('kpiUsPct', usPct + '%', 'kpi-value neutral');
+    }
+  } else if (US_MAIN.length > 0 || US_ROY.length > 0) {
+    const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+    const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+    const tot = twMV + mainMV + royMV;
+    if (tot > 0) set('kpiUsPct', ((mainMV + royMV) / tot * 100).toFixed(1) + '%', 'kpi-value neutral');
+  }
+}
+
 function renderAllocDetail() {
   const USD_TWD = 31.96;
   let rows, total, totalCost;
@@ -1431,6 +1495,7 @@ function buildGrowthData() {
 }
 
 function rerenderCharts() {
+  renderOverviewKPIs();
   renderMonthlyTable();
   renderAllocDetail();
   renderAllocAdvice();
@@ -1799,7 +1864,13 @@ let SHEET_ALLOC = {
   stocks_c: 0, subbroker_c: 0, bank_c: 0, binance_c: 0, firstrade_c: 0,
   ready: false
 };
+// 載入上次同步的分類資產資料
+try {
+  const _sa = localStorage.getItem('inv_sheet_alloc');
+  if (_sa) { const _obj = JSON.parse(_sa); if (_obj?.ready) SHEET_ALLOC = _obj; }
+} catch(e) {}
 initOverviewCharts();
+renderOverviewKPIs();
 window._overviewInit = true;
 renderTwStocks();
 renderUsStocks();
@@ -2105,6 +2176,12 @@ async function syncSheets() {
         };
       }
     }
+
+    // 持久化同步資料（下次開啟直接使用，不需再 sync）
+    try { localStorage.setItem('inv_tw_hold',      JSON.stringify(TW_HOLD)); } catch(e) {}
+    try { localStorage.setItem('inv_us_main',      JSON.stringify(US_MAIN)); } catch(e) {}
+    try { localStorage.setItem('inv_us_roy',       JSON.stringify(US_ROY)); } catch(e) {}
+    try { localStorage.setItem('inv_sheet_alloc',  JSON.stringify(SHEET_ALLOC)); } catch(e) {}
 
     rerenderStockTables();
     rerenderCharts();
