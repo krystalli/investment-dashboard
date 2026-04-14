@@ -714,6 +714,20 @@
 
 <!-- ═══ PAGE: AI TEAM ═══ -->
 <div id="page-team" class="page">
+  <!-- AI 深度分析卡 -->
+  <div class="card" style="border: 1px solid var(--accent);margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin-bottom:0">🤖 AI 即時深度分析 <span class="badge">Groq llama-3.3-70b</span></div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span id="teamAiKeyHint" style="font-size:11px;color:var(--text2)"></span>
+        <button onclick="runTeamAIAnalysis()" id="teamAiBtn" class="btn-action btn-sheets" style="font-size:12px;padding:6px 16px">🔮 開始 AI 分析</button>
+      </div>
+    </div>
+    <div id="teamAiResult" style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
+      按「🔮 開始 AI 分析」讓 Groq AI 根據即時持倉給出六位顧問的深度建議。<br>
+      需先在右下角聊天室 ⚙️ 設定 Groq API Key（免費申請：<a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>）
+    </div>
+  </div>
   <div id="teamContent"></div>
 </div>
 
@@ -1062,7 +1076,7 @@ function showPage(id) {
   if (id === 'history' && !window._historyInit) { initHistoryCharts(); window._historyInit = true; }
   if (id === 'qqq' && !window._qqqInit) { initQQQChart(); window._qqqInit = true; }
   if (id === 'backtest' && !window._btInit) { initBacktestChart(); window._btInit = true; }
-  if (id === 'team') { renderTeamPage(); }
+  if (id === 'team') { renderTeamPage(); updateTeamAiKeyHint(); }
   if (id === 'crypto') { renderCrypto(); window._cryptoInit = true; }
 }
 
@@ -1876,6 +1890,11 @@ try {
   const _sa = localStorage.getItem('inv_sheet_alloc');
   if (_sa) { const _obj = JSON.parse(_sa); if (_obj?.ready) SHEET_ALLOC = _obj; }
 } catch(e) {}
+// 恢復上次同步時間至 navDate
+try {
+  const _d = localStorage.getItem('inv_last_sync');
+  if (_d) document.getElementById('navDate').textContent = _d;
+} catch(e) {}
 initOverviewCharts();
 renderOverviewKPIs();
 window._overviewInit = true;
@@ -2249,8 +2268,9 @@ function showStatus(msg, type) {
 function updateNavDate() {
   const now = new Date();
   const pad = n => String(n).padStart(2,'0');
-  document.getElementById('navDate').textContent =
-    `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const dateStr = `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  document.getElementById('navDate').textContent = dateStr;
+  try { localStorage.setItem('inv_last_sync', dateStr); } catch(e) {}
 }
 
 // ─────── AI CHAT ───────
@@ -2279,13 +2299,15 @@ function saveApiKey() {
     updateGearStatus();
     document.getElementById('apiKeyPanel').style.display = 'none';
     addSystemMsg('✅ API Key 已儲存，現在使用 Groq AI 回答問題。');
+    updateTeamAiKeyHint();
   }
 }
 function clearApiKey() {
   localStorage.removeItem('inv_gemini_key');
   document.getElementById('apiKeyInput').value = '';
-  document.getElementById('apiKeyInput').placeholder = '輸入 Google Gemini API Key...';
+  document.getElementById('apiKeyInput').placeholder = '輸入 Groq API Key...';
   updateGearStatus();
+  updateTeamAiKeyHint();
   addSystemMsg('🗑️ API Key 已清除，切換回規則引擎模式。');
 }
 function updateGearStatus() {
@@ -2389,6 +2411,143 @@ async function callGeminiAPI(question, apiKey) {
   }
   const data = await res.json();
   return data.choices[0].message.content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
+// ─────── AI 投資團隊深度分析 ───────
+function buildTeamAnalysisContext() {
+  const USD_TWD = 31.96;
+  const allUS = [...US_MAIN, ...US_ROY];
+  const twMV  = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
+  const usMV  = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
+  const binMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+  const total = twMV + usMV + binMV;
+  const latest = MONTHLY[MONTHLY.length-1];
+  const qqqPos = allUS.find(s => s.sym==='QQQ');
+  const qqqSMA = 594.20;
+
+  const twStr = TW_HOLD.map(h =>
+    `  ${h.name}(${h.code}): 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()}`).join('\n');
+  const usStr = allUS.map(h =>
+    `  ${h.sym}: 均價$${h.avg} 現價$${h.price} 損益${h.pct?.toFixed(1)}% 市值$${(h.mv||0).toFixed(0)}`).join('\n');
+  const twPct = total ? (twMV/total*100).toFixed(0) : 0;
+  const usPct = total ? (usMV/total*100).toFixed(0) : 0;
+  const binPct = total ? (binMV/total*100).toFixed(0) : 0;
+
+  return `【投資組合概況】
+總資產估計：NT$${(total/1e6).toFixed(2)}M（台股${twPct}% / 美股${usPct}% / 幣安${binPct}%）
+最新月度紀錄：${latest?.m || '未知'} NT$${(latest?.v||0).toLocaleString()}
+QQQ現價：$${qqqPos?.price||'N/A'} vs SMA200 $${qqqSMA}（${qqqPos?.price ? (qqqPos.price>qqqSMA?'高於':'低於')+' '+(Math.abs((qqqPos.price-qqqSMA)/qqqSMA*100)).toFixed(1)+'%' : 'N/A'}）
+今日日期：${new Date().toLocaleDateString('zh-TW')}
+
+【台股持倉 ${TW_HOLD.length} 檔】
+${twStr || '  （無資料）'}
+
+【美股持倉 ${allUS.length} 檔（USD）】
+${usStr || '  （無資料）'}
+
+【幣安/加密資產】市值約 NT$${Math.round(binMV).toLocaleString()}`;
+}
+
+async function runTeamAIAnalysis() {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  const btn    = document.getElementById('teamAiBtn');
+  const result = document.getElementById('teamAiResult');
+  const hint   = document.getElementById('teamAiKeyHint');
+
+  if (!apiKey) {
+    result.innerHTML = `<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div>
+      請先在右下角聊天室 ⚙️ 設定 <strong>Groq API Key</strong>（免費申請：
+      <a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>）
+    </div></div>`;
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = '⏳ AI 分析中...';
+  result.innerHTML = '<div style="color:var(--text2);padding:12px 0;font-size:13px">🧠 AI 正在分析您的投資組合，通常需要 10–20 秒...</div>';
+
+  const prompt = `你是一個由6位投資顧問組成的AI分析團隊，請根據以下即時投資組合資料，用繁體中文為每位顧問提供3-5條具體且有數據支撐的分析建議。
+
+嚴格以下列JSON格式回覆，不要加 markdown code block，只輸出JSON：
+{"alex":"...","sophia":"...","max":"...","emma":"...","david":"...","ryan":"..."}
+
+各顧問職責（請依此撰寫各自角色的分析）：
+- alex：技術分析師（近期圖表訊號、支撐壓力位、具體進出場建議）
+- sophia：基本面分析師（持倉股票估值、財報亮點、產業趨勢）
+- max：風險管理師（集中度警示、停損建議、下行風險量化）
+- emma：股息策略師（配息標的分析、殖利率估算、再投入策略）
+- david：宏觀策略師（Fed政策影響、匯率風險、地緣政治、加密市場觀點）
+- ryan：QQQ槓桿策略師（SMA200訊號解讀、QQQ/QLD/TQQQ具體配置建議）
+
+${buildTeamAnalysisContext()}`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 2048,
+        temperature: 0.7,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const raw = data.choices[0].message.content.trim();
+
+    // 嘗試解析 JSON（移除可能的 ```json 包裝）
+    const jsonStr = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
+    let advice;
+    try { advice = JSON.parse(jsonStr); }
+    catch(e) {
+      // JSON 解析失敗：直接顯示原始回應
+      result.innerHTML = `<div class="card-title" style="margin-bottom:8px">🤖 AI 分析報告</div>
+        <div style="font-size:13px;line-height:1.8">${raw.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:8px">⏱ ${new Date().toLocaleString('zh-TW')}</div>`;
+      btn.disabled=false; btn.textContent='🔮 重新分析'; return;
+    }
+
+    const advisors = [
+      {key:'alex',  icon:'📈', name:'Alex',   role:'技術分析師',   color:'rgba(88,166,255,.15)',  border:'var(--blue)'},
+      {key:'sophia',icon:'💡', name:'Sophia', role:'基本面分析師', color:'rgba(63,185,80,.15)',   border:'var(--green)'},
+      {key:'max',   icon:'🛡️', name:'Max',    role:'風險管理師',   color:'rgba(248,81,73,.15)',   border:'var(--red)'},
+      {key:'emma',  icon:'💰', name:'Emma',   role:'股息策略師',   color:'rgba(188,140,255,.15)', border:'var(--purple)'},
+      {key:'david', icon:'🌏', name:'David',  role:'宏觀策略師',   color:'rgba(227,179,65,.15)',  border:'var(--yellow)'},
+      {key:'ryan',  icon:'⚡', name:'Ryan',   role:'槓桿策略師',   color:'rgba(63,185,80,.15)',   border:'var(--orange)'},
+    ];
+    const mkLine = t => `<div class="team-bullet"><div class="team-dot" style="background:var(--accent)"></div><div>${t}</div></div>`;
+    const fmtText = t => (t||'暫無分析').split('\n').map(l => l.trim() ? mkLine(l.replace(/^[-•·]\s*/,'').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')) : '').join('');
+
+    result.innerHTML = `
+      <div style="font-size:11px;color:var(--text2);margin-bottom:12px">🕐 ${new Date().toLocaleString('zh-TW')} · Groq llama-3.3-70b-versatile · 基於即時持倉</div>
+      <div class="team-grid">
+        ${advisors.map(a => `
+          <div class="team-card">
+            <div class="team-card-header">
+              <div class="team-avatar-lg" style="background:${a.color}">${a.icon}</div>
+              <div class="team-meta"><div class="team-name">${a.name} — ${a.role}</div><div class="team-role">AI 即時分析</div></div>
+            </div>
+            <div class="team-body" style="border-left:3px solid ${a.border};padding-left:10px">
+              ${fmtText(advice[a.key])}
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    if (hint) hint.textContent = `上次分析：${new Date().toLocaleTimeString('zh-TW')}`;
+  } catch(e) {
+    result.innerHTML = `<div class="alert alert-danger"><div class="alert-icon">❌</div><div>分析失敗：${escHtml(e.message)}。請確認 API Key 是否正確。</div></div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = '🔮 重新分析';
+  }
+}
+
+// 更新 AI 分析頁面的 key 提示
+function updateTeamAiKeyHint() {
+  const hint = document.getElementById('teamAiKeyHint');
+  if (!hint) return;
+  const hasKey = !!localStorage.getItem('inv_gemini_key');
+  hint.textContent = hasKey ? '✅ API Key 已設定' : '⚠️ 尚未設定 API Key';
+  hint.style.color = hasKey ? 'var(--green)' : 'var(--text2)';
 }
 
 function generateChatResponse(question) {
