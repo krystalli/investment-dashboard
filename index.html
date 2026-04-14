@@ -714,20 +714,6 @@
 
 <!-- ═══ PAGE: AI TEAM ═══ -->
 <div id="page-team" class="page">
-  <!-- AI 深度分析卡 -->
-  <div class="card" style="border: 1px solid var(--accent);margin-bottom:16px">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin-bottom:0">🤖 AI 即時深度分析 <span class="badge">Groq llama-3.3-70b</span></div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span id="teamAiKeyHint" style="font-size:11px;color:var(--text2)"></span>
-        <button onclick="runTeamAIAnalysis()" id="teamAiBtn" class="btn-action btn-sheets" style="font-size:12px;padding:6px 16px">🔮 開始 AI 分析</button>
-      </div>
-    </div>
-    <div id="teamAiResult" style="margin-top:12px;color:var(--text2);font-size:13px;line-height:1.7">
-      按「🔮 開始 AI 分析」讓 Groq AI 根據即時持倉給出六位顧問的深度建議。<br>
-      需先在右下角聊天室 ⚙️ 設定 Groq API Key（免費申請：<a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>）
-    </div>
-  </div>
   <div id="teamContent"></div>
 </div>
 
@@ -1144,14 +1130,14 @@ function renderTeamPage() {
 
   const b = (color, txt) => `<div class="team-bullet"><div class="team-dot" style="background:${color}"></div><div>${txt}</div></div>`;
   const sec = (title, content) => `<div class="team-section"><div class="team-section-title">${title}</div>${content}</div>`;
-  const card = (avatar, bg, name, role, verdictHTML, sections) => `
+  const card = (key, avatar, bg, name, role, verdictHTML, sections) => `
     <div class="team-card">
       <div class="team-card-header">
         <div class="team-avatar-lg" style="background:${bg}">${avatar}</div>
         <div class="team-meta"><div class="team-name">${name}</div><div class="team-role">${role}</div></div>
         ${verdictHTML}
       </div>
-      <div class="team-body">${sections}</div>
+      <div class="team-body" id="team-body-${key}">${sections}</div>
     </div>`;
 
   // ── Alex 技術分析師 ──
@@ -1238,24 +1224,32 @@ function renderTeamPage() {
   const curM = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
 
   document.getElementById('teamContent').innerHTML = `
-    <div class="kpi-grid" style="margin-bottom:16px">
-      <div class="kpi-card"><div class="kpi-label">總資產（估）</div><div class="kpi-value">$${(total/1e6).toFixed(2)}M</div><div class="kpi-sub neutral">TWD ${curM}｜含幣安 ${binPct}%</div></div>
-      <div class="kpi-card"><div class="kpi-label">組合評級</div><div class="kpi-value" style="color:var(--yellow)">${twPct>70?'中高風險':'中等風險'}</div><div class="kpi-sub neutral">台股 ${twPct}% · 幣安 ${binPct}%</div></div>
-      <div class="kpi-card"><div class="kpi-label">最需關注</div><div class="kpi-value down" style="font-size:16px">${urgentStock?urgentStock.name:'無緊急警示'}</div><div class="kpi-sub down">${urgentStock?urgentStock.pct.toFixed(1)+'% '+urgentStock.reason.slice(0,15):'所有部位風險可控'}</div></div>
-      <div class="kpi-card"><div class="kpi-label">最大獲利</div><div class="kpi-value up" style="font-size:16px">${bestStock?.name} +${bestStock?.pct.toFixed(0)}%</div><div class="kpi-sub up">核心持倉</div></div>
+    <!-- 頁首：KPI + AI 分析按鈕 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div class="kpi-grid" style="flex:1;margin-bottom:0">
+        <div class="kpi-card"><div class="kpi-label">總資產（估）</div><div class="kpi-value">$${(total/1e6).toFixed(2)}M</div><div class="kpi-sub neutral">TWD ${curM}｜含幣安 ${binPct}%</div></div>
+        <div class="kpi-card"><div class="kpi-label">組合評級</div><div class="kpi-value" style="color:var(--yellow)">${twPct>70?'中高風險':'中等風險'}</div><div class="kpi-sub neutral">台股 ${twPct}% · 幣安 ${binPct}%</div></div>
+        <div class="kpi-card"><div class="kpi-label">最需關注</div><div class="kpi-value down" style="font-size:16px">${urgentStock?urgentStock.name:'無緊急警示'}</div><div class="kpi-sub down">${urgentStock?urgentStock.pct.toFixed(1)+'% '+urgentStock.reason.slice(0,15):'所有部位風險可控'}</div></div>
+        <div class="kpi-card"><div class="kpi-label">最大獲利</div><div class="kpi-value up" style="font-size:16px">${bestStock?.name} +${bestStock?.pct.toFixed(0)}%</div><div class="kpi-sub up">核心持倉</div></div>
+      </div>
+      <div class="card" style="min-width:200px;padding:16px 20px;display:flex;flex-direction:column;align-items:center;gap:8px;border:1px solid var(--accent)">
+        <button onclick="runTeamAIAnalysis()" id="teamAiBtn" class="btn-action btn-sheets" style="font-size:13px;padding:8px 20px;width:100%">🔮 AI 即時深度分析</button>
+        <div style="font-size:11px;color:var(--text2);text-align:center"><span id="teamAiKeyHint"></span></div>
+        <div style="font-size:11px;text-align:center"><span id="teamAiStatus" style="color:var(--text2)">按下按鈕，AI 將更新各顧問分析</span></div>
+      </div>
     </div>
     <div class="team-grid">
-      ${card('📈','rgba(88,166,255,.15)','Alex — 技術分析師','圖表趨勢 · 支撐壓力 · 進出場時機',alexVerdict,
+      ${card('alex','📈','rgba(88,166,255,.15)','Alex — 技術分析師','圖表趨勢 · 支撐壓力 · 進出場時機',alexVerdict,
         sec('📉 警示訊號',alexWarn)+sec('✅ 強勢標的',alexStrong)+sec('🎯 建議動作',alexAction))}
-      ${card('💡','rgba(63,185,80,.15)','Sophia — 基本面分析師','財報分析 · 產業趨勢 · 估值',
+      ${card('sophia','💡','rgba(63,185,80,.15)','Sophia — 基本面分析師','財報分析 · 產業趨勢 · 估值',
         `<span class="team-verdict" style="background:rgba(88,166,255,.15);color:var(--blue)">📊 長線看好</span>`,
         sec('🔑 核心持倉優勢',sophiaCore)+sec('⚠️ 基本面疑慮',sophiaConcern)+sec('💎 觀察清單',sophiaWatch))}
-      ${card('🛡️','rgba(248,81,73,.15)','Max — 風險管理師','下行保護 · 集中度控管 · 停損紀律',maxVerdict,
+      ${card('max','🛡️','rgba(248,81,73,.15)','Max — 風險管理師','下行保護 · 集中度控管 · 停損紀律',maxVerdict,
         sec('🚨 緊急風險',maxRisk)+sec('⚖️ 集中度風險',maxConc)+sec('🛡️ 風控行動',maxAction))}
-      ${card('💰','rgba(188,140,255,.15)','Emma — 股息策略師','被動收入 · 殖利率 · 股息再投入',
+      ${card('emma','💰','rgba(188,140,255,.15)','Emma — 股息策略師','被動收入 · 殖利率 · 股息再投入',
         `<span class="team-verdict" style="background:rgba(63,185,80,.15);color:var(--green)">✅ 穩健收益</span>`,
         sec('💎 股息核心持倉',emmaCoreDiv)+sec('📊 股息進度',emmaProgress)+sec('🎯 股息優化',emmaOpt))}
-      ${card('🌏','rgba(227,179,65,.15)','David — 宏觀策略師','總體經濟 · 匯率 · 地緣政治 · 加密市場',
+      ${card('david','🌏','rgba(227,179,65,.15)','David — 宏觀策略師','總體經濟 · 匯率 · 地緣政治 · 加密市場',
         `<span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">📡 審慎觀察</span>`,
         sec('🌐 宏觀環境',
           b('var(--red)','美國關稅戰持續，科技股出口受限壓制')+
@@ -1273,7 +1267,7 @@ function renderTeamPage() {
           b('var(--blue)',`加大美元資產至 ${Math.round(40-usPct)}%+，對沖台幣地緣政治風險`)+
           b('var(--blue)','持有 QQQ/SPY 作為美元計價資產核心')+
           b('var(--blue)','關稅明朗前，美股個股維持觀望，不大幅加碼')))}
-      ${card('⚡','rgba(63,185,80,.15)','Ryan — 槓桿策略師','QQQ / QLD / TQQQ · SMA200 動態配置',ryanVerdict,
+      ${card('ryan','⚡','rgba(63,185,80,.15)','Ryan — 槓桿策略師','QQQ / QLD / TQQQ · SMA200 動態配置',ryanVerdict,
         sec('📊 當前訊號',ryanSignal)+sec('💼 持倉現狀',ryanHolding)+sec('🎯 行動計劃',ryanAction))}
     </div>`;
 }
@@ -2444,23 +2438,29 @@ function buildTeamAnalysisContext() {
 
   const mom = (latest && prev) ? ` 較上月${latest.v>=prev.v?'↑':'↓'}$${Math.abs(latest.v-prev.v).toLocaleString()}` : '';
 
+  // 加密貨幣持倉細項（從 CRYPTO 陣列）
+  const cryptoStr = CRYPTO.length
+    ? CRYPTO.map(c => `  ${c.sym}: 數量${c.qty} 現價≈$${c.price} 市值≈$${(c.qty*c.price).toFixed(0)} USD`).join('\n')
+    : '  （無細項，僅知總市值）';
+
   return `=== 投資人即時資料（分析須以此為準）===
-分析日期：${new Date().toLocaleDateString('zh-TW')}
-總資產：NT$${(total/1e6).toFixed(2)}M（台股${total?(twMV/total*100).toFixed(0):0}% 美股${total?(usMV/total*100).toFixed(0):0}% 幣安${total?(binMV/total*100).toFixed(0):0}% 銀行${total?(bankMV/total*100).toFixed(0):0}%）
+總資產：NT$${(total/1e6).toFixed(2)}M（台股${total?(twMV/total*100).toFixed(0):0}% 美股${total?(usMV/total*100).toFixed(0):0}% 加密${total?(binMV/total*100).toFixed(0):0}% 銀行${total?(bankMV/total*100).toFixed(0):0}%）
 最新月度：${latest?.m||'N/A'} NT$${(latest?.v||0).toLocaleString()}${mom}
 QQQ現價：$${qqqPos?.price||'N/A'} / SMA200：$${qqqSMA}（${qqqPos?.price?(qqqPos.price>qqqSMA?'高於':'低於')+' '+Math.abs(((qqqPos.price-qqqSMA)/qqqSMA*100)).toFixed(1)+'%':'N/A'}）
 
---- 台股持倉（★ 用戶確實持有，請只討論以下股票的持倉，不得提及清單外的台股）---
+--- 台股持倉（★ 用戶確實持有，持倉分析只能討論這些）---
 ${twHoldStr}
 
---- 台股觀察清單（尚未持有，可評估是否買入）---
+--- 台股觀察清單（尚未持有，可評估買入）---
 ${twWatchStr}
 
 --- 美股持倉（USD）---
 ${usStr}
 
---- 幣安加密資產 ---
-  市值約 NT$${Math.round(binMV).toLocaleString()}（BTC/ETH/BNB/USDT，詳情請手動更新）`;
+--- 加密貨幣持倉（幣安）---
+  總市值：NT$${Math.round(binMV).toLocaleString()}（佔總資產${total?(binMV/total*100).toFixed(1):0}%）
+${cryptoStr}
+  ★ david 需根據當前市場（${new Date().toLocaleDateString('zh-TW')}）給予 BTC/ETH/山寨幣即時操作建議，並評估是否有新的加密投資機會`;
 }
 
 // 解析 AI 回應文字，按三個段落分欄渲染（對應 .team-body 的 3-col grid）
@@ -2508,53 +2508,49 @@ function fmtAiSection(text, ac) {
 async function runTeamAIAnalysis() {
   const apiKey = localStorage.getItem('inv_gemini_key');
   const btn    = document.getElementById('teamAiBtn');
-  const result = document.getElementById('teamAiResult');
+  const status = document.getElementById('teamAiStatus');
   const hint   = document.getElementById('teamAiKeyHint');
 
+  const setStatus = (msg, color='var(--text2)') => { if (status) { status.textContent = msg; status.style.color = color; } };
+
   if (!apiKey) {
-    result.innerHTML = `<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div>
-      請先在右下角聊天室 ⚙️ 設定 <strong>Groq API Key</strong>（免費申請：
-      <a href="https://console.groq.com" target="_blank" style="color:var(--accent)">console.groq.com</a>）
-    </div></div>`;
+    setStatus('⚠️ 請先在聊天室 ⚙️ 設定 Groq API Key', 'var(--yellow)');
     return;
   }
 
-  btn.disabled = true; btn.textContent = '⏳ AI 分析中...';
-  result.innerHTML = `<div style="color:var(--text2);padding:16px 0;font-size:13px;text-align:center">
-    🧠 六位 AI 顧問正在分析您的投資組合，通常需要 15–25 秒…
-  </div>`;
+  btn.disabled = true; btn.textContent = '⏳ 分析中…';
+  setStatus('🧠 六位顧問分析中，約 20–30 秒…', 'var(--text2)');
 
-  const prompt = `你是一個由6位專業投資顧問組成的AI分析團隊。
+  const prompt = `你是一個由6位專業投資顧問組成的AI分析團隊，分析日期：${new Date().toLocaleDateString('zh-TW')}。
 
-⚠️ 鐵則（違反視為嚴重錯誤）：
-1. 「📊 持倉分析」只能分析「持倉清單」內的股票；絕對不可說用戶持有清單外的股票（例如持倉無鴻海，就不能說「您持有鴻海」）
-2. 「💡 新投資機會」可以自由推薦觀察清單或任何市場上值得買的標的，不受持倉清單限制
-3. 每條分析必須附具體數字（損益%、目標價、佔比、時間等）
-4. 每位顧問需有：持倉分析 + 新投資機會 + 本週操作建議三個區塊
+⚠️ 鐵則：
+1. 「📊 持倉分析」只能分析「台股持倉清單」內的股票；絕對不可說用戶持有清單外的台股（清單外股票不存在於持倉中）
+2. 「💡 新投資機會」可以自由推薦觀察清單或任何市場上值得買的標的（台股/美股/加密貨幣均可）
+3. 每條分析必須附具體數字（損益%、目標價、佔比、幣種等）
+4. david 必須分析加密貨幣市場現況並給予 BTC/ETH 即時操作建議
 
-回覆格式：僅輸出以下JSON，不加任何其他文字或markdown：
+回覆格式：僅輸出以下JSON，不加任何其他文字或markdown符號：
 {"alex":"...","sophia":"...","max":"...","emma":"...","david":"...","ryan":"..."}
 
-每位顧問的文字格式（用\\n換行）：
+每位顧問文字格式（用\\n換行，段落標題後直接換行接 1.）：
 📊 持倉分析：
-1. [具體分析現有持股]
+1. [分析持倉股票，附損益%]
 2. ...
-3. ...
 
 💡 新投資機會：
-1. [從觀察清單或市場推薦1-2個值得買入的標的，說明理由和目標價]
+1. [推薦標的，附理由+目標價/進場區間]
 2. ...
 
 🎯 本週操作重點：
-1. [最優先的1-2個具體行動]
+1. [最具體的1-2個行動]
 
-各顧問角色：
-- alex：技術分析師（趨勢、支撐壓力、進出場訊號）
-- sophia：基本面（估值、財報、產業競爭力）
-- max：風險管理（集中度、停損、下行風險）
-- emma：股息策略（殖利率、配息、再投入）
-- david：宏觀（Fed、匯率、地緣政治、加密市場）
-- ryan：QQQ/槓桿（SMA200、QQQ/QLD/TQQQ配置）
+各顧問專責：
+- alex：技術分析（趨勢、支撐壓力、K線、進出場時機）
+- sophia：基本面（估值、財報、產業競爭力、護城河）
+- max：風險管理（集中度、停損、下行風險、組合平衡）
+- emma：股息策略（殖利率、配息穩定性、再投入規劃）
+- david：宏觀+加密（Fed/匯率/地緣政治 + BTC/ETH當前趨勢、加密市場機會）
+- ryan：QQQ/槓桿策略（SMA200訊號、QQQ/QLD/TQQQ動態配置）
 
 ${buildTeamAnalysisContext()}`;
 
@@ -2564,7 +2560,7 @@ ${buildTeamAnalysisContext()}`;
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 3000,
+        max_tokens: 3500,
         temperature: 0.6,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -2578,50 +2574,35 @@ ${buildTeamAnalysisContext()}`;
     let advice;
     try { advice = JSON.parse(jsonStr); }
     catch(e) {
-      result.innerHTML = `<div class="card-title" style="margin-bottom:12px">🤖 AI 分析報告</div>
-        <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${raw.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:12px">⏱ ${new Date().toLocaleString('zh-TW')}</div>`;
-      btn.disabled=false; btn.textContent='🔮 重新分析'; return;
+      // JSON 解析失敗：把原始文字塞進第一個顧問卡顯示
+      const fallbackEl = document.getElementById('team-body-alex');
+      if (fallbackEl) fallbackEl.innerHTML = `<div class="team-section" style="grid-column:1/-1">
+        <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${escHtml(raw)}</div></div>`;
+      btn.disabled=false; btn.textContent='🔄 重新分析'; return;
     }
 
     const advisors = [
-      {key:'alex',  icon:'📈', name:'Alex',   role:'技術分析師',   bg:'rgba(88,166,255,.12)',  ac:'#58a6ff'},
-      {key:'sophia',icon:'💡', name:'Sophia', role:'基本面分析師', bg:'rgba(63,185,80,.12)',   ac:'#3fb950'},
-      {key:'max',   icon:'🛡️', name:'Max',    role:'風險管理師',   bg:'rgba(248,81,73,.12)',   ac:'#f85149'},
-      {key:'emma',  icon:'💰', name:'Emma',   role:'股息策略師',   bg:'rgba(188,140,255,.12)', ac:'#bc8cff'},
-      {key:'david', icon:'🌏', name:'David',  role:'宏觀策略師',   bg:'rgba(227,179,65,.12)',  ac:'#e3b341'},
-      {key:'ryan',  icon:'⚡', name:'Ryan',   role:'槓桿策略師',   bg:'rgba(63,185,80,.12)',   ac:'#f0883e'},
+      {key:'alex',  ac:'#58a6ff'},
+      {key:'sophia',ac:'#3fb950'},
+      {key:'max',   ac:'#f85149'},
+      {key:'emma',  ac:'#bc8cff'},
+      {key:'david', ac:'#e3b341'},
+      {key:'ryan',  ac:'#f0883e'},
     ];
 
-    result.innerHTML = `
-      <div style="font-size:11px;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:6px">
-        <span>🕐 ${new Date().toLocaleString('zh-TW')}</span>
-        <span style="opacity:.4">·</span>
-        <span>Groq llama-3.3-70b-versatile</span>
-        <span style="opacity:.4">·</span>
-        <span>基於即時持倉 + 市場觀察清單</span>
-      </div>
-      <div class="team-grid">
-        ${advisors.map(a => `
-          <div class="team-card" style="border-top:3px solid ${a.ac}">
-            <div class="team-card-header">
-              <div class="team-avatar-lg" style="background:${a.bg};font-size:20px">${a.icon}</div>
-              <div class="team-meta">
-                <div class="team-name">${a.name}</div>
-                <div class="team-role">${a.role} · AI 即時分析</div>
-              </div>
-            </div>
-            <div class="team-body">
-              ${fmtAiSection(advice[a.key], a.ac)}
-            </div>
-          </div>`).join('')}
-      </div>`;
+    // 更新各顧問卡片 body（保留卡片 header，只換內容）
+    advisors.forEach(a => {
+      const bodyEl = document.getElementById(`team-body-${a.key}`);
+      if (bodyEl && advice[a.key]) bodyEl.innerHTML = fmtAiSection(advice[a.key], a.ac);
+    });
 
-    if (hint) { hint.textContent = `上次：${new Date().toLocaleTimeString('zh-TW')}`; hint.style.color='var(--green)'; }
+    const timeStr = new Date().toLocaleTimeString('zh-TW');
+    setStatus(`✅ AI 分析完成 ${timeStr}`, 'var(--green)');
+    if (hint) { hint.textContent = `Groq llama-3.3-70b · ${timeStr}`; hint.style.color='var(--text2)'; }
+    btn.disabled=false; btn.textContent='🔄 重新分析';
   } catch(e) {
-    result.innerHTML = `<div class="alert alert-danger"><div class="alert-icon">❌</div><div>分析失敗：${escHtml(e.message)}。請確認 API Key 是否正確。</div></div>`;
-  } finally {
-    btn.disabled = false; btn.textContent = '🔮 重新分析';
+    setStatus(`❌ 分析失敗：${e.message}`, 'var(--red)');
+    btn.disabled = false; btn.textContent = '🔮 AI 即時深度分析';
   }
 }
 
