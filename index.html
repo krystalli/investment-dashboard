@@ -892,8 +892,12 @@ const US_ROY = [
   { sym:'NVDA', shares:3.5,    avg:185.60, price:171.24, cost:649.59,   mv:599.34,   pnl:-50.25,   pct:-7.74,  rec:'HOLD',  reason:'NVDA持倉補倉，合併看待' },
   { sym:'SPY',  shares:6.474,  avg:618.95, price:655.09, cost:4007.08,  mv:4241.05,  pnl:233.97,   pct:5.84,   rec:'HOLD',  reason:'+5.84%穩健，S&P500長期持有' },
 ];
-// 補上當月估算值（TW_HOLD / US_MAIN / US_ROY 已初始化，不會觸發 TDZ）
-appendCurrentMonth();
+// 補上當月估算值：只在 MONTHLY 沒有當月資料時才補（避免覆蓋已同步的試算表數據）
+(function() {
+  const now = new Date();
+  const curM = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
+  if (!MONTHLY.some(r => r.m === curM)) appendCurrentMonth();
+})();
 
 // Backtest data for Taiwan stocks
 const TW_BT = [
