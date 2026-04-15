@@ -443,7 +443,7 @@
     <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:13px;line-height:1.8">
       <div style="margin-bottom:8px"><strong style="color:var(--blue)">🔵 永久配置（60%）：</strong>QQQ $18,000 — 無論市場強弱，核心部位不動</div>
       <div style="margin-bottom:8px"><strong style="color:var(--green)">🟢 進場條件（剩餘40%）：</strong>Nasdaq 指數 > SMA200 × 1.04 → QLD 30%（$9,000）+ TQQQ 10%（$3,000）</div>
-      <div><strong style="color:var(--red)">🔴 退場條件：</strong>Nasdaq 指數 &lt; SMA200 × 0.07 → 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金</div>
+      <div><strong style="color:var(--red)">🔴 退場條件：</strong>Nasdaq 指數 &lt; SMA200 × 0.93（低於 SMA200 約 7%）→ 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金</div>
     </div>
   </div>
 
@@ -468,10 +468,10 @@
     </div>
 
     <div class="card">
-      <div class="card-title">💰 目前建議配置 <span class="badge">$30,000 USD · 訊號：等待</span></div>
-      <div class="alert alert-warn" style="margin-bottom:12px">
-        <div class="alert-icon">⏸</div>
-        <div>QQQ（$558.28）目前低於進場門檻（$617.96），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待 QQQ 突破 $617.96 再建 QLD/TQQQ。</div>
+      <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
+      <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
+        <div class="alert-icon" id="allocAlertIcon">⏸</div>
+        <div id="allocAlertText">QQQ 價格載入中…</div>
       </div>
       <div class="gauge-row">
         <div class="gauge-item">
@@ -480,17 +480,17 @@
           <div class="gauge-amount">$18,000</div>
           <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
         </div>
-        <div class="gauge-item" style="opacity:0.4">
+        <div class="gauge-item" id="qldGauge" style="opacity:0.4">
           <div class="gauge-pct" style="color:var(--purple)">30%</div>
-          <div class="gauge-name">QLD ⏸ 待機</div>
+          <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
           <div class="gauge-amount">$9,000</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+          <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
         </div>
-        <div class="gauge-item" style="opacity:0.4">
+        <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
           <div class="gauge-pct" style="color:var(--orange)">10%</div>
-          <div class="gauge-name">TQQQ ⏸ 待機</div>
+          <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
           <div class="gauge-amount">$3,000</div>
-          <div style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+          <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
         </div>
       </div>
       <div style="margin-top:8px">
@@ -1654,7 +1654,9 @@ function renderCrypto() {
 
 // ─────── QQQ CHART ───────
 function initQQQChart() {
-  updateNasdaqDisplay(558.28); // 初始顯示（QQQ 收盤價），刷新股價後即時更新
+  // 優先用 US_MAIN/US_ROY 已知價格，否則用最後備援值
+  const stored = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
+  updateNasdaqDisplay(stored?.price || 558.28);
   new Chart(document.getElementById('chartQQQAlloc'), {
     type: 'doughnut',
     data: {
@@ -1672,8 +1674,9 @@ function renderQQQHoldings() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const SMA200 = 594.20;
-  const allUS = [...US_MAIN, ...US_ROY];
+  const SMA200  = 594.20;
+  const ENTRY   = +(SMA200 * 1.04).toFixed(2);
+  const allUS   = [...US_MAIN, ...US_ROY];
 
   // Merge QQQ from both accounts
   const qqqEntries = allUS.filter(s => s.sym === 'QQQ');
@@ -1690,7 +1693,7 @@ function renderQQQHoldings() {
   const qqqAvg    = qqqShares ? qqqCost / qqqShares : 0;
   const qqqPct    = qqqCost ? ((qqqMV - qqqCost) / qqqCost * 100) : 0;
 
-  const leverOK = qqqPrice >= SMA200 * 1.04;
+  const leverOK = qqqPrice >= ENTRY;
 
   const rows = [
     { sym: 'QQQ',  shares: qqqShares, avg: qqqAvg, price: qqqPrice, mv: qqqMV, pct: qqqPct, cost: qqqCost },
@@ -1733,7 +1736,7 @@ function renderQQQHoldings() {
   });
 
   tbody.innerHTML += `<tr><td colspan="9" style="color:var(--text2);font-size:11px">
-    * QQQ 合併 US_MAIN + US_ROY 兩帳戶；SMA200=${SMA200}，leverOK=${leverOK}（需 QQQ 現價 ≥ SMA200×1.04=${(SMA200*1.04).toFixed(2)}）
+    * QQQ 合併 US_MAIN + US_ROY 兩帳戶｜SMA200=$${SMA200}｜進場門檻=$${ENTRY}｜訊號：${leverOK ? '✅ 進場（QQQ $'+qqqPrice.toFixed(2)+' ≥ $'+ENTRY+'）' : '⏸ 等待（QQQ $'+qqqPrice.toFixed(2)+' < $'+ENTRY+'）'}
   </td></tr>`;
 }
 
@@ -1972,34 +1975,73 @@ async function refreshPrices() {
 }
 
 function updateNasdaqDisplay(price) {
-  const sma = 594.20; // QQQ SMA200 — 每月更新一次（2026/03/30 實際計算值）
-  const entry = sma * 1.04;
-  const exit  = sma * 0.07;
+  const sma   = 594.20; // QQQ SMA200 — 每月更新一次（2026/03/30 實際計算值）
+  const entry = +(sma * 1.04).toFixed(2);  // 進場：高於 SMA200 4%
+  const exit  = +(sma * 0.93).toFixed(2);  // 退場：低於 SMA200 7%（≈ $552.6）
   const diff  = price - entry;
   const diffPct = ((price - sma) / sma * 100).toFixed(1);
   const signal = price >= entry ? 'BUY' : price <= exit ? 'SELL' : 'HOLD';
+  const isBuy  = signal === 'BUY';
+  const isSell = signal === 'SELL';
 
   const el = id => document.getElementById(id);
+
+  // ── 關鍵數值區 ──
   if (el('nasdaqPrice'))  el('nasdaqPrice').textContent  = `$${price.toFixed(2)}`;
   if (el('nasdaqSMA'))    el('nasdaqSMA').textContent    = `$${sma.toFixed(2)}`;
   if (el('nasdaqEntry'))  el('nasdaqEntry').textContent  = `$${entry.toFixed(2)}`;
   if (el('nasdaqExit'))   el('nasdaqExit').textContent   = `$${exit.toFixed(2)}`;
-  if (el('nasdaqDiff'))   el('nasdaqDiff').textContent   = `${diff >= 0 ? '+' : ''}$${Math.abs(diff).toFixed(2)} (${diff >= 0 ? '+' : ''}${((diff/entry)*100).toFixed(1)}%)`;
+  if (el('nasdaqDiff')) {
+    el('nasdaqDiff').textContent = `${diff >= 0 ? '+' : ''}$${Math.abs(diff).toFixed(2)} (${diff >= 0 ? '+' : ''}${((diff/entry)*100).toFixed(1)}%)`;
+    el('nasdaqDiff').className = diff >= 0 ? 'up' : 'down';
+  }
   if (el('nasdaqVsSMA'))  el('nasdaqVsSMA').textContent  = `${diffPct >= 0 ? '+' : ''}${diffPct}%（${price >= sma ? '高於' : '低於'} SMA200）`;
-  if (el('nasdaqSignal')) el('nasdaqSignal').textContent = signal === 'BUY' ? '✅ 進場' : signal === 'SELL' ? '🔴 退場' : '⏸ 等待進場';
+  if (el('nasdaqSignal')) el('nasdaqSignal').textContent = isBuy ? '✅ 進場' : isSell ? '🔴 退場' : '⏸ 等待進場';
 
-  // Update QQQ shares calculation using live QQQ price
-  const qqqData = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
-  const qqqPrice = qqqData?.price || 576;
-  const qqqShares = (18000 / qqqPrice).toFixed(1);
-  if (el('qqqSharesCalc')) el('qqqSharesCalc').textContent = `≈ ${qqqShares} 股 @$${qqqPrice.toFixed(0)}`;
-
-  const panel = document.getElementById('signalPanel');
-  const text  = document.getElementById('signalText');
-  const desc  = document.getElementById('signalDesc');
-  if (panel) { panel.className = `signal-panel ${signal.toLowerCase()}`; }
+  // ── 訊號面板 ──
+  const panel = el('signalPanel'), text = el('signalText'), desc = el('signalDesc');
+  if (panel) panel.className = `signal-panel ${signal.toLowerCase()}`;
   if (text)  { text.className = `signal-big ${signal.toLowerCase()}`; text.textContent = `${signal} ◆`; }
-  if (desc)  { desc.textContent = signal === 'BUY' ? 'QQQ 突破 SMA200×1.04，啟動槓桿策略！' : signal === 'SELL' ? '退場訊號觸發，賣出 QLD/TQQQ' : `QQQ $${price.toFixed(2)} 低於進場門檻 $${entry.toFixed(2)}，槓桿暫不啟動`; }
+  if (desc)  desc.textContent = isBuy ? 'QQQ 突破 SMA200×1.04，啟動槓桿策略！'
+    : isSell ? '退場訊號觸發，賣出 QLD/TQQQ'
+    : `QQQ $${price.toFixed(2)} 低於進場門檻 $${entry}，槓桿暫不啟動`;
+
+  // ── 目前建議配置 badge ──
+  if (el('allocBadge')) el('allocBadge').textContent =
+    `$30,000 USD · 訊號：${isBuy ? '✅ 進場' : isSell ? '🔴 退場' : '⏸ 等待'}`;
+
+  // ── 建議配置 alert ──
+  const alertEl = el('allocAlert'), iconEl = el('allocAlertIcon'), txtEl = el('allocAlertText');
+  if (alertEl && iconEl && txtEl) {
+    if (isBuy) {
+      alertEl.className = 'alert alert-success'; iconEl.textContent = '✅';
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）已突破進場門檻（$${entry}），<strong>槓桿啟動！</strong> 建議立即建立 QLD + TQQQ 部位，把剩餘 40% 資金（$12,000）配置到位。`;
+    } else if (isSell) {
+      alertEl.className = 'alert alert-danger'; iconEl.textContent = '🔴';
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）跌破退場門檻（$${exit}），<strong>退場訊號觸發！</strong> 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金。`;
+    } else {
+      alertEl.className = 'alert alert-warn'; iconEl.textContent = '⏸';
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）低於進場門檻（$${entry}），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待突破 $${entry} 再建 QLD/TQQQ。`;
+    }
+  }
+
+  // ── QLD / TQQQ gauge ──
+  const qldG = el('qldGauge'), tqqqG = el('tqqqGauge');
+  if (qldG) {
+    qldG.style.opacity = isBuy ? '1' : '0.4';
+    if (el('qldName'))  el('qldName').textContent  = isBuy ? 'QLD ✅ 建倉' : 'QLD ⏸ 待機';
+    if (el('qldText'))  el('qldText').textContent  = isBuy ? '訊號成立，建倉 $9,000' : '條件未達，暫不建倉';
+  }
+  if (tqqqG) {
+    tqqqG.style.opacity = isBuy ? '1' : '0.4';
+    if (el('tqqqName')) el('tqqqName').textContent = isBuy ? 'TQQQ ✅ 建倉' : 'TQQQ ⏸ 待機';
+    if (el('tqqqText')) el('tqqqText').textContent = isBuy ? '訊號成立，建倉 $3,000' : '條件未達，暫不建倉';
+  }
+
+  // ── QQQ 股數計算 ──
+  const qqqData = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
+  const livePrice = qqqData?.price || price;
+  if (el('qqqSharesCalc')) el('qqqSharesCalc').textContent = `≈ ${(18000/livePrice).toFixed(1)} 股 @$${livePrice.toFixed(0)}`;
 }
 
 // ─────── 同步 Google Sheets（三張表）───────
