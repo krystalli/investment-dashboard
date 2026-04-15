@@ -259,32 +259,32 @@
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">總資產 (TWD)</div>
-      <div class="kpi-value" id="kpiTotal">$10,156,888</div>
-      <div class="kpi-sub up" id="kpiTotalSub">↑ $302,357 本月</div>
+      <div class="kpi-value" id="kpiTotal">—</div>
+      <div class="kpi-sub neutral" id="kpiTotalSub">載入中…</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">年度報酬</div>
-      <div class="kpi-value up" id="kpiYearReturn">+41.2%</div>
-      <div class="kpi-sub neutral" id="kpiYearReturnSub">Apr 2025 → Mar 2026</div>
+      <div class="kpi-value neutral" id="kpiYearReturn">—</div>
+      <div class="kpi-sub neutral" id="kpiYearReturnSub">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">台股未實現損益</div>
-      <div class="kpi-value up" id="kpiTwPnl">+$1,203,110</div>
-      <div class="kpi-sub up" id="kpiTwPnlPct">+16.68%</div>
+      <div class="kpi-value neutral" id="kpiTwPnl">—</div>
+      <div class="kpi-sub neutral" id="kpiTwPnlPct">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">累計實現損益</div>
-      <div class="kpi-value up">+$2,131,479</div>
-      <div class="kpi-sub neutral">2020 至今</div>
+      <div class="kpi-value up" id="kpiRealizedPnl">—</div>
+      <div class="kpi-sub neutral" id="kpiRealizedSub">同步試算表後更新</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">銀行存款</div>
-      <div class="kpi-value neutral" id="kpiBankPct">5.74%</div>
-      <div class="kpi-sub neutral" id="kpiBankVal">$597,828</div>
+      <div class="kpi-value neutral" id="kpiBankPct">—</div>
+      <div class="kpi-sub neutral" id="kpiBankVal">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">美股 + 加密</div>
-      <div class="kpi-value neutral" id="kpiUsPct">15.65%</div>
+      <div class="kpi-value neutral" id="kpiUsPct">—</div>
       <div class="kpi-sub neutral">Firstrade + Binance</div>
     </div>
   </div>
@@ -756,6 +756,19 @@
 </div>
 
 <script>
+// ─────── GLOBAL CONSTANTS（集中管理，修改一處即全站生效）───────
+const USD_TWD    = 31.96;                             // USD→TWD 匯率（每月更新）
+const QQQ_SMA200 = 594.20;                            // QQQ SMA200（每月更新：2026/03/30）
+const QQQ_ENTRY  = +(QQQ_SMA200 * 1.04).toFixed(2);  // 進場門檻（SMA200 × 1.04）
+const QQQ_EXIT   = +(QQQ_SMA200 * 0.93).toFixed(2);  // 退場門檻（SMA200 × 0.93）
+const QQQ_TARGETS = { QQQ: 18000, QLD: 9000, TQQQ: 3000 };
+const CAGR_TW = { '006208':11,'00878':9,'00662':17,'2330':15,'00646':13,'0050':11,
+                  '00713':9,'0052':12,'4763':8,'2609':7,'3324':10,'2355':9,'6285':12,
+                  '2603':9,'00900':9,'2882':8,'00642U':7 };
+const CAGR_US = { 'QQQ':17,'SPY':13,'NVDA':20,'MSFT':13,'TSLA':12,'MAGS':18,
+                  'SMH':16,'BOXX':5,'SCHD':11,'QLD':25,'TQQQ':30,
+                  'GOOGL':14,'AMZN':15,'META':18,'AAPL':13 };
+
 // ─────── DATA ───────
 const MONTHLY = [
   { m:'2025/04', v:7194423 },
@@ -780,7 +793,6 @@ const MONTHLY = [
 })();
 
 function calcCurrentTotal() {
-  const USD_TWD = 31.96;
   const twMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
   const usMV = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
   return Math.round(twMV + usMV);
@@ -1091,7 +1103,6 @@ function initOverviewCharts() {
 }
 
 function renderTeamPage() {
-  const USD_TWD = 31.96;
   const allUS  = [...US_MAIN, ...US_ROY];
   const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
   const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
@@ -1121,13 +1132,9 @@ function renderTeamPage() {
   const qqqPos  = allUS.find(s => s.sym==='QQQ');
   const qqqPrice = qqqPos?.price || 0;
   const qqqMV   = qqqPos ? qqqPos.shares * qqqPos.price : 0;
-  const qqqSMA  = 594.20;
-  const qqqEntry = +(qqqSMA*1.04).toFixed(2);
-  const qqqExit  = +(qqqSMA*0.07).toFixed(2);
-  const qqqTarget = 18000;
+  const qqqTarget = QQQ_TARGETS.QQQ;
   const qqqGap   = Math.max(0, qqqTarget - qqqMV).toFixed(0);
-  const leverOK  = qqqPrice >= qqqEntry;
-
+  const leverOK  = qqqPrice >= QQQ_ENTRY;
   const b = (color, txt) => `<div class="team-bullet"><div class="team-dot" style="background:${color}"></div><div>${txt}</div></div>`;
   const sec = (title, content) => `<div class="team-section"><div class="team-section-title">${title}</div>${content}</div>`;
   const card = (key, avatar, bg, name, role, verdictHTML, sections) => `
@@ -1148,7 +1155,7 @@ function renderTeamPage() {
   const alexAction = [
     b('var(--blue)', `${twByGain[0]?.name} 設停利 +${Math.round(twByGain[0]?.pct*0.8)}% 觸發點，分批出場`),
     twByLoss[0] ? b('var(--red)', `${twByLoss[0].name} 設停損，跌破均價 $${(twByLoss[0].avg*0.9).toFixed(0)} 立即出場`) : '',
-    b('var(--blue)', leverOK ? 'QQQ 突破進場訊號，可啟動槓桿部位' : `等 QQQ 突破 $${qqqEntry} 再建 QLD/TQQQ`)
+    b('var(--blue)', leverOK ? 'QQQ 突破進場訊號，可啟動槓桿部位' : `等 QQQ 突破 $${QQQ_ENTRY} 再建 QLD/TQQQ`)
   ].join('');
   const alexVerdict = `<span class="team-verdict" style="background:rgba(227,179,65,.15);color:var(--yellow)">⚠️ 需注意</span>`;
 
@@ -1199,9 +1206,9 @@ function renderTeamPage() {
 
   // ── Ryan 槓桿策略師 ──
   const ryanSignal = [
-    b(leverOK?'var(--green)':'var(--red)', `QQQ $${qqqPrice.toFixed(2)} ${leverOK?'>':'<'} 進場門檻 $${qqqEntry} → 槓桿${leverOK?'可':'不'}啟動`),
-    b('var(--green)', `QQQ $${qqqPrice.toFixed(2)} >> 退場線 $${qqqExit} → 無退場風險`),
-    b(qqqPrice>qqqSMA?'var(--green)':'var(--red)', `QQQ ${qqqPrice>qqqSMA?'高於':'低於'} SMA200 $${qqqSMA}，現價${((qqqPrice-qqqSMA)/qqqSMA*100).toFixed(1)}%`)
+    b(leverOK?'var(--green)':'var(--red)', `QQQ $${qqqPrice.toFixed(2)} ${leverOK?'>':'<'} 進場門檻 $${QQQ_ENTRY} → 槓桿${leverOK?'可':'不'}啟動`),
+    b(qqqPrice>QQQ_EXIT?'var(--green)':'var(--red)', `QQQ $${qqqPrice.toFixed(2)} ${qqqPrice>QQQ_EXIT?'高於':'低於'} 退場線 $${QQQ_EXIT}`),
+    b(qqqPrice>QQQ_SMA200?'var(--green)':'var(--red)', `QQQ ${qqqPrice>QQQ_SMA200?'高於':'低於'} SMA200 $${QQQ_SMA200}，現價${((qqqPrice-QQQ_SMA200)/QQQ_SMA200*100).toFixed(1)}%`)
   ].join('');
   const ryanHolding = [
     b('var(--blue)', `QQQ ${qqqPos?.shares||0}股（$${qqqMV.toFixed(0)} USD），距目標 $${qqqTarget.toLocaleString()} 差 $${qqqGap}`),
@@ -1210,8 +1217,8 @@ function renderTeamPage() {
   ].join('');
   const ryanAction = [
     b('var(--blue)', `補足 QQQ 至 $${qqqTarget.toLocaleString()}（約再買 ${Math.ceil(+qqqGap/(qqqPrice||1))} 股）`),
-    b(leverOK?'var(--green)':'var(--yellow)', leverOK ? `進場訊號成立，建 QLD $9,000` : `等 QQQ 突破 $${qqqEntry} → 買 QLD $9,000`),
-    b(leverOK?'var(--green)':'var(--yellow)', leverOK ? `進場訊號成立，建 TQQQ $3,000` : `等 QQQ 突破 $${qqqEntry} → 買 TQQQ $3,000`)
+    b(leverOK?'var(--green)':'var(--yellow)', leverOK ? `進場訊號成立，建 QLD $${QQQ_TARGETS.QLD.toLocaleString()}` : `等 QQQ 突破 $${QQQ_ENTRY} → 買 QLD $${QQQ_TARGETS.QLD.toLocaleString()}`),
+    b(leverOK?'var(--green)':'var(--yellow)', leverOK ? `進場訊號成立，建 TQQQ $${QQQ_TARGETS.TQQQ.toLocaleString()}` : `等 QQQ 突破 $${QQQ_ENTRY} → 買 TQQQ $${QQQ_TARGETS.TQQQ.toLocaleString()}`)
   ].join('');
   const ryanVerdict = leverOK
     ? `<span class="team-verdict" style="background:rgba(63,185,80,.15);color:var(--green)">✅ 進場訊號</span>`
@@ -1298,7 +1305,6 @@ function renderMonthlyTable() {
 }
 
 function renderOverviewKPIs() {
-  const USD_TWD = 31.96;
   const set = (id, text, cls) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -1341,6 +1347,14 @@ function renderOverviewKPIs() {
     }
   }
 
+  // ── 累計實現損益（從 YEARLY 加總）──
+  if (YEARLY.length > 0) {
+    const totalPnl = YEARLY.reduce((s, r) => s + (r.total || 0), 0);
+    const firstY = YEARLY[0].y, lastY = YEARLY[YEARLY.length-1].y;
+    set('kpiRealizedPnl', '+$' + totalPnl.toLocaleString(), 'kpi-value up');
+    set('kpiRealizedSub', `${firstY}–${lastY} 含股息`, 'kpi-sub neutral');
+  }
+
   // ── 銀行 / 美股+加密 佔比（優先用 SHEET_ALLOC）──
   if (SHEET_ALLOC.ready) {
     const total = SHEET_ALLOC.stocks + SHEET_ALLOC.subbroker + SHEET_ALLOC.bank + SHEET_ALLOC.binance + SHEET_ALLOC.firstrade;
@@ -1361,7 +1375,6 @@ function renderOverviewKPIs() {
 }
 
 function renderAllocDetail() {
-  const USD_TWD = 31.96;
   let rows, total, totalCost;
   if (SHEET_ALLOC.ready) {
     const { stocks, subbroker, bank, binance, firstrade,
@@ -1439,7 +1452,6 @@ function renderAllocDetail() {
 }
 
 function renderAllocAdvice() {
-  const USD_TWD = 31.96;
   const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
   const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
   const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
@@ -1478,7 +1490,6 @@ function renderAllocAdvice() {
 }
 
 function buildAllocData() {
-  const USD_TWD = 31.96;
   let labels, values, colors;
   if (SHEET_ALLOC.ready) {
     const { stocks, subbroker, bank, binance, firstrade } = SHEET_ALLOC;
@@ -1523,6 +1534,8 @@ function rerenderCharts() {
     window._monthlyChart.update();
   }
   if (window._cryptoInit) renderCrypto();
+  // 回測頁：重設 flag 讓下次訪問時用新資料重繪
+  if (window._btInit) { window._btInit = false; initBacktestChart(); }
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -1597,7 +1610,6 @@ function renderUsStocks() {
 
 // ─────── CRYPTO ───────
 function renderCrypto() {
-  const USD_TWD = 31.96;
   // KPI 摘要
   const totalMV_usd = CRYPTO.reduce((s,c) => s+(c.mv||0), 0);
   const totalCost_usd = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
@@ -1674,8 +1686,6 @@ function renderQQQHoldings() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  const SMA200  = 594.20;
-  const ENTRY   = +(SMA200 * 1.04).toFixed(2);
   const allUS   = [...US_MAIN, ...US_ROY];
 
   // Merge QQQ from both accounts
@@ -1683,7 +1693,7 @@ function renderQQQHoldings() {
   const qldEntry   = allUS.find(s => s.sym === 'QLD');
   const tqqqEntry  = allUS.find(s => s.sym === 'TQQQ');
 
-  const targets = { QQQ: 18000, QLD: 9000, TQQQ: 3000 };
+  const targets = QQQ_TARGETS;
 
   // Compute merged QQQ figures
   const qqqShares = qqqEntries.reduce((s, e) => s + e.shares, 0);
@@ -1693,7 +1703,7 @@ function renderQQQHoldings() {
   const qqqAvg    = qqqShares ? qqqCost / qqqShares : 0;
   const qqqPct    = qqqCost ? ((qqqMV - qqqCost) / qqqCost * 100) : 0;
 
-  const leverOK = qqqPrice >= ENTRY;
+  const leverOK = qqqPrice >= QQQ_ENTRY;
 
   const rows = [
     { sym: 'QQQ',  shares: qqqShares, avg: qqqAvg, price: qqqPrice, mv: qqqMV, pct: qqqPct, cost: qqqCost },
@@ -1736,18 +1746,21 @@ function renderQQQHoldings() {
   });
 
   tbody.innerHTML += `<tr><td colspan="9" style="color:var(--text2);font-size:11px">
-    * QQQ 合併 US_MAIN + US_ROY 兩帳戶｜SMA200=$${SMA200}｜進場門檻=$${ENTRY}｜訊號：${leverOK ? '✅ 進場（QQQ $'+qqqPrice.toFixed(2)+' ≥ $'+ENTRY+'）' : '⏸ 等待（QQQ $'+qqqPrice.toFixed(2)+' < $'+ENTRY+'）'}
+    * QQQ 合併 US_MAIN + US_ROY 兩帳戶｜SMA200=$${QQQ_SMA200}｜進場門檻=$${QQQ_ENTRY}｜訊號：${leverOK ? '✅ 進場（QQQ $'+qqqPrice.toFixed(2)+' ≥ $'+QQQ_ENTRY+'）' : '⏸ 等待（QQQ $'+qqqPrice.toFixed(2)+' < $'+QQQ_ENTRY+'）'}
   </td></tr>`;
 }
 
 // ─────── BACKTEST ───────
 function initBacktestChart() {
+  // 銷毀舊圖（rerenderCharts 呼叫時需重繪）
+  if (window._btChart) { try { window._btChart.destroy(); } catch(e){} window._btChart = null; }
+
   // Projection chart
   const years = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
-  const base = 10156888;
+  const base = MONTHLY.length ? MONTHLY[MONTHLY.length-1].v : 10000000;
   const compound = (cagr, yr) => Math.round(base * Math.pow(1 + cagr/100, yr));
 
-  new Chart(document.getElementById('chartProjection'), {
+  window._btChart = new Chart(document.getElementById('chartProjection'), {
     type: 'line',
     data: {
       labels: years.map(y => y === 0 ? '現在' : `+${y}年`),
@@ -1767,9 +1780,16 @@ function initBacktestChart() {
     }
   });
 
-  // Taiwan backtest table
+  // ── 台股回測表（從 TW_HOLD 即時計算）──
   const tbody = document.getElementById('twBacktestTable');
-  TW_BT.forEach(s => {
+  tbody.innerHTML = '';
+  const twBtData = TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({
+    code: h.code, name: h.name, mv: h.mv,
+    cagr: CAGR_TW[h.code] || 10
+  }));
+  // 補充 TW_BT 中有但 TW_HOLD 目前沒資料的（用靜態 mv 顯示）
+  if (!twBtData.length) TW_BT.forEach(s => twBtData.push(s));
+  twBtData.forEach(s => {
     const c = s.cagr/100;
     const yr5  = Math.round(s.mv * Math.pow(1+c,5));
     const yr10 = Math.round(s.mv * Math.pow(1+c,10));
@@ -1785,27 +1805,26 @@ function initBacktestChart() {
     </tr>`;
   });
 
-  // US backtest table (USD, then convert note)
-  const US_BT = [
-    { sym:'QQQ',  name:'Nasdaq 100 ETF',   mv:7258,   cagr:17 },
-    { sym:'SPY',  name:'S&P 500 ETF',       mv:1943,   cagr:13 },
-    { sym:'NVDA', name:'NVIDIA',            mv:2631,   cagr:20 },
-    { sym:'MSFT', name:'Microsoft',         mv:3672,   cagr:15 },
-    { sym:'TSLA', name:'Tesla',             mv:5994,   cagr:12 },
-    { sym:'MAGS', name:'Magnificent 7 ETF', mv:3712,   cagr:18 },
-    { sym:'SMH',  name:'半導體 ETF',         mv:4214,   cagr:16 },
-    { sym:'BOXX', name:'短債替代',           mv:11957,  cagr:5  },
-    { sym:'SCHD', name:'美股高息 ETF',       mv:31,     cagr:11 },
-  ];
+  // ── 美股回測表（從 US_MAIN + US_ROY 即時計算）──
   const ubody = document.getElementById('usBacktestTable');
-  US_BT.forEach(s => {
+  ubody.innerHTML = '';
+  const allUS = [...US_MAIN, ...US_ROY];
+  // 合併相同 sym 的倉位
+  const usMap = {};
+  allUS.forEach(h => {
+    if (!h.mv) return;
+    if (usMap[h.sym]) usMap[h.sym].mv += h.mv;
+    else usMap[h.sym] = { sym: h.sym, mv: h.mv, cagr: CAGR_US[h.sym] || 12 };
+  });
+  const usBtData = Object.values(usMap).sort((a,b) => b.mv - a.mv);
+  usBtData.forEach(s => {
     const c = s.cagr/100;
     const yr5  = (s.mv * Math.pow(1+c,5)).toFixed(0);
     const yr10 = (s.mv * Math.pow(1+c,10)).toFixed(0);
     const yr15 = (s.mv * Math.pow(1+c,15)).toFixed(0);
     const color = s.cagr >= 17 ? 'var(--purple)' : s.cagr >= 13 ? 'var(--green)' : 'var(--text2)';
     ubody.innerHTML += `<tr>
-      <td><span class="ticker">${s.sym}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
+      <td><span class="ticker">${s.sym}</span></td>
       <td style="font-family:monospace">$${Number(s.mv).toLocaleString()}</td>
       <td style="color:${color};font-weight:600">+${s.cagr}%</td>
       <td class="up" style="font-family:monospace">$${Number(yr5).toLocaleString()}</td>
@@ -1975,9 +1994,9 @@ async function refreshPrices() {
 }
 
 function updateNasdaqDisplay(price) {
-  const sma   = 594.20; // QQQ SMA200 — 每月更新一次（2026/03/30 實際計算值）
-  const entry = +(sma * 1.04).toFixed(2);  // 進場：高於 SMA200 4%
-  const exit  = +(sma * 0.93).toFixed(2);  // 退場：低於 SMA200 7%（≈ $552.6）
+  const sma   = QQQ_SMA200;
+  const entry = QQQ_ENTRY;
+  const exit  = QQQ_EXIT;
   const diff  = price - entry;
   const diffPct = ((price - sma) / sma * 100).toFixed(1);
   const signal = price >= entry ? 'BUY' : price <= exit ? 'SELL' : 'HOLD';
@@ -2451,7 +2470,6 @@ async function callGeminiAPI(question, apiKey) {
 
 // ─────── AI 投資團隊深度分析 ───────
 function buildTeamAnalysisContext() {
-  const USD_TWD = 31.96;
   const allUS  = [...US_MAIN, ...US_ROY];
   const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
   const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
@@ -2461,8 +2479,6 @@ function buildTeamAnalysisContext() {
   const latest = MONTHLY[MONTHLY.length-1];
   const prev   = MONTHLY[MONTHLY.length-2];
   const qqqPos = allUS.find(s => s.sym==='QQQ');
-  const qqqSMA = 594.20;
-
   // 台股持倉（確實持有）
   const twHoldStr = TW_HOLD.length
     ? TW_HOLD.map(h => `  ${h.name}(${h.code}): ${h.shares}股 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()} [${h.rec}]`).join('\n')
@@ -2488,7 +2504,7 @@ function buildTeamAnalysisContext() {
   return `=== 投資人即時資料（分析須以此為準）===
 總資產：NT$${(total/1e6).toFixed(2)}M（台股${total?(twMV/total*100).toFixed(0):0}% 美股${total?(usMV/total*100).toFixed(0):0}% 加密${total?(binMV/total*100).toFixed(0):0}% 銀行${total?(bankMV/total*100).toFixed(0):0}%）
 最新月度：${latest?.m||'N/A'} NT$${(latest?.v||0).toLocaleString()}${mom}
-QQQ現價：$${qqqPos?.price||'N/A'} / SMA200：$${qqqSMA}（${qqqPos?.price?(qqqPos.price>qqqSMA?'高於':'低於')+' '+Math.abs(((qqqPos.price-qqqSMA)/qqqSMA*100)).toFixed(1)+'%':'N/A'}）
+QQQ現價：$${qqqPos?.price||'N/A'} / SMA200：$${QQQ_SMA200}（${qqqPos?.price?(qqqPos.price>QQQ_SMA200?'高於':'低於')+' '+Math.abs(((qqqPos.price-QQQ_SMA200)/QQQ_SMA200*100)).toFixed(1)+'%':'N/A'}）｜進場門檻：$${QQQ_ENTRY}（現價${qqqPos?.price>=QQQ_ENTRY?'已達✅':'未達⏸'}）
 
 --- 台股持倉（★ 用戶確實持有，持倉分析只能討論這些）---
 ${twHoldStr}
@@ -2659,7 +2675,6 @@ function updateTeamAiKeyHint() {
 
 function generateChatResponse(question) {
   const q = question.toLowerCase();
-  const USD_TWD = 31.96;
 
   // ── 即時從持倉資料計算 ──
   const allUS = [...US_MAIN, ...US_ROY];
@@ -2678,8 +2693,8 @@ function generateChatResponse(question) {
   const usByGain= [...allUS].sort((a,b) => b.pct-a.pct);
   const usByLoss= [...allUS].sort((a,b) => a.pct-b.pct);
   const qqqPos  = allUS.find(s => s.sym==='QQQ');
-  const qqqSMA  = 594.20, qqqPrice = qqqPos?.price||558.28;
-  const qqqEntry= +(qqqSMA*1.04).toFixed(2), qqqExit=+(qqqSMA*0.07).toFixed(2);
+  const qqqPrice = qqqPos?.price || QQQ_SMA200;
+  const qqqEntry = QQQ_ENTRY, qqqExit = QQQ_EXIT;
 
   // ── 意圖偵測 ──
   const isUS       = q.includes('美股') || q.includes('firstrade') || q.includes('複委託');
@@ -2777,11 +2792,11 @@ function generateChatResponse(question) {
     const curMV = qqqPos?.mv||0, gap = 18000-curMV;
     r.push({ agent:'Ryan｜槓桿策略師', color:'var(--green)', icon:'⚡', msg:
       `<strong>QQQ 策略現況</strong><br>
-      QQQ 現價：$${qqqPrice.toFixed(2)} ／ SMA200：$${qqqSMA}<br>
+      QQQ 現價：$${qqqPrice.toFixed(2)} ／ SMA200：$${QQQ_SMA200}<br>
       持倉：${qqqPos?.shares||0} 股，市值 $${$(curMV)} USD<br>
-      目標 $18,000 → 尚差 $${gap.toFixed(0)}<br><br>
-      訊號：${qqqPrice>=qqqEntry?'✅ 進場！建 QLD+TQQQ':'⏸ HOLD — 等 QQQ 突破 $'+qqqEntry}<br>
-      退場線：$${qqqExit}（目前遠低於現價，無風險）` });
+      目標 $${QQQ_TARGETS.QQQ.toLocaleString()} → 尚差 $${gap.toFixed(0)}<br><br>
+      訊號：${qqqPrice>=qqqEntry?'✅ 進場！建 QLD $'+QQQ_TARGETS.QLD+' + TQQQ $'+QQQ_TARGETS.TQQQ:'⏸ HOLD — 等 QQQ 突破 $'+qqqEntry}<br>
+      退場線：$${qqqExit}（${qqqPrice>qqqExit?'現價高於退場線，持倉安全':'⚠️ 接近退場線！'}）` });
     return r;
   }
 
