@@ -710,6 +710,11 @@
     <div class="card-title">📅 月資產總覽</div>
     <div class="chart-wrap-lg"><canvas id="chartMonthly"></canvas></div>
   </div>
+
+  <div class="card">
+    <div class="card-title">📈 各類資產逐月趨勢 <span class="badge">對數刻度</span></div>
+    <div class="chart-wrap-lg"><canvas id="chartCatTrend"></canvas></div>
+  </div>
 </div>
 
 <!-- ═══ PAGE: AI TEAM ═══ -->
@@ -909,10 +914,18 @@ const US_ROY = [
   load('inv_tw_hold', TW_HOLD);
   load('inv_us_main', US_MAIN);
   load('inv_us_roy',  US_ROY);
+  // 各類資產逐月歷史（per-category monthly MV）
+  try {
+    const s = localStorage.getItem('inv_monthly_cats');
+    if (s) { const a = JSON.parse(s); if (Array.isArray(a) && a.length > 0) MONTHLY_CATS.splice(0, MONTHLY_CATS.length, ...a); }
+  } catch(e) {}
   const now = new Date();
   const curM = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
   if (!MONTHLY.some(r => r.m === curM)) appendCurrentMonth();
 })();
+
+// 各類資產逐月歷史 [{m:'2025/04', stocks:N, bank:N, ...}]
+const MONTHLY_CATS = [];
 
 // Backtest data for Taiwan stocks
 const TW_BT = [
@@ -1357,10 +1370,10 @@ function renderOverviewKPIs() {
 
   // ── 銀行 / 美股+加密 佔比（優先用 SHEET_ALLOC）──
   if (SHEET_ALLOC.ready) {
-    const total = SHEET_ALLOC.stocks + SHEET_ALLOC.subbroker + SHEET_ALLOC.bank + SHEET_ALLOC.binance + SHEET_ALLOC.firstrade;
+    const total = SHEET_ALLOC.stocks + SHEET_ALLOC.subbroker + SHEET_ALLOC.bank + SHEET_ALLOC.binance + SHEET_ALLOC.firstrade + (SHEET_ALLOC.kfu||0) + (SHEET_ALLOC.yuanta||0) + (SHEET_ALLOC.subbroker_dca||0);
     if (total > 0) {
       const bankPct = (SHEET_ALLOC.bank / total * 100).toFixed(1);
-      const usPct   = ((SHEET_ALLOC.firstrade + SHEET_ALLOC.subbroker + SHEET_ALLOC.binance) / total * 100).toFixed(1);
+      const usPct   = ((SHEET_ALLOC.firstrade + SHEET_ALLOC.subbroker + (SHEET_ALLOC.subbroker_dca||0) + SHEET_ALLOC.binance + (SHEET_ALLOC.kfu||0) + (SHEET_ALLOC.yuanta||0)) / total * 100).toFixed(1);
       set('kpiBankPct', bankPct + '%', 'kpi-value neutral');
       set('kpiBankVal', '$' + Math.round(SHEET_ALLOC.bank).toLocaleString(), 'kpi-sub neutral');
       set('kpiUsPct', usPct + '%', 'kpi-value neutral');
@@ -1378,15 +1391,20 @@ function renderAllocDetail() {
   let rows, total, totalCost;
   if (SHEET_ALLOC.ready) {
     const { stocks, subbroker, bank, binance, firstrade,
-            stocks_c, subbroker_c, bank_c, binance_c, firstrade_c } = SHEET_ALLOC;
-    total     = stocks + subbroker + bank + binance + firstrade;
-    totalCost = stocks_c + subbroker_c + bank_c + binance_c + firstrade_c;
+            kfu, yuanta, subbroker_dca,
+            stocks_c, subbroker_c, bank_c, binance_c, firstrade_c,
+            kfu_c, yuanta_c, subbroker_dca_c } = SHEET_ALLOC;
+    total     = stocks + subbroker + bank + binance + firstrade + (kfu||0) + (yuanta||0) + (subbroker_dca||0);
+    totalCost = stocks_c + subbroker_c + bank_c + binance_c + firstrade_c + (kfu_c||0) + (yuanta_c||0) + (subbroker_dca_c||0);
     rows = [
-      { label: '股票',      mv: stocks,    cost: stocks_c,    color: 'var(--blue)' },
-      { label: '複委託',    mv: subbroker, cost: subbroker_c, color: 'var(--green)' },
-      { label: '銀行',      mv: bank,      cost: bank_c,      color: 'var(--yellow)' },
-      { label: '幣安',      mv: binance,   cost: binance_c,   color: 'var(--orange)' },
-      { label: 'Firstrade', mv: firstrade, cost: firstrade_c, color: 'var(--purple)' },
+      { label: '股票',            mv: stocks,        cost: stocks_c,        color: 'var(--blue)' },
+      { label: '複委託',          mv: subbroker,     cost: subbroker_c,     color: '#f0883e' },
+      { label: '複委託(定期定額)', mv: subbroker_dca, cost: subbroker_dca_c, color: 'var(--purple)' },
+      { label: '銀行',            mv: bank,          cost: bank_c,          color: 'var(--red)' },
+      { label: '幣安',            mv: binance,       cost: binance_c,       color: 'var(--yellow)' },
+      { label: 'Firstrade',       mv: firstrade,     cost: firstrade_c,     color: 'var(--green)' },
+      { label: '基富通',          mv: kfu,           cost: kfu_c,           color: '#39d353' },
+      { label: '元大',            mv: yuanta,        cost: yuanta_c,        color: '#c9d100' },
     ].filter(r => r.mv > 0);
   } else {
     // 未同步：以持股估算
@@ -1536,6 +1554,8 @@ function rerenderCharts() {
   if (window._cryptoInit) renderCrypto();
   // 回測頁：重設 flag 讓下次訪問時用新資料重繪
   if (window._btInit) { window._btInit = false; initBacktestChart(); }
+  // 歷史頁分類趨勢圖：若已初始化則重繪
+  if (window._historyInit) initCatTrendChart();
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -1836,6 +1856,70 @@ function initBacktestChart() {
 }
 
 // ─────── HISTORY ───────
+function initCatTrendChart() {
+  const canvas = document.getElementById('chartCatTrend');
+  if (!canvas) return;
+  // 銷毀舊圖（rerenderCharts 呼叫時需重繪）
+  if (window._catChart) { window._catChart.destroy(); window._catChart = null; }
+  if (!MONTHLY_CATS.length) return;
+
+  const labels = MONTHLY_CATS.map(r => r.m.slice(5)); // "MM"
+  const CAT_DEF = [
+    { key: 'stocks',       label: '股票',            color: '#58a6ff' },
+    { key: 'bank',         label: '銀行',            color: '#f85149' },
+    { key: 'binance',      label: '幣安',            color: '#e3b341' },
+    { key: 'firstrade',    label: 'Firstrade',       color: '#3fb950' },
+    { key: 'subbroker',    label: '複委託',          color: '#f0883e' },
+    { key: 'kfu',          label: '基富通',          color: '#39d353' },
+    { key: 'subbroker_dca',label: '複委託(定期定額)', color: '#bc8cff' },
+    { key: 'yuanta',       label: '元大',            color: '#c9d100' },
+  ];
+  const datasets = CAT_DEF
+    .filter(d => MONTHLY_CATS.some(r => r[d.key] > 0))
+    .map(d => ({
+      label: d.label,
+      data: MONTHLY_CATS.map(r => r[d.key] || null),
+      borderColor: d.color,
+      backgroundColor: d.color + '22',
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      borderWidth: 2,
+      tension: 0.3,
+      spanGaps: true,
+    }));
+
+  window._catChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          type: 'logarithmic',
+          ticks: {
+            color: '#8b949e',
+            callback: v => {
+              const m = Math.round(v / 10000);
+              return m >= 1 ? '$' + m + '萬' : '$' + Math.round(v).toLocaleString();
+            }
+          },
+          grid: { color: '#21262d' }
+        },
+        x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#8b949e', boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: $${Math.round(ctx.parsed.y).toLocaleString()}`
+          }
+        }
+      }
+    }
+  });
+}
+
 function initHistoryCharts() {
   // Yearly PnL bar
   new Chart(document.getElementById('chartYearlyPnl'), {
@@ -1878,6 +1962,9 @@ function initHistoryCharts() {
     </tr>`;
   });
 
+  // Per-category trend chart
+  initCatTrendChart();
+
   // Monthly chart
   window._monthlyChart = new Chart(document.getElementById('chartMonthly'), {
     type: 'bar',
@@ -1898,7 +1985,9 @@ function initHistoryCharts() {
 // ─────── INIT ───────
 let SHEET_ALLOC = {
   stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0,
+  kfu: 0, yuanta: 0, subbroker_dca: 0,
   stocks_c: 0, subbroker_c: 0, bank_c: 0, binance_c: 0, firstrade_c: 0,
+  kfu_c: 0, yuanta_c: 0, subbroker_dca_c: 0,
   ready: false
 };
 // 載入上次同步的分類資產資料
@@ -2194,6 +2283,10 @@ async function syncSheets() {
         if (k.includes('firstrade')) return 'firstrade';
         if (k.includes('幣安') || k.includes('binance')) return 'binance';
         if (k.includes('銀行') || k.includes('bank')) return 'bank';
+        if (k.includes('基富通') || k.includes('kfu')) return 'kfu';
+        if (k.includes('元大') || k.includes('yuanta')) return 'yuanta';
+        // 「複委託(定期定額)」必須在「複委託」前比對
+        if ((k.includes('複委託') || k.includes('sub')) && (k.includes('定期') || k.includes('dca'))) return 'subbroker_dca';
         if (k.includes('複委託') || k.includes('sub')) return 'subbroker';
         if (k.includes('股票')) return 'stocks';
         return null;
@@ -2244,6 +2337,21 @@ async function syncSheets() {
         results.push(`歷年 ${newMonthly.length} 個月`);
       }
 
+      // 建立逐月分類資料 MONTHLY_CATS
+      const ALL_CAT_KEYS = ['stocks','subbroker','bank','binance','firstrade','kfu','yuanta','subbroker_dca'];
+      const newMonthlyCats = Object.entries(monthGroups)
+        .filter(([, g]) => g.small > 0)
+        .map(([d, g]) => {
+          const entry = { m: fmtMonth(d) };
+          ALL_CAT_KEYS.forEach(k => { if (g.cats[k]) entry[k] = g.cats[k]; });
+          return entry;
+        })
+        .sort((a, b) => a.m.localeCompare(b.m));
+      if (newMonthlyCats.length) {
+        MONTHLY_CATS.splice(0, MONTHLY_CATS.length, ...newMonthlyCats);
+        try { localStorage.setItem('inv_monthly_cats', JSON.stringify(MONTHLY_CATS)); } catch(e) {}
+      }
+
       // 取最新月份的分類資產值 → SHEET_ALLOC
       const sortDate = d => { const [y, m] = d.split('/').map(Number); return y * 100 + m; };
       const latestDate = Object.keys(monthGroups).sort((a, b) => sortDate(b) - sortDate(a))[0];
@@ -2251,8 +2359,12 @@ async function syncSheets() {
         const c  = monthGroups[latestDate].cats;
         const cc = monthGroups[latestDate].cats_c || {};
         SHEET_ALLOC = {
-          stocks: c.stocks||0, subbroker: c.subbroker||0, bank: c.bank||0, binance: c.binance||0, firstrade: c.firstrade||0,
-          stocks_c: cc.stocks||0, subbroker_c: cc.subbroker||0, bank_c: cc.bank||0, binance_c: cc.binance||0, firstrade_c: cc.firstrade||0,
+          stocks:   c.stocks||0,      subbroker:   c.subbroker||0,   bank:   c.bank||0,
+          binance:  c.binance||0,     firstrade:   c.firstrade||0,
+          kfu:      c.kfu||0,         yuanta:      c.yuanta||0,      subbroker_dca: c.subbroker_dca||0,
+          stocks_c: cc.stocks||0,     subbroker_c: cc.subbroker||0,  bank_c: cc.bank||0,
+          binance_c:cc.binance||0,    firstrade_c: cc.firstrade||0,
+          kfu_c:    cc.kfu||0,        yuanta_c:    cc.yuanta||0,     subbroker_dca_c: cc.subbroker_dca||0,
           ready: true
         };
       }
