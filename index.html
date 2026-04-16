@@ -1405,7 +1405,7 @@ function renderAllocDetail() {
       { label: '幣安',            mv: binance,       cost: binance_c,       color: 'var(--yellow)' },
       { label: 'Firstrade',       mv: firstrade,     cost: firstrade_c,     color: 'var(--green)' },
       { label: '基富通',          mv: kfu,           cost: kfu_c,           color: '#39d353' },
-      { label: '元大',            mv: yuanta,        cost: yuanta_c,        color: '#c9d100' },
+      // 元大為借款（負債），不列入資產明細
     ].filter(r => r.mv > 0);
   } else {
     // 未同步：以持股估算
@@ -1865,21 +1865,21 @@ function initCatTrendChart() {
   if (!MONTHLY_CATS.length) return;
 
   const labels = MONTHLY_CATS.map(r => r.m.slice(5)); // "MM"
+  // 元大是借款（負債），不列入資產圖表
   const CAT_DEF = [
-    { key: 'stocks',       label: '股票',            color: '#58a6ff' },
-    { key: 'bank',         label: '銀行',            color: '#f85149' },
-    { key: 'binance',      label: '幣安',            color: '#e3b341' },
-    { key: 'firstrade',    label: 'Firstrade',       color: '#3fb950' },
-    { key: 'subbroker',    label: '複委託',          color: '#f0883e' },
-    { key: 'kfu',          label: '基富通',          color: '#39d353' },
-    { key: 'subbroker_dca',label: '複委託(定期定額)', color: '#bc8cff' },
-    { key: 'yuanta',       label: '元大',            color: '#c9d100' },
+    { key: 'stocks',        label: '股票',             color: '#58a6ff' },
+    { key: 'bank',          label: '銀行',             color: '#f85149' },
+    { key: 'binance',       label: '幣安',             color: '#e3b341' },
+    { key: 'firstrade',     label: 'Firstrade',        color: '#3fb950' },
+    { key: 'subbroker',     label: '複委託',           color: '#f0883e' },
+    { key: 'kfu',           label: '基富通',           color: '#39d353' },
+    { key: 'subbroker_dca', label: '複委託(定期定額)',  color: '#bc8cff' },
   ];
-  const datasets = CAT_DEF
-    .filter(d => MONTHLY_CATS.some(r => r[d.key] > 0))
+  const catDatasets = CAT_DEF
+    .filter(d => MONTHLY_CATS.some(r => (r[d.key] || 0) > 0))
     .map(d => ({
       label: d.label,
-      data: MONTHLY_CATS.map(r => r[d.key] || null),
+      data: MONTHLY_CATS.map(r => r[d.key] > 0 ? r[d.key] : null),
       borderColor: d.color,
       backgroundColor: d.color + '22',
       pointRadius: 3,
@@ -1888,6 +1888,28 @@ function initCatTrendChart() {
       tension: 0.3,
       spanGaps: true,
     }));
+
+  // 總額線：加總所有正值資產類別（排除借款）
+  const ASSET_KEYS = CAT_DEF.map(d => d.key);
+  const totalData = MONTHLY_CATS.map(r =>
+    ASSET_KEYS.reduce((s, k) => s + ((r[k] || 0) > 0 ? (r[k] || 0) : 0), 0) || null
+  );
+  const datasets = [
+    {
+      label: '總額',
+      data: totalData,
+      borderColor: '#ffffff',
+      backgroundColor: '#ffffff11',
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      borderWidth: 2.5,
+      borderDash: [5, 3],
+      tension: 0.3,
+      spanGaps: true,
+      order: 0,
+    },
+    ...catDatasets,
+  ];
 
   window._catChart = new Chart(canvas, {
     type: 'line',
