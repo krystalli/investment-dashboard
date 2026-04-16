@@ -1890,10 +1890,10 @@ function initCatTrendChart() {
     }));
 
   // 總額線：加總所有正值資產類別（排除借款）
-  const ASSET_KEYS = CAT_DEF.map(d => d.key);
-  const totalData = MONTHLY_CATS.map(r =>
-    ASSET_KEYS.reduce((s, k) => s + ((r[k] || 0) > 0 ? (r[k] || 0) : 0), 0) || null
-  );
+  // 總額從 MONTHLY 表格取（小計已扣除負債如元大借款）
+  const monthlyLookup = {};
+  MONTHLY.forEach(r => { monthlyLookup[r.m] = r.v; });
+  const totalData = MONTHLY_CATS.map(r => monthlyLookup[r.m] || null);
   const datasets = [
     {
       label: '總額',
