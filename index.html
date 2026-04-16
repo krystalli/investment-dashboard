@@ -305,6 +305,11 @@
     <div id="allocDetail"></div>
   </div>
 
+  <div class="card">
+    <div class="card-title">📈 各類資產逐月趨勢 <span class="badge">對數刻度</span></div>
+    <div class="chart-wrap-lg"><canvas id="chartCatTrend"></canvas></div>
+  </div>
+
   <!-- 配置建議 -->
   <div class="card" id="allocAdvice"></div>
 
@@ -711,10 +716,6 @@
     <div class="chart-wrap-lg"><canvas id="chartMonthly"></canvas></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">📈 各類資產逐月趨勢 <span class="badge">對數刻度</span></div>
-    <div class="chart-wrap-lg"><canvas id="chartCatTrend"></canvas></div>
-  </div>
 </div>
 
 <!-- ═══ PAGE: AI TEAM ═══ -->
@@ -1554,8 +1555,8 @@ function rerenderCharts() {
   if (window._cryptoInit) renderCrypto();
   // 回測頁：重設 flag 讓下次訪問時用新資料重繪
   if (window._btInit) { window._btInit = false; initBacktestChart(); }
-  // 歷史頁分類趨勢圖：若已初始化則重繪
-  if (window._historyInit) initCatTrendChart();
+  // 總覽頁分類趨勢圖：同步後重繪
+  initCatTrendChart();
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -1962,9 +1963,6 @@ function initHistoryCharts() {
     </tr>`;
   });
 
-  // Per-category trend chart
-  initCatTrendChart();
-
   // Monthly chart
   window._monthlyChart = new Chart(document.getElementById('chartMonthly'), {
     type: 'bar',
@@ -2001,6 +1999,7 @@ try {
   if (_d) document.getElementById('navDate').textContent = _d;
 } catch(e) {}
 initOverviewCharts();
+initCatTrendChart();
 renderOverviewKPIs();
 window._overviewInit = true;
 renderTwStocks();
