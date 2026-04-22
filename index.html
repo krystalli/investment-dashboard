@@ -1581,7 +1581,7 @@ function renderTwStocks() {
     wbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
       <td>${s.name}</td>
-      <td style="font-family:monospace">~$${s.price}</td>
+      <td style="font-family:monospace">${s.live ? '' : '<span style="color:var(--text2);font-size:10px">估 </span>'}$${s.price.toLocaleString()}</td>
       <td>${recTag[s.rec]}</td>
       <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
       <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
@@ -2069,16 +2069,25 @@ async function fetchOnePrice(sym) {
 async function refreshPrices() {
   const btn = document.querySelector('.btn-refresh');
   btn.textContent = '⏳ 更新中...'; btn.disabled = true;
-  showStatus('⏳ 正在抓取即時美股+Nasdaq...', 'loading');
+  showStatus('⏳ 正在抓取即時股價...', 'loading');
   try {
+    // 美股
     const usSym = [...new Set([...US_MAIN, ...US_ROY].map(s => s.sym))];
-    const allSym = [...usSym, '^IXIC'];
+    const allUsSym = [...usSym, '^IXIC'];
+    // 台股（持倉 + 觀察）
+    const twCodes = [...new Set([...TW_HOLD.map(s => s.code), ...TW_WATCH.map(s => s.code)])];
+    const twSym   = twCodes.map(c => c + '.TW');
 
-    // 並行抓取所有股票
-    const prices = await Promise.all(allSym.map(sym => fetchOnePrice(sym)));
-    const priceMap = Object.fromEntries(allSym.map((sym, i) => [sym, prices[i]]).filter(([,p]) => p));
+    const [usPrices, twPrices] = await Promise.all([
+      Promise.all(allUsSym.map(sym => fetchOnePrice(sym))),
+      Promise.all(twSym.map(sym => fetchOnePrice(sym))),
+    ]);
 
-    let updated = 0;
+    const priceMap   = Object.fromEntries(allUsSym.map((s, i) => [s, usPrices[i]]).filter(([,p]) => p));
+    const twPriceMap = Object.fromEntries(twCodes.map((c, i) => [c, twPrices[i]]).filter(([,p]) => p));
+
+    // 更新美股
+    let usUpdated = 0;
     [...US_MAIN, ...US_ROY].forEach(s => {
       const p = priceMap[s.sym];
       if (!p) return;
@@ -2086,16 +2095,34 @@ async function refreshPrices() {
       s.pnl = +(s.mv - s.cost).toFixed(2);
       s.pct = (p - s.avg) / s.avg * 100;
       const a = advisorRec(s, true); s.rec = a.rec; s.reason = a.reason;
-      updated++;
+      usUpdated++;
+    });
+
+    // 更新台股持倉
+    let twUpdated = 0;
+    TW_HOLD.forEach(s => {
+      const p = twPriceMap[s.code];
+      if (!p) return;
+      s.price = p;
+      s.mv    = Math.round(p * s.shares);
+      s.pct   = (p - s.avg) / s.avg * 100;
+      twUpdated++;
+    });
+
+    // 更新台股觀察清單
+    TW_WATCH.forEach(s => {
+      const p = twPriceMap[s.code];
+      if (p) { s.price = p; s.live = true; }
     });
 
     const nasdaq = priceMap['QQQ'];
     if (nasdaq) updateNasdaqDisplay(nasdaq);
 
     rerenderStockTables();
+    renderOverviewKPIs();
     updateNavDate();
-    const failed = allSym.length - Object.keys(priceMap).length;
-    showStatus(`✅ 已更新 ${updated} 支即時股價${nasdaq ? `，Nasdaq ${nasdaq.toLocaleString()}` : ''}${failed ? `（${failed} 支失敗）` : ''}`, 'success');
+    const failed = (allUsSym.length + twSym.length) - Object.keys(priceMap).length - Object.keys(twPriceMap).length;
+    showStatus(`✅ 已更新 美股${usUpdated}支、台股${twUpdated}支${nasdaq ? `，QQQ $${nasdaq}` : ''}${failed > 0 ? `（${failed} 支失敗）` : ''}`, 'success');
   } catch(e) {
     showStatus('❌ 股價更新失敗：' + e.message, 'error');
   } finally {
