@@ -915,6 +915,7 @@ const US_ROY = [
   load('inv_tw_hold', TW_HOLD);
   load('inv_us_main', US_MAIN);
   load('inv_us_roy',  US_ROY);
+  load('inv_yearly',  YEARLY);
   // 各類資產逐月歷史（per-category monthly MV）
   try {
     const s = localStorage.getItem('inv_monthly_cats');
@@ -1557,6 +1558,22 @@ function rerenderCharts() {
   if (window._btInit) { window._btInit = false; initBacktestChart(); }
   // 總覽頁分類趨勢圖：同步後重繪
   initCatTrendChart();
+  // 歷史頁年度圖表 + 表格：重設 flag 讓下次訪問時重繪；若已開啟則直接更新
+  if (window._historyInit) {
+    if (window._yearlyPnlChart) {
+      window._yearlyPnlChart.data.labels = YEARLY.map(r => r.y);
+      window._yearlyPnlChart.data.datasets[0].data = YEARLY.map(r => r.pnl);
+      window._yearlyPnlChart.update();
+    }
+    if (window._dividendChart) {
+      window._dividendChart.data.labels = YEARLY.map(r => r.y);
+      window._dividendChart.data.datasets[0].data = YEARLY.map(r => r.div);
+      window._dividendChart.update();
+    }
+    renderYearlyTable();
+  } else {
+    window._historyInit = false; // 讓下次切到歷史頁時用新資料初始化
+  }
 }
 
 // ─────── TAIWAN STOCKS ───────
@@ -1943,9 +1960,28 @@ function initCatTrendChart() {
   });
 }
 
+function renderYearlyTable() {
+  const tbody = document.getElementById('historyTable');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  YEARLY.forEach((r, i) => {
+    const prev   = i > 0 ? YEARLY[i-1].total : null;
+    const growth = prev ? ((r.total - prev) / prev * 100).toFixed(0) + '%' : '—';
+    tbody.innerHTML += `<tr>
+      <td>${r.y}</td>
+      <td class="up">$${r.pnl.toLocaleString()}</td>
+      <td class="up">$${r.div.toLocaleString()}</td>
+      <td class="${r.lend ? 'up' : 'neutral'}">${r.lend ? '$' + r.lend.toLocaleString() : '—'}</td>
+      <td class="up" style="font-weight:600">$${r.total.toLocaleString()}</td>
+      <td class="up">${growth}</td>
+    </tr>`;
+  });
+}
+
 function initHistoryCharts() {
   // Yearly PnL bar
-  new Chart(document.getElementById('chartYearlyPnl'), {
+  if (window._yearlyPnlChart) { window._yearlyPnlChart.destroy(); window._yearlyPnlChart = null; }
+  window._yearlyPnlChart = new Chart(document.getElementById('chartYearlyPnl'), {
     type: 'bar',
     data: {
       labels: YEARLY.map(r => r.y),
@@ -1958,7 +1994,8 @@ function initHistoryCharts() {
   });
 
   // Dividend bar
-  new Chart(document.getElementById('chartDividend'), {
+  if (window._dividendChart) { window._dividendChart.destroy(); window._dividendChart = null; }
+  window._dividendChart = new Chart(document.getElementById('chartDividend'), {
     type: 'bar',
     data: {
       labels: YEARLY.map(r => r.y),
@@ -1971,19 +2008,7 @@ function initHistoryCharts() {
   });
 
   // History table
-  const tbody = document.getElementById('historyTable');
-  YEARLY.forEach((r, i) => {
-    const prev = i > 0 ? YEARLY[i-1].total : null;
-    const growth = prev ? ((r.total-prev)/prev*100).toFixed(0)+'%' : '—';
-    tbody.innerHTML += `<tr>
-      <td>${r.y}</td>
-      <td class="up">$${r.pnl.toLocaleString()}</td>
-      <td class="up">$${r.div.toLocaleString()}</td>
-      <td class="${r.lend?'up':'neutral'}">${r.lend?'$'+r.lend:'—'}</td>
-      <td class="up" style="font-weight:600">$${r.total.toLocaleString()}</td>
-      <td class="up">${growth}</td>
-    </tr>`;
-  });
+  renderYearlyTable();
 
   // Monthly chart
   window._monthlyChart = new Chart(document.getElementById('chartMonthly'), {
@@ -2455,6 +2480,48 @@ async function syncSheets() {
         try { localStorage.setItem('inv_monthly_cats', JSON.stringify(MONTHLY_CATS)); } catch(e) {}
       }
 
+      // 解析年度損益摘要表（掃描含有 4 位年份的行）
+      const isYearCell = c => /^20[12]\d$/.test(c?.trim());
+      const colMatch   = (h, keys) => h.findIndex(c => keys.some(k => c.toLowerCase().includes(k)));
+      let yearHdrIdx = { pnl:-1, div:-1, lend:-1, total:-1 };
+      let inYearTable = false;
+      const newYearly = [];
+      histRows.forEach(row => {
+        const cells = row.map(c => (c||'').trim());
+        // 偵測年度表 header（含「損益」或「股息」關鍵字的行）
+        if (!inYearTable && cells.some(c => c.includes('損益') || c.includes('股息') || c.includes('股利'))) {
+          const hi = cells.map(c => c.toLowerCase());
+          yearHdrIdx = {
+            pnl:   colMatch(hi, ['損益','realized','獲利']),
+            div:   colMatch(hi, ['股息','股利','dividend','配息']),
+            lend:  colMatch(hi, ['借券','lending','出借']),
+            total: colMatch(hi, ['合計','total']),
+          };
+          if (yearHdrIdx.pnl >= 0 || yearHdrIdx.div >= 0) inYearTable = true;
+          return;
+        }
+        if (!inYearTable) return;
+        // 解析年度資料行
+        const yearCell = cells.find(isYearCell);
+        if (!yearCell) return;
+        const y = parseInt(yearCell);
+        const get = idx => idx >= 0 ? (parseNum(cells[idx]) || 0) : 0;
+        const pnl   = get(yearHdrIdx.pnl);
+        const div   = get(yearHdrIdx.div);
+        const lend  = get(yearHdrIdx.lend);
+        const total = get(yearHdrIdx.total) || pnl + div + lend;
+        if (pnl > 0 || div > 0 || total > 0) newYearly.push({ y, pnl, div, lend, total });
+      });
+      if (newYearly.length) {
+        // 按年排序，合併重複年份（取最後一筆）
+        const yMap = {};
+        newYearly.forEach(r => { yMap[r.y] = r; });
+        const sorted = Object.values(yMap).sort((a,b) => a.y - b.y);
+        YEARLY.splice(0, YEARLY.length, ...sorted);
+        try { localStorage.setItem('inv_yearly', JSON.stringify(YEARLY)); } catch(e) {}
+        results.push(`年度 ${sorted.length} 年`);
+      }
+
       // 取最新月份的分類資產值 → SHEET_ALLOC
       const sortDate = d => { const [y, m] = d.split('/').map(Number); return y * 100 + m; };
       const latestDate = Object.keys(monthGroups).sort((a, b) => sortDate(b) - sortDate(a))[0];
@@ -2478,6 +2545,7 @@ async function syncSheets() {
     try { localStorage.setItem('inv_us_main',      JSON.stringify(US_MAIN)); } catch(e) {}
     try { localStorage.setItem('inv_us_roy',       JSON.stringify(US_ROY)); } catch(e) {}
     try { localStorage.setItem('inv_sheet_alloc',  JSON.stringify(SHEET_ALLOC)); } catch(e) {}
+    try { localStorage.setItem('inv_yearly',       JSON.stringify(YEARLY)); } catch(e) {}
 
     rerenderStockTables();
     rerenderCharts();
