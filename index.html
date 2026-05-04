@@ -1909,19 +1909,19 @@ function initCatTrendChart() {
   const labels = MONTHLY_CATS.map(r => r.m.slice(5)); // "MM"
   // 元大是借款（負債），不列入資產圖表
   const CAT_DEF = [
-    { key: 'stocks',        label: '股票',             color: '#58a6ff' },
-    { key: 'bank',          label: '銀行',             color: '#f85149' },
-    { key: 'binance',       label: '幣安',             color: '#e3b341' },
-    { key: 'firstrade',     label: 'Firstrade',        color: '#3fb950' },
-    { key: 'subbroker',     label: '複委託',           color: '#f0883e' },
-    { key: 'kfu',           label: '基富通',           color: '#39d353' },
-    { key: 'subbroker_dca', label: '複委託(定期定額)',  color: '#bc8cff' },
+    { key: 'stocks',    label: '股票',      color: '#58a6ff', getValue: r => (r.stocks    || 0) },
+    { key: 'bank',      label: '銀行',      color: '#f85149', getValue: r => (r.bank      || 0) },
+    { key: 'binance',   label: '幣安',      color: '#e3b341', getValue: r => (r.binance   || 0) },
+    { key: 'firstrade', label: 'Firstrade', color: '#3fb950', getValue: r => (r.firstrade || 0) },
+    // 複委託合併（一般 + 定期定額）
+    { key: 'subbroker', label: '複委託',    color: '#f0883e', getValue: r => (r.subbroker || 0) + (r.subbroker_dca || 0) },
+    { key: 'kfu',       label: '基富通',    color: '#39d353', getValue: r => (r.kfu       || 0) },
   ];
   const catDatasets = CAT_DEF
-    .filter(d => MONTHLY_CATS.some(r => (r[d.key] || 0) > 0))
+    .filter(d => MONTHLY_CATS.some(r => d.getValue(r) > 0))
     .map(d => ({
       label: d.label,
-      data: MONTHLY_CATS.map(r => r[d.key] > 0 ? r[d.key] : null),
+      data: MONTHLY_CATS.map(r => { const v = d.getValue(r); return v > 0 ? v : null; }),
       borderColor: d.color,
       backgroundColor: d.color + '22',
       pointRadius: 3,
