@@ -532,7 +532,7 @@
   <div class="card">
     <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標</div>
     <table>
-      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
+      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
       <tbody id="qqqHoldingsBody"></tbody>
     </table>
   </div>
@@ -1407,21 +1407,19 @@ function renderAllocDetail() {
   const royC_calc   = US_ROY.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
 
   if (SHEET_ALLOC.ready) {
-    const { stocks, subbroker, subbroker_dca, bank, binance, firstrade, kfu } = SHEET_ALLOC;
-    // 複委託兩欄合併（定期定額 + 一般）
+    const { stocks, subbroker, subbroker_dca, bank, binance, kfu } = SHEET_ALLOC;
+    // 複委託兩欄合併；Firstrade/複委託 成本 & 市值都從實際持股計算（來源一致）
     const subMV   = (subbroker || 0) + (subbroker_dca || 0);
-    const subCost = royC_calc;   // 成本從 US_ROY 實際持股計算
     const twMV    = stocks || twMV_calc;
-    const ftMV    = firstrade || mainMV_calc;
-    total     = twMV + subMV + (bank||0) + (binance||0) + ftMV + (kfu||0);
-    totalCost = twCost_calc + subCost + (bank||0) + mainC_calc + (binance||0) + (kfu ? 0 : 0);
+    total     = twMV + subMV + (bank||0) + (binance||0) + mainMV_calc + (kfu||0);
+    totalCost = twCost_calc + royC_calc + (bank||0) + mainC_calc + (binance||0);
     rows = [
-      { label: '股票',      mv: twMV,      cost: twCost_calc, color: 'var(--blue)' },
-      { label: '複委託',    mv: subMV,     cost: subCost,     color: '#f0883e' },
-      { label: 'Firstrade', mv: ftMV,      cost: mainC_calc,  color: 'var(--green)' },
-      { label: '銀行',      mv: bank||0,   cost: bank||0,     color: 'var(--red)' },
-      { label: '幣安',      mv: binance||0,cost: 0,           color: 'var(--yellow)' },
-      { label: '基富通',    mv: kfu||0,    cost: 0,           color: '#39d353' },
+      { label: '股票',      mv: twMV,        cost: twCost_calc, color: 'var(--blue)' },
+      { label: '複委託',    mv: royMV_calc,  cost: royC_calc,   color: '#f0883e' },
+      { label: 'Firstrade', mv: mainMV_calc, cost: mainC_calc,  color: 'var(--green)' },
+      { label: '銀行',      mv: bank||0,     cost: bank||0,     color: 'var(--red)' },
+      { label: '幣安',      mv: binance||0,  cost: 0,           color: 'var(--yellow)' },
+      { label: '基富通',    mv: kfu||0,      cost: 0,           color: '#39d353' },
     ].filter(r => r.mv > 0);
   } else {
     total     = twMV_calc + mainMV_calc + royMV_calc;
@@ -1771,10 +1769,13 @@ function renderQQQHoldings() {
       action = gap >= 0 ? '<span class="rec-hold">◆ 持有</span>' : '<span class="rec-buy">▲ 考慮買入</span>';
     }
 
+    const pnl        = r.cost ? r.mv - r.cost : null;
     const sharesDisp = r.shares ? r.shares : '—';
     const avgDisp    = r.avg    ? '$' + r.avg.toFixed(2)                    : '—';
     const priceDisp  = r.price  ? '$' + r.price.toFixed(2)                  : '—';
     const mvDisp     = r.mv     ? '$' + r.mv.toLocaleString(undefined, {maximumFractionDigits:0}) : '—';
+    const pnlDisp    = pnl != null ? (pnl >= 0 ? '+$' : '-$') + Math.abs(pnl).toLocaleString(undefined, {maximumFractionDigits:0}) : '—';
+    const pnlCls2    = pnl != null ? (pnl >= 0 ? 'up' : 'down') : '';
     const pctDisp    = r.cost   ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(2) + '%' : '—';
     const gapDisp    = r.mv     ? (gap >= 0 ? '+$' : '-$') + Math.abs(Math.round(gap)).toLocaleString() : '-$' + target.toLocaleString();
 
@@ -1784,6 +1785,7 @@ function renderQQQHoldings() {
       <td style="font-family:monospace">${avgDisp}</td>
       <td style="font-family:monospace">${priceDisp}</td>
       <td style="font-family:monospace">${mvDisp}</td>
+      <td class="${pnlCls2}" style="font-family:monospace">${pnlDisp}</td>
       <td class="${pctCls}">${pctDisp}</td>
       <td style="font-family:monospace">$${target.toLocaleString()}</td>
       <td class="${gap >= 0 ? 'up' : 'down'}" style="font-family:monospace">${gapDisp}</td>
