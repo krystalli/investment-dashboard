@@ -1362,13 +1362,14 @@ function renderOverviewKPIs() {
     }
   }
 
-  // ── 美股未實現損益（US_MAIN + US_ROY，USD）──
+  // ── 美股未實現損益（US_MAIN + US_ROY，換算台幣）──
   const usAllHoldings = [...US_MAIN, ...US_ROY];
   if (usAllHoldings.length > 0) {
-    const usPnl  = usAllHoldings.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv - h.cost)), 0);
-    const usCost = usAllHoldings.reduce((s, h) => s + (h.cost || 0), 0);
-    const sign = usPnl >= 0;
-    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnl).toFixed(0) + ' USD', 'kpi-value ' + (sign ? 'up' : 'down'));
+    const usPnl     = usAllHoldings.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv - h.cost)), 0);
+    const usCost    = usAllHoldings.reduce((s, h) => s + (h.cost || 0), 0);
+    const usPnlTwd  = Math.round(usPnl * USD_TWD);
+    const sign = usPnlTwd >= 0;
+    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnlTwd).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (usCost > 0) {
       const pct = (usPnl / usCost * 100).toFixed(2);
       set('kpiUsPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
