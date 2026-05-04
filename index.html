@@ -1793,7 +1793,22 @@ function renderQQQHoldings() {
     </tr>`;
   });
 
-  tbody.innerHTML += `<tr><td colspan="9" style="color:var(--text2);font-size:11px">
+  // 小計列
+  const totalCost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+  const totalMV   = rows.reduce((s, r) => s + (r.mv   || 0), 0);
+  const totalPnl  = totalMV - totalCost;
+  const totalPct  = totalCost ? (totalPnl / totalCost * 100) : 0;
+  if (totalCost > 0) {
+    tbody.innerHTML += `<tr style="font-weight:600;border-top:2px solid var(--border)">
+      <td colspan="4" style="color:var(--text2)">小計</td>
+      <td style="font-family:monospace">$${totalMV.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td class="${totalPnl>=0?'up':'down'}" style="font-family:monospace">${totalPnl>=0?'+$':'-$'}${Math.abs(totalPnl).toLocaleString(undefined,{maximumFractionDigits:0})}</td>
+      <td class="${totalPnl>=0?'up':'down'}">${totalPct>=0?'+':''}${totalPct.toFixed(2)}%</td>
+      <td colspan="3"></td>
+    </tr>`;
+  }
+
+  tbody.innerHTML += `<tr><td colspan="10" style="color:var(--text2);font-size:11px">
     * QQQ 合併 US_MAIN + US_ROY 兩帳戶｜SMA200=$${QQQ_SMA200}｜進場門檻=$${QQQ_ENTRY}｜訊號：${leverOK ? '✅ 進場（QQQ $'+qqqPrice.toFixed(2)+' ≥ $'+QQQ_ENTRY+'）' : '⏸ 等待（QQQ $'+qqqPrice.toFixed(2)+' < $'+QQQ_ENTRY+'）'}
   </td></tr>`;
 }
