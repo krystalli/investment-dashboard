@@ -273,9 +273,9 @@
       <div class="kpi-sub neutral" id="kpiTwPnlPct">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">累計實現損益</div>
-      <div class="kpi-value up" id="kpiRealizedPnl">—</div>
-      <div class="kpi-sub neutral" id="kpiRealizedSub">同步試算表後更新</div>
+      <div class="kpi-label">美股未實現損益</div>
+      <div class="kpi-value neutral" id="kpiUsPnl">—</div>
+      <div class="kpi-sub neutral" id="kpiUsPnlPct">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">銀行存款</div>
@@ -1362,12 +1362,17 @@ function renderOverviewKPIs() {
     }
   }
 
-  // ── 累計實現損益（從 YEARLY 加總）──
-  if (YEARLY.length > 0) {
-    const totalPnl = YEARLY.reduce((s, r) => s + (r.total || 0), 0);
-    const firstY = YEARLY[0].y, lastY = YEARLY[YEARLY.length-1].y;
-    set('kpiRealizedPnl', '+$' + totalPnl.toLocaleString(), 'kpi-value up');
-    set('kpiRealizedSub', `${firstY}–${lastY} 含股息`, 'kpi-sub neutral');
+  // ── 美股未實現損益（US_MAIN + US_ROY，USD）──
+  const usAllHoldings = [...US_MAIN, ...US_ROY];
+  if (usAllHoldings.length > 0) {
+    const usPnl  = usAllHoldings.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv - h.cost)), 0);
+    const usCost = usAllHoldings.reduce((s, h) => s + (h.cost || 0), 0);
+    const sign = usPnl >= 0;
+    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnl).toFixed(0) + ' USD', 'kpi-value ' + (sign ? 'up' : 'down'));
+    if (usCost > 0) {
+      const pct = (usPnl / usCost * 100).toFixed(2);
+      set('kpiUsPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+    }
   }
 
   // ── 銀行 / 美股+加密 佔比（優先用 SHEET_ALLOC）──
@@ -1391,37 +1396,39 @@ function renderOverviewKPIs() {
 
 function renderAllocDetail() {
   let rows, total, totalCost;
+
+  // 成本：優先從實際持股計算（準確），市值優先用 SHEET_ALLOC（含未同步到持股清單的部位）
+  const twMV_calc   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const twCost_calc = TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+  const mainMV_calc = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const mainC_calc  = US_MAIN.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
+  const royMV_calc  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const royC_calc   = US_ROY.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
+
   if (SHEET_ALLOC.ready) {
-    const { stocks, subbroker, bank, binance, firstrade,
-            kfu, yuanta, subbroker_dca,
-            stocks_c, subbroker_c, bank_c, binance_c, firstrade_c,
-            kfu_c, yuanta_c, subbroker_dca_c } = SHEET_ALLOC;
-    total     = stocks + subbroker + bank + binance + firstrade + (kfu||0) + (yuanta||0) + (subbroker_dca||0);
-    totalCost = stocks_c + subbroker_c + bank_c + binance_c + firstrade_c + (kfu_c||0) + (yuanta_c||0) + (subbroker_dca_c||0);
+    const { stocks, subbroker, subbroker_dca, bank, binance, firstrade, kfu } = SHEET_ALLOC;
+    // 複委託兩欄合併（定期定額 + 一般）
+    const subMV   = (subbroker || 0) + (subbroker_dca || 0);
+    const subCost = royC_calc;   // 成本從 US_ROY 實際持股計算
+    const twMV    = stocks || twMV_calc;
+    const ftMV    = firstrade || mainMV_calc;
+    total     = twMV + subMV + (bank||0) + (binance||0) + ftMV + (kfu||0);
+    totalCost = twCost_calc + subCost + (bank||0) + mainC_calc + (binance||0) + (kfu ? 0 : 0);
     rows = [
-      { label: '股票',            mv: stocks,        cost: stocks_c,        color: 'var(--blue)' },
-      { label: '複委託',          mv: subbroker,     cost: subbroker_c,     color: '#f0883e' },
-      { label: '複委託(定期定額)', mv: subbroker_dca, cost: subbroker_dca_c, color: 'var(--purple)' },
-      { label: '銀行',            mv: bank,          cost: bank_c,          color: 'var(--red)' },
-      { label: '幣安',            mv: binance,       cost: binance_c,       color: 'var(--yellow)' },
-      { label: 'Firstrade',       mv: firstrade,     cost: firstrade_c,     color: 'var(--green)' },
-      { label: '基富通',          mv: kfu,           cost: kfu_c,           color: '#39d353' },
-      // 元大為借款（負債），不列入資產明細
+      { label: '股票',      mv: twMV,      cost: twCost_calc, color: 'var(--blue)' },
+      { label: '複委託',    mv: subMV,     cost: subCost,     color: '#f0883e' },
+      { label: 'Firstrade', mv: ftMV,      cost: mainC_calc,  color: 'var(--green)' },
+      { label: '銀行',      mv: bank||0,   cost: bank||0,     color: 'var(--red)' },
+      { label: '幣安',      mv: binance||0,cost: 0,           color: 'var(--yellow)' },
+      { label: '基富通',    mv: kfu||0,    cost: 0,           color: '#39d353' },
     ].filter(r => r.mv > 0);
   } else {
-    // 未同步：以持股估算
-    const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
-    const twCost = TW_HOLD.reduce((s, h) => s + ((h.avg || 0) * (h.shares || 0)), 0);
-    const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-    const mainC  = US_MAIN.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
-    const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-    const royC   = US_ROY.reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
-    total     = twMV + mainMV + royMV;
-    totalCost = twCost + mainC + royC;
+    total     = twMV_calc + mainMV_calc + royMV_calc;
+    totalCost = twCost_calc + mainC_calc + royC_calc;
     rows = [
-      { label: '股票',      mv: twMV,   cost: twCost, color: 'var(--blue)' },
-      { label: '複委託',    mv: royMV,  cost: royC,   color: 'var(--green)' },
-      { label: 'Firstrade', mv: mainMV, cost: mainC,  color: 'var(--purple)' },
+      { label: '股票',      mv: twMV_calc,   cost: twCost_calc, color: 'var(--blue)' },
+      { label: '複委託',    mv: royMV_calc,  cost: royC_calc,   color: '#f0883e' },
+      { label: 'Firstrade', mv: mainMV_calc, cost: mainC_calc,  color: 'var(--green)' },
     ];
   }
   const el = document.getElementById('allocDetail');
@@ -2325,7 +2332,7 @@ async function syncSheets() {
         reason: findCol(h, ['說明','備註','reason']),
       };
       if (idx.code < 0) throw new Error(`台股：找不到「代號」欄，目前欄位：${h.slice(0,10).join(', ')}`);
-      const newHold = [];
+      const holdMap = new Map();
       // 台股代號：4~6 位數字，可選一個英文字母結尾（如 00878、2330、00937B）
       const isValidTWCode = c => /^[0-9]{4,6}[A-Za-z]?$/.test(c);
       twRows.slice(1).forEach(row => {
@@ -2335,6 +2342,8 @@ async function syncSheets() {
         const avg = parseNum(row[idx.avg]);
         const price = parseNum(row[idx.price]) || avg;
         const shares = parseNum(row[idx.shares]);
+        // 試算表可能有重複代號行（如第二個彙總表）：保留股數最多的那筆
+        if (holdMap.has(code) && holdMap.get(code).shares >= shares) return;
         const mv = parseNum(row[idx.mv]) || Math.round(price * shares);
         const pct = idx.pct >= 0 ? parseNum(row[idx.pct]) : (avg ? (price-avg)/avg*100 : 0);
         const sheetRec = row[idx.rec]?.trim().toUpperCase();
@@ -2343,8 +2352,9 @@ async function syncSheets() {
         const advisor = advisorRec(tempStock, false);
         const rec    = (sheetRec && sheetRec !== 'HOLD') ? sheetRec : advisor.rec;
         const reason = sheetReason || advisor.reason;
-        newHold.push({ code, shares, avg, price, mv, pct, name: row[idx.name]?.trim() || code, rec, reason });
+        holdMap.set(code, { code, shares, avg, price, mv, pct, name: row[idx.name]?.trim() || code, rec, reason });
       });
+      const newHold = [...holdMap.values()].filter(s => s.shares > 0);
       if (newHold.length) { TW_HOLD.splice(0, TW_HOLD.length, ...newHold); results.push(`台股 ${newHold.length} 筆`); }
     }
 
