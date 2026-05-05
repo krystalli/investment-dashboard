@@ -786,7 +786,10 @@
 
   <!-- Level 1: Benchmark Comparison -->
   <div class="card">
-    <div class="card-title">📊 投資組合 vs 基準指數 <span class="badge">指數化（起始=100）</span></div>
+    <div class="card-title">📊 投資組合 vs 基準指數 <span class="badge">指數化（起始=100）</span>
+      <button onclick="syncBenchmarkData()" id="benchFetchBtn" class="btn-action btn-refresh" style="font-size:11px;padding:3px 10px;margin-left:auto">🔄 更新基準</button>
+      <span id="benchLastUpdate" style="font-size:11px;color:var(--text2);margin-left:6px"></span>
+    </div>
     <div id="benchmarkSummaryRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px"></div>
     <div class="chart-wrap-lg"><canvas id="chartBenchmark"></canvas></div>
   </div>
@@ -2137,6 +2140,13 @@ function initHistoryCharts() {
 }
 
 // ─────── INIT ───────
+// 基準指數真實月報酬（從 Yahoo Finance 拉取後儲存）
+let BENCHMARK_DATA = { SPY: {}, TW50: {}, lastFetch: 0 };
+try {
+  const _bd = localStorage.getItem('inv_benchmark_data');
+  if (_bd) { const _obj = JSON.parse(_bd); if (_obj?.lastFetch) BENCHMARK_DATA = _obj; }
+} catch(e) {}
+
 let SHEET_ALLOC = {
   stocks: 0, subbroker: 0, bank: 0, binance: 0, firstrade: 0,
   kfu: 0, yuanta: 0, subbroker_dca: 0,
@@ -3068,6 +3078,76 @@ function updateTeamAiKeyHint() {
   hint.style.color = hasKey ? 'var(--green)' : 'var(--text2)';
 }
 
+// ─────── BENCHMARK FETCH (Yahoo Finance 真實歷史月報酬) ───────
+async function fetchBenchmarkHistory(sym) {
+  const enc = encodeURIComponent(sym);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?range=2y&interval=1mo`;
+  const proxies = [
+    u => u,
+    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  ];
+  for (const proxy of proxies) {
+    try {
+      const r = await fetch(proxy(url), { headers: { Accept: 'application/json' } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const result = d.chart?.result?.[0];
+      if (!result) continue;
+      const ts     = result.timestamp;
+      const closes = result.indicators?.quote?.[0]?.close;
+      if (!ts || !closes || ts.length < 2) continue;
+
+      const monthly = {};
+      for (let i = 1; i < ts.length; i++) {
+        if (closes[i] == null || closes[i-1] == null) continue;
+        const dt = new Date(ts[i] * 1000);
+        const m  = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
+        monthly[m] = +((closes[i] - closes[i-1]) / closes[i-1] * 100).toFixed(3);
+      }
+      return monthly;
+    } catch(e) {}
+  }
+  return null;
+}
+
+async function syncBenchmarkData() {
+  const btn = document.getElementById('benchFetchBtn');
+  const lbl = document.getElementById('benchLastUpdate');
+  if (btn) { btn.textContent = '⏳ 抓取中…'; btn.disabled = true; }
+  if (lbl) lbl.textContent = '';
+
+  try {
+    const [spyData, tw50Data] = await Promise.all([
+      fetchBenchmarkHistory('SPY'),
+      fetchBenchmarkHistory('0050.TW'),
+    ]);
+
+    let updated = 0;
+    if (spyData  && Object.keys(spyData).length  > 0) { BENCHMARK_DATA.SPY  = spyData;  updated++; }
+    if (tw50Data && Object.keys(tw50Data).length > 0) { BENCHMARK_DATA.TW50 = tw50Data; updated++; }
+
+    if (updated > 0) {
+      BENCHMARK_DATA.lastFetch = Date.now();
+      try { localStorage.setItem('inv_benchmark_data', JSON.stringify(BENCHMARK_DATA)); } catch(e) {}
+      const timeStr = new Date().toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+      if (lbl) lbl.textContent = `✅ 真實資料 ${timeStr}`;
+
+      // Re-render benchmark sections with real data
+      const bench = riskBuildBenchmarkSeries();
+      const stats = riskCalcStats();
+      renderBenchmarkSummary(bench, stats);
+      renderBenchmarkChart(bench);
+    } else {
+      if (lbl) lbl.textContent = '❌ 拉取失敗，仍用估算值';
+    }
+  } catch(e) {
+    if (lbl) lbl.textContent = `❌ ${e.message}`;
+  } finally {
+    if (btn) { btn.textContent = '🔄 更新基準'; btn.disabled = false; }
+  }
+}
+
 // ═══════════════════════════════════════════════════════
 // ─────── RISK ANALYSIS ENGINE ───────────────────────────
 // ═══════════════════════════════════════════════════════
@@ -3189,11 +3269,15 @@ function riskCalcCashFlow() {
 
 function riskBuildBenchmarkSeries() {
   if (!MONTHLY.length) return null;
-  // Portfolio: normalize first month = 100
   const base = MONTHLY[0].v;
   const portSeries = MONTHLY.map(r => +(r.v / base * 100).toFixed(2));
 
-  // Benchmark: compound from month 2 onward using lookup table
+  // Use real data if available, otherwise fall back to hardcoded estimates
+  const hasRealSPY  = BENCHMARK_DATA.SPY  && Object.keys(BENCHMARK_DATA.SPY).length  > 2;
+  const hasRealTW50 = BENCHMARK_DATA.TW50 && Object.keys(BENCHMARK_DATA.TW50).length > 2;
+  const sp500Table  = hasRealSPY  ? BENCHMARK_DATA.SPY  : SP500_MONTHLY;
+  const tw50Table   = hasRealTW50 ? BENCHMARK_DATA.TW50 : TW50_MONTHLY;
+
   const buildBenchmark = (table) => {
     const vals = [100];
     MONTHLY.slice(1).forEach(r => {
@@ -3206,8 +3290,10 @@ function riskBuildBenchmarkSeries() {
   return {
     labels: MONTHLY.map(r => r.m),
     portfolio: portSeries,
-    sp500: buildBenchmark(SP500_MONTHLY),
-    tw50:  buildBenchmark(TW50_MONTHLY),
+    sp500: buildBenchmark(sp500Table),
+    tw50:  buildBenchmark(tw50Table),
+    isRealData: hasRealSPY && hasRealTW50,
+    hasRealSPY, hasRealTW50,
   };
 }
 
@@ -3313,12 +3399,17 @@ function renderBenchmarkSummary(bench, stats) {
       <div style="font-size:11px;color:var(--text2);margin-top:3px">${sub}</div>
     </div>`;
 
+  const spyLabel  = bench.hasRealSPY  ? 'S&P500（SPY 實際）'   : 'S&P500（估算）';
+  const tw50Label = bench.hasRealTW50 ? '台灣0050（實際）'      : '台灣0050（估算）';
+  const dataSrc   = bench.isRealData  ? '✅ Yahoo Finance 真實資料' : '⚠️ 估算值，按「更新基準」取得真實資料';
+
   el.innerHTML =
     card('我的投資組合', portTotal, portTotal >= 0 ? 'var(--green)' : 'var(--red)', `近 ${bench.labels.length-1} 個月累積`) +
-    card('S&P500（估）', sp500Total, sp500Total >= 0 ? 'var(--blue)' : 'var(--red)', '參考指數') +
-    card('台灣0050（估）', tw50Total, tw50Total >= 0 ? 'var(--orange)' : 'var(--red)', '參考指數') +
-    card('超額報酬 vs SPY', alpha_sp500, alpha_sp500 >= 0 ? 'var(--green)' : 'var(--red)', alpha_sp500 >= 0 ? '✅ 跑贏大盤' : '❌ 跑輸大盤') +
-    card('超額報酬 vs 0050', alpha_tw50, alpha_tw50 >= 0 ? 'var(--green)' : 'var(--red)', alpha_tw50 >= 0 ? '✅ 跑贏台股' : '❌ 跑輸台股');
+    card(spyLabel,  sp500Total, sp500Total >= 0 ? 'var(--blue)'   : 'var(--red)', bench.hasRealSPY  ? '真實 SPY 月收益' : '⚠️ 估算') +
+    card(tw50Label, tw50Total,  tw50Total  >= 0 ? 'var(--orange)' : 'var(--red)', bench.hasRealTW50 ? '真實 0050 月收益' : '⚠️ 估算') +
+    card('超額報酬 vs SPY',  alpha_sp500, alpha_sp500 >= 0 ? 'var(--green)' : 'var(--red)', alpha_sp500 >= 0 ? '✅ 跑贏大盤' : '❌ 跑輸大盤') +
+    card('超額報酬 vs 0050', alpha_tw50,  alpha_tw50  >= 0 ? 'var(--green)' : 'var(--red)', alpha_tw50  >= 0 ? '✅ 跑贏台股' : '❌ 跑輸台股') +
+    `<div style="grid-column:1/-1;font-size:11px;color:var(--text2);padding:4px 0">${dataSrc}</div>`;
 }
 
 function renderBenchmarkChart(bench) {
@@ -3331,9 +3422,9 @@ function renderBenchmarkChart(bench) {
     data: {
       labels: bench.labels,
       datasets: [
-        { label: '我的組合', data: bench.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
-        { label: 'S&P500 (估)', data: bench.sp500,  borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
-        { label: '台灣0050 (估)',data: bench.tw50,   borderColor: '#e3b341', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+        { label: '我的組合',   data: bench.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+        { label: bench.hasRealSPY  ? 'S&P500 (SPY)'  : 'S&P500 (估)', data: bench.sp500, borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: bench.hasRealSPY  ? [] : [4,3] },
+        { label: bench.hasRealTW50 ? '台灣0050'       : '台灣0050 (估)', data: bench.tw50, borderColor: '#e3b341', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: bench.hasRealTW50 ? [] : [4,3] },
       ]
     },
     options: {
@@ -3733,9 +3824,9 @@ function renderCorrelationMatrix(corrData) {
 }
 
 function initRiskPage() {
-  const stats   = riskCalcStats();
-  const cf      = riskCalcCashFlow();
-  const bench   = riskBuildBenchmarkSeries();
+  const stats    = riskCalcStats();
+  const cf       = riskCalcCashFlow();
+  const bench    = riskBuildBenchmarkSeries();
   const corrData = riskBuildCorrelationData();
 
   renderRiskKPIs(stats);
@@ -3749,6 +3840,23 @@ function initRiskPage() {
   renderPerfAttribution();
   renderTopHoldings();
   renderCorrelationMatrix(corrData);
+
+  // Show last-fetch time label
+  const lbl = document.getElementById('benchLastUpdate');
+  if (lbl) {
+    if (BENCHMARK_DATA.lastFetch) {
+      const d = new Date(BENCHMARK_DATA.lastFetch);
+      const label = `${bench.isRealData ? '✅ 真實資料' : '部分真實'} · ${d.toLocaleDateString('zh-TW')}`;
+      lbl.textContent = label;
+    } else {
+      lbl.textContent = '⚠️ 尚未取得真實資料';
+    }
+  }
+
+  // Auto-fetch if data is older than 7 days or missing
+  const stale = Date.now() - (BENCHMARK_DATA.lastFetch || 0) > 7 * 86400 * 1000;
+  const empty = Object.keys(BENCHMARK_DATA.SPY || {}).length === 0;
+  if (stale || empty) syncBenchmarkData();
 }
 
 // ─────── END RISK ANALYSIS ENGINE ───────
