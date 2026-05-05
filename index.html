@@ -177,6 +177,18 @@
   .chat-apikey-panel button { background: var(--accent); color: white; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
   .chat-apikey-panel button.clear { background: var(--surface); color: var(--text2); border: 1px solid var(--border); }
 
+  /* ── RISK ANALYSIS ── */
+  .hm-cell { border-radius: 4px; text-align: center; font-size: 11px; font-weight: 600; padding: 5px 4px; min-width: 46px; }
+  .hm-th { font-size: 11px; color: var(--text2); padding: 4px 6px; text-align: center; white-space: nowrap; }
+  .hm-yr { font-size: 12px; font-weight: 600; color: var(--text2); padding: 6px 8px; }
+  .corr-cell { width: 60px; height: 40px; text-align: center; font-size: 11px; font-weight: 600; border-radius: 4px; }
+  .corr-label { font-size: 11px; color: var(--text2); padding: 4px 8px; white-space: nowrap; font-weight: 500; }
+  .attr-bar { height: 8px; border-radius: 4px; margin-top: 4px; min-width: 4px; }
+  .risk-stat { background: var(--surface2); border-radius: 10px; padding: 14px 16px; }
+  .risk-stat-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .5px; }
+  .risk-stat-value { font-size: 22px; font-weight: 700; }
+  .risk-stat-sub { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
   hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
   .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
   .summary-row:last-child { border-bottom: none; }
@@ -245,6 +257,7 @@
     <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
     <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
     <button class="nav-tab" onclick="showPage('team')">AI投資團隊</button>
+    <button class="nav-tab" onclick="showPage('risk')">風險分析</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -761,6 +774,76 @@
   </div>
 </div>
 
+<!-- ═══ PAGE: RISK ANALYSIS ═══ -->
+<div id="page-risk" class="page">
+  <div class="alert alert-info" style="margin-bottom:16px">
+    <div class="alert-icon">📊</div>
+    <div><strong>風險指標說明：</strong>基於 MONTHLY 月度資產快照計算。Sharpe／Sortino 使用年化報酬與波動，無風險利率設為 3%（台幣）。基準指數為估算值，僅供參考對比。</div>
+  </div>
+
+  <!-- Level 1: Risk KPIs -->
+  <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:16px"></div>
+
+  <!-- Level 1: Benchmark Comparison -->
+  <div class="card">
+    <div class="card-title">📊 投資組合 vs 基準指數 <span class="badge">指數化（起始=100）</span></div>
+    <div id="benchmarkSummaryRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px"></div>
+    <div class="chart-wrap-lg"><canvas id="chartBenchmark"></canvas></div>
+  </div>
+
+  <!-- Level 1: Cash Flow & Rolling Returns -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">💰 現金流分析 <span class="badge">投入 vs 收益</span></div>
+      <div id="cashFlowDetail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 滾動報酬 <span class="badge">各期間績效</span></div>
+      <div id="rollingReturnsDetail"></div>
+    </div>
+  </div>
+
+  <!-- Level 2: Monthly Return Heatmap -->
+  <div class="card">
+    <div class="card-title">🗓️ 月報酬熱圖 <span class="badge">顏色深淺代表漲跌幅</span></div>
+    <div id="monthlyHeatmap" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- Level 2: Sector + Region Allocation Drill-down -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🏭 產業配置分析</div>
+      <div id="sectorAllocDetail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 地區配置分析</div>
+      <div id="regionAllocDetail"></div>
+    </div>
+  </div>
+
+  <!-- Level 2: Performance Attribution -->
+  <div class="card">
+    <div class="card-title">📈 績效歸因 — 哪個資產在賺錢</div>
+    <div style="overflow-x:auto"><div id="perfAttributionDetail"></div></div>
+  </div>
+
+  <!-- Level 2: Top Holdings Concentration -->
+  <div class="card">
+    <div class="card-title">🏆 前10大持倉集中度分析</div>
+    <div id="topHoldingsDetail"></div>
+  </div>
+
+  <!-- Level 3: Correlation Matrix -->
+  <div class="card">
+    <div class="card-title">🔗 資產類別相關係數矩陣 <span class="badge">基於月度報酬估算</span></div>
+    <div class="alert alert-warn" style="margin-bottom:10px">
+      <div class="alert-icon">⚠️</div>
+      <div>相關係數基於月度資產類別變化估算，因資料點有限（<12個月），供方向性參考。1=完全正相關，-1=完全負相關，0=無相關。</div>
+    </div>
+    <div id="correlationMatrix" style="overflow-x:auto"></div>
+  </div>
+</div>
+
 <script>
 // ─────── GLOBAL CONSTANTS（集中管理，修改一處即全站生效）───────
 const USD_TWD    = 31.96;                             // USD→TWD 匯率（每月更新）
@@ -1091,6 +1174,7 @@ function showPage(id) {
   if (id === 'backtest' && !window._btInit) { initBacktestChart(); window._btInit = true; }
   if (id === 'team') { renderTeamPage(); updateTeamAiKeyHint(); }
   if (id === 'crypto') { renderCrypto(); window._cryptoInit = true; }
+  if (id === 'risk' && !window._riskInit) { initRiskPage(); window._riskInit = true; }
 }
 
 // ─────── OVERVIEW ───────
@@ -2983,6 +3067,691 @@ function updateTeamAiKeyHint() {
   hint.textContent = hasKey ? '✅ API Key 已設定' : '⚠️ 尚未設定 API Key';
   hint.style.color = hasKey ? 'var(--green)' : 'var(--text2)';
 }
+
+// ═══════════════════════════════════════════════════════
+// ─────── RISK ANALYSIS ENGINE ───────────────────────────
+// ═══════════════════════════════════════════════════════
+
+// Approximate S&P500 monthly returns (%) for the MONTHLY data window
+// Source: well-known historical data — approximate values
+const SP500_MONTHLY = {
+  '2025/04': -4.8, '2025/05': 5.0, '2025/06': 3.5,
+  '2025/07': 2.8,  '2025/08': 1.6, '2025/09': 1.0,
+  '2025/10': 2.2,  '2025/11': 3.5, '2025/12': -0.4,
+  '2026/01': 2.6,  '2026/02': -1.8,'2026/03': -2.2,
+};
+
+// Approximate Taiwan 0050 monthly returns (%)
+const TW50_MONTHLY = {
+  '2025/04': -6.5, '2025/05': 2.2, '2025/06': 2.8,
+  '2025/07': 1.4,  '2025/08': 0.8, '2025/09': 0.5,
+  '2025/10': 0.3,  '2025/11': -1.2,'2025/12': -0.6,
+  '2026/01': 0.0,  '2026/02': -4.2,'2026/03': -5.5,
+};
+
+// Sector classification for all holdings
+const SECTOR_MAP = {
+  // 科技/AI/半導體
+  '2330':'科技/AI','0052':'科技/AI','00662':'科技/AI',
+  'QQQ':'科技/AI','NVDA':'科技/AI','MSFT':'科技/AI',
+  'MAGS':'科技/AI','SMH':'科技/AI','MU':'科技/AI',
+  'GOOGL':'科技/AI','TSLA':'科技/電動車',
+  '1513':'電力/製造','6763':'科技','2357':'電子/製造',
+  // 大盤 ETF
+  '006208':'大盤ETF','0050':'大盤ETF','00924':'大盤ETF',
+  '00858':'大盤ETF','00646':'大盤ETF','SPY':'大盤ETF',
+  '00981A':'大盤ETF',
+  // 高息 ETF
+  '00878':'高息ETF','00713':'高息ETF','00900':'高息ETF',
+  '00916':'高息ETF','00991A':'高息ETF','SCHD':'高息ETF',
+  // 債券
+  '00937B':'債券','00725B':'債券','00751B':'債券',
+  '00720B':'債券','BOXX':'債券',
+  // 金融
+  '2881':'金融','2890':'金融','5871':'金融租賃',
+  // 航運
+  '2603':'航運','2646':'航空',
+  // 傳產
+  '1301':'石化/傳產','1537':'機械/傳產','1580':'食品/傳產',
+  // 其他
+  '2348':'建商','4763':'材料',
+  // 槓桿 ETF
+  'QLD':'槓桿ETF','TQQQ':'槓桿ETF',
+};
+
+function riskGetMonthlyReturns() {
+  return MONTHLY.slice(1).map((r, i) => (r.v - MONTHLY[i].v) / MONTHLY[i].v * 100);
+}
+
+function riskCalcStats() {
+  const returns = riskGetMonthlyReturns();
+  if (returns.length < 2) return null;
+
+  const n = returns.length;
+  const mean = returns.reduce((a, b) => a + b, 0) / n;
+  const variance = returns.reduce((s, r) => s + Math.pow(r - mean, 2), 0) / n;
+  const monthlyVol = Math.sqrt(variance);
+  const annualVol  = monthlyVol * Math.sqrt(12);
+
+  // CAGR from first to last month
+  const first = MONTHLY[0].v;
+  const last  = MONTHLY[MONTHLY.length - 1].v;
+  const months = MONTHLY.length - 1;
+  const totalReturn = (last - first) / first * 100;
+  const cagr = (Math.pow(last / first, 12 / months) - 1) * 100;
+
+  const riskFree = 3.0; // % annualized (TWD)
+  const sharpe   = annualVol > 0 ? (cagr - riskFree) / annualVol : 0;
+
+  // Max Drawdown
+  let maxDD = 0, peak = MONTHLY[0].v;
+  MONTHLY.forEach(r => {
+    if (r.v > peak) peak = r.v;
+    const dd = (peak - r.v) / peak * 100;
+    if (dd > maxDD) maxDD = dd;
+  });
+
+  // Sortino (downside deviation using all months as denominator)
+  const downsideVar = returns.reduce((s, r) => s + Math.pow(Math.min(r, 0), 2), 0) / n;
+  const downDev    = Math.sqrt(downsideVar * 12);
+  const sortino    = downDev > 0 ? (cagr - riskFree) / downDev : 0;
+
+  const wins   = returns.filter(r => r > 0).length;
+  const winRate = wins / n * 100;
+  const best   = Math.max(...returns);
+  const worst  = Math.min(...returns);
+
+  return { returns, cagr, annualVol, sharpe, sortino, maxDD, winRate, best, worst, months, totalReturn };
+}
+
+function riskCalcCashFlow() {
+  const twCost = TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+  const usCost = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
+  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV   = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const bankMV   = SHEET_ALLOC.ready ? SHEET_ALLOC.bank   : 0;
+  const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+
+  const totalCost = twCost + usCost;
+  const investedMV = twMV + usMV; // Only where we have cost data
+  const unrealizedGain = investedMV - totalCost;
+
+  const totalDivs    = YEARLY.reduce((s, y) => s + (y.div   || 0), 0);
+  const realizedGain = YEARLY.reduce((s, y) => s + (y.pnl   || 0), 0);
+  const lendIncome   = YEARLY.reduce((s, y) => s + (y.lend  || 0), 0);
+  const totalGain    = unrealizedGain + totalDivs;
+  const totalGainPct = totalCost > 0 ? totalGain / totalCost * 100 : 0;
+
+  return { twCost, usCost, totalCost, twMV, usMV, bankMV, cryptoMV,
+           investedMV, unrealizedGain, totalDivs, realizedGain, lendIncome,
+           totalGain, totalGainPct };
+}
+
+function riskBuildBenchmarkSeries() {
+  if (!MONTHLY.length) return null;
+  // Portfolio: normalize first month = 100
+  const base = MONTHLY[0].v;
+  const portSeries = MONTHLY.map(r => +(r.v / base * 100).toFixed(2));
+
+  // Benchmark: compound from month 2 onward using lookup table
+  const buildBenchmark = (table) => {
+    const vals = [100];
+    MONTHLY.slice(1).forEach(r => {
+      const ret = table[r.m] || 0;
+      vals.push(+(vals[vals.length - 1] * (1 + ret / 100)).toFixed(2));
+    });
+    return vals;
+  };
+
+  return {
+    labels: MONTHLY.map(r => r.m),
+    portfolio: portSeries,
+    sp500: buildBenchmark(SP500_MONTHLY),
+    tw50:  buildBenchmark(TW50_MONTHLY),
+  };
+}
+
+function riskBuildCorrelationData() {
+  if (!MONTHLY_CATS.length || MONTHLY_CATS.length < 3) return null;
+
+  // Build return series per category
+  const cats = ['stocks', 'subbroker', 'firstrade', 'bank', 'binance', 'kfu'];
+  const labels = { stocks:'台股', subbroker:'複委託', firstrade:'Firstrade', bank:'銀行', binance:'幣安', kfu:'基富通' };
+
+  const series = {};
+  cats.forEach(c => {
+    const vals = MONTHLY_CATS.map(r => r[c] || 0).filter(v => v > 0);
+    if (vals.length >= 3) {
+      series[c] = MONTHLY_CATS.slice(1).map((r, i) => {
+        const prev = MONTHLY_CATS[i][c] || 0;
+        const cur  = r[c] || 0;
+        return prev > 0 ? (cur - prev) / prev * 100 : 0;
+      });
+    }
+  });
+
+  const available = Object.keys(series);
+  if (available.length < 2) return null;
+
+  const corr = (a, b) => {
+    const n = Math.min(a.length, b.length);
+    if (n < 2) return 0;
+    const ax = a.slice(0, n), bx = b.slice(0, n);
+    const ma = ax.reduce((s,v) => s+v, 0) / n;
+    const mb = bx.reduce((s,v) => s+v, 0) / n;
+    const num = ax.reduce((s, v, i) => s + (v - ma) * (bx[i] - mb), 0);
+    const da  = Math.sqrt(ax.reduce((s, v) => s + Math.pow(v - ma, 2), 0));
+    const db  = Math.sqrt(bx.reduce((s, v) => s + Math.pow(v - mb, 2), 0));
+    return (da * db) > 0 ? +(num / (da * db)).toFixed(2) : 0;
+  };
+
+  return { cats: available, labels, series, corr };
+}
+
+// ─────── RENDER FUNCTIONS ───────
+
+function renderRiskKPIs(stats) {
+  const el = document.getElementById('riskKpiGrid');
+  if (!el) return;
+  if (!stats) {
+    el.innerHTML = '<div class="kpi-card"><div class="kpi-label">資料不足</div><div class="kpi-value neutral">需至少 2 個月資料</div></div>';
+    return;
+  }
+
+  const sharpeColor = stats.sharpe >= 1 ? 'var(--green)' : stats.sharpe >= 0.5 ? 'var(--yellow)' : 'var(--red)';
+  const ddColor = stats.maxDD > 15 ? 'var(--red)' : stats.maxDD > 8 ? 'var(--yellow)' : 'var(--green)';
+  const sharpeLabel = stats.sharpe >= 1.5 ? '優秀' : stats.sharpe >= 1 ? '良好' : stats.sharpe >= 0.5 ? '尚可' : '偏低';
+  const ddLabel = stats.maxDD > 15 ? '高回撤風險' : stats.maxDD > 8 ? '中等回撤' : '回撤可控';
+
+  el.innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">年化報酬 (CAGR)</div>
+      <div class="kpi-value ${stats.cagr >= 0 ? 'up' : 'down'}">${stats.cagr >= 0 ? '+' : ''}${stats.cagr.toFixed(1)}%</div>
+      <div class="kpi-sub neutral">近 ${stats.months} 個月年化</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">年化波動率</div>
+      <div class="kpi-value neutral">${stats.annualVol.toFixed(1)}%</div>
+      <div class="kpi-sub neutral">月波動 × √12</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Sharpe Ratio</div>
+      <div class="kpi-value" style="color:${sharpeColor}">${stats.sharpe.toFixed(2)}</div>
+      <div class="kpi-sub neutral">${sharpeLabel}（無風險利率 3%）</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Sortino Ratio</div>
+      <div class="kpi-value" style="color:${stats.sortino >= 1 ? 'var(--green)' : 'var(--yellow)'}">${stats.sortino.toFixed(2)}</div>
+      <div class="kpi-sub neutral">下行風險調整報酬</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大回撤</div>
+      <div class="kpi-value" style="color:${ddColor}">-${stats.maxDD.toFixed(1)}%</div>
+      <div class="kpi-sub neutral">${ddLabel}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月勝率</div>
+      <div class="kpi-value ${stats.winRate >= 60 ? 'up' : 'neutral'}">${stats.winRate.toFixed(0)}%</div>
+      <div class="kpi-sub neutral">最佳 ${stats.best >= 0 ? '+' : ''}${stats.best.toFixed(1)}% / 最差 ${stats.worst.toFixed(1)}%</div>
+    </div>`;
+}
+
+function renderBenchmarkSummary(bench, stats) {
+  const el = document.getElementById('benchmarkSummaryRow');
+  if (!el || !bench) return;
+
+  const portTotal   = ((bench.portfolio[bench.portfolio.length-1] - 100)).toFixed(1);
+  const sp500Total  = ((bench.sp500[bench.sp500.length-1]  - 100)).toFixed(1);
+  const tw50Total   = ((bench.tw50[bench.tw50.length-1]    - 100)).toFixed(1);
+  const alpha_sp500 = (portTotal - sp500Total).toFixed(1);
+  const alpha_tw50  = (portTotal - tw50Total).toFixed(1);
+
+  const card = (label, val, color, sub) =>
+    `<div style="background:var(--surface2);border-radius:10px;padding:12px 16px">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${label}</div>
+      <div style="font-size:20px;font-weight:700;color:${color}">${val >= 0 ? '+' : ''}${val}%</div>
+      <div style="font-size:11px;color:var(--text2);margin-top:3px">${sub}</div>
+    </div>`;
+
+  el.innerHTML =
+    card('我的投資組合', portTotal, portTotal >= 0 ? 'var(--green)' : 'var(--red)', `近 ${bench.labels.length-1} 個月累積`) +
+    card('S&P500（估）', sp500Total, sp500Total >= 0 ? 'var(--blue)' : 'var(--red)', '參考指數') +
+    card('台灣0050（估）', tw50Total, tw50Total >= 0 ? 'var(--orange)' : 'var(--red)', '參考指數') +
+    card('超額報酬 vs SPY', alpha_sp500, alpha_sp500 >= 0 ? 'var(--green)' : 'var(--red)', alpha_sp500 >= 0 ? '✅ 跑贏大盤' : '❌ 跑輸大盤') +
+    card('超額報酬 vs 0050', alpha_tw50, alpha_tw50 >= 0 ? 'var(--green)' : 'var(--red)', alpha_tw50 >= 0 ? '✅ 跑贏台股' : '❌ 跑輸台股');
+}
+
+function renderBenchmarkChart(bench) {
+  if (window._benchChart) { try { window._benchChart.destroy(); } catch(e){} window._benchChart = null; }
+  const canvas = document.getElementById('chartBenchmark');
+  if (!canvas || !bench) return;
+
+  window._benchChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: bench.labels,
+      datasets: [
+        { label: '我的組合', data: bench.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+        { label: 'S&P500 (估)', data: bench.sp500,  borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+        { label: '台灣0050 (估)',data: bench.tw50,   borderColor: '#e3b341', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: [4,3] },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { ticks: { color: '#8b949e', callback: v => v.toFixed(0) }, grid: { color: '#21262d' } },
+        x: { ticks: { color: '#8b949e' }, grid: { color: '#21262d' } }
+      },
+      plugins: {
+        legend: { labels: { color: '#8b949e' } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}（起始=100）` } }
+      }
+    }
+  });
+}
+
+function renderCashFlow(cf) {
+  const el = document.getElementById('cashFlowDetail');
+  if (!el) return;
+  const f = n => '$' + Math.round(Math.abs(n)).toLocaleString();
+  const pct = (a, b) => b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—';
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">💼 投入成本（可追蹤）</div>
+        <div style="font-size:20px;font-weight:700;color:var(--blue)">${f(cf.totalCost)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">台股 ${f(cf.twCost)} + 美股 ${f(cf.usCost)}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:var(--text2);margin-bottom:4px">📈 未實現資本增值</div>
+        <div style="font-size:20px;font-weight:700;color:${cf.unrealizedGain >= 0 ? 'var(--green)' : 'var(--red)'}">${cf.unrealizedGain >= 0 ? '+' : ''}${f(cf.unrealizedGain)}</div>
+        <div style="font-size:11px;color:${cf.unrealizedGain >= 0 ? 'var(--green)' : 'var(--red)'};margin-top:2px">${pct(cf.unrealizedGain, cf.totalCost)}</div>
+      </div>
+    </div>
+    <div class="summary-row"><span class="summary-key">💰 歷年股息收入（已實現）</span><span class="up">+${f(cf.totalDivs)}</span></div>
+    <div class="summary-row"><span class="summary-key">📊 歷年實現損益</span><span class="up">+${f(cf.realizedGain)}</span></div>
+    ${cf.lendIncome > 0 ? `<div class="summary-row"><span class="summary-key">🏦 出借收入</span><span class="up">+${f(cf.lendIncome)}</span></div>` : ''}
+    <div class="summary-row" style="font-weight:600;border-top:2px solid var(--border);margin-top:6px">
+      <span class="summary-key">🎯 綜合報酬（資本增值+股息）</span>
+      <span class="${cf.totalGain >= 0 ? 'up' : 'down'}">${cf.totalGain >= 0 ? '+' : ''}${f(cf.totalGain)} (${pct(cf.totalGain, cf.totalCost)})</span>
+    </div>
+    <div style="margin-top:12px;background:var(--surface2);border-radius:8px;padding:10px;font-size:12px">
+      <div style="margin-bottom:6px;font-weight:600;color:var(--text2)">報酬來源拆解</div>
+      <div style="display:flex;gap:0;height:16px;border-radius:8px;overflow:hidden;margin-bottom:6px">
+        ${cf.totalGain > 0 ? `
+        <div style="width:${Math.min(cf.unrealizedGain/cf.totalGain*100,100).toFixed(0)}%;background:var(--green);transition:width .5s"></div>
+        <div style="width:${Math.min(cf.totalDivs/cf.totalGain*100,100).toFixed(0)}%;background:var(--purple);transition:width .5s"></div>
+        ` : '<div style="width:100%;background:var(--red)"></div>'}
+      </div>
+      <div style="display:flex;gap:16px;font-size:11px;color:var(--text2)">
+        <span><span style="color:var(--green)">●</span> 資本增值 ${cf.totalGain > 0 ? Math.min(cf.unrealizedGain/cf.totalGain*100,100).toFixed(0) : 0}%</span>
+        <span><span style="color:var(--purple)">●</span> 股息收入 ${cf.totalGain > 0 ? Math.min(cf.totalDivs/cf.totalGain*100,100).toFixed(0) : 0}%</span>
+      </div>
+    </div>`;
+}
+
+function renderRollingReturns(stats) {
+  const el = document.getElementById('rollingReturnsDetail');
+  if (!el || !stats) return;
+
+  // Rolling returns from MONTHLY
+  const calcRolling = (months) => {
+    const n = MONTHLY.length;
+    if (n <= months) return null;
+    const start = MONTHLY[n - 1 - months].v;
+    const end   = MONTHLY[n - 1].v;
+    return (end - start) / start * 100;
+  };
+
+  const r1  = calcRolling(1);
+  const r3  = calcRolling(3);
+  const r6  = calcRolling(6);
+  const r12 = calcRolling(12);
+
+  const row = (label, val, suffix = '') => {
+    if (val === null) return '';
+    const cls = val >= 0 ? 'up' : 'down';
+    return `<div class="summary-row">
+      <span class="summary-key">${label}</span>
+      <span class="${cls}" style="font-weight:600">${val >= 0 ? '+' : ''}${val.toFixed(2)}%${suffix}</span>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    ${row('📅 近 1 個月', r1)}
+    ${row('📅 近 3 個月', r3)}
+    ${row('📅 近 6 個月', r6)}
+    ${row('📅 近 12 個月', r12)}
+    <hr>
+    ${row('📈 年化報酬 (CAGR)', stats.cagr, `（近 ${stats.months}M）`)}
+    ${row('📊 總累積報酬', stats.totalReturn)}
+    <hr>
+    <div class="summary-row"><span class="summary-key">📆 月勝率</span><span class="up">${stats.winRate.toFixed(0)}% (${Math.round(stats.winRate/100*stats.months)}/${stats.months} 個月)</span></div>
+    <div class="summary-row"><span class="summary-key">🏆 最佳月份</span><span class="up">+${stats.best.toFixed(2)}%</span></div>
+    <div class="summary-row"><span class="summary-key">⚠️ 最差月份</span><span class="down">${stats.worst.toFixed(2)}%</span></div>`;
+}
+
+function renderMonthlyHeatmap() {
+  const el = document.getElementById('monthlyHeatmap');
+  if (!el) return;
+  const returns = riskGetMonthlyReturns();
+  if (returns.length < 2) {
+    el.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px">資料不足，需至少 2 個月</div>';
+    return;
+  }
+
+  // Map returns to month positions
+  const byYear = {};
+  MONTHLY.forEach((row, i) => {
+    if (i === 0) return;
+    const [yr, mo] = row.m.split('/').map(Number);
+    if (!byYear[yr]) byYear[yr] = {};
+    byYear[yr][mo] = returns[i - 1];
+  });
+
+  const MONTHS = ['1','2','3','4','5','6','7','8','9','10','11','12'];
+  const bgColor = (r) => {
+    if (r > 8)  return ['#145a32','#fff'];
+    if (r > 5)  return ['#1a7f37','#fff'];
+    if (r > 3)  return ['#27a845','#fff'];
+    if (r > 1)  return ['#6cc686','#000'];
+    if (r > 0)  return ['#c3e8c8','#000'];
+    if (r > -1) return ['#fddede','#000'];
+    if (r > -3) return ['#f9a8a8','#000'];
+    if (r > -5) return ['#f44336','#fff'];
+    return ['#b71c1c','#fff'];
+  };
+
+  let html = `<table style="border-collapse:separate;border-spacing:3px">
+    <thead><tr>
+      <th class="hm-yr">年份</th>
+      ${MONTHS.map(m => `<th class="hm-th">${m}月</th>`).join('')}
+      <th class="hm-th">年合計</th>
+    </tr></thead><tbody>`;
+
+  Object.keys(byYear).sort().forEach(yr => {
+    let yearFactor = 1;
+    const cells = MONTHS.map((_, i) => {
+      const mo = i + 1;
+      const r  = byYear[yr][mo];
+      if (r === undefined) return `<td style="min-width:42px"></td>`;
+      yearFactor *= (1 + r / 100);
+      const [bg, fg] = bgColor(r);
+      return `<td class="hm-cell" style="background:${bg};color:${fg}">${r > 0 ? '+' : ''}${r.toFixed(1)}%</td>`;
+    });
+    const yrR = (yearFactor - 1) * 100;
+    const [bg, fg] = bgColor(yrR);
+    html += `<tr>
+      <td class="hm-yr">${yr}</td>
+      ${cells.join('')}
+      <td class="hm-cell" style="background:${bg};color:${fg};font-size:12px">${yrR > 0 ? '+' : ''}${yrR.toFixed(1)}%</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function renderSectorAlloc() {
+  const el = document.getElementById('sectorAllocDetail');
+  if (!el) return;
+
+  const sectors = {};
+  const addToSector = (code, mv, isUS) => {
+    const s = SECTOR_MAP[code] || '其他';
+    if (!sectors[s]) sectors[s] = 0;
+    sectors[s] += mv;
+  };
+
+  TW_HOLD.forEach(h => addToSector(h.code, h.mv || 0, false));
+  [...US_MAIN, ...US_ROY].forEach(h => addToSector(h.sym, (h.mv || 0) * USD_TWD, true));
+
+  const totalSector = Object.values(sectors).reduce((a, b) => a + b, 0);
+  const sorted = Object.entries(sectors).sort((a, b) => b[1] - a[1]);
+  const COLORS = ['#58a6ff','#3fb950','#e3b341','#f85149','#bc8cff','#f0883e','#39d353','#ff7b72','#79c0ff','#a5d6ff'];
+
+  const rows = sorted.map(([name, mv], i) => {
+    const pct = totalSector > 0 ? mv / totalSector * 100 : 0;
+    const color = COLORS[i % COLORS.length];
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span><span style="color:${color};margin-right:5px">●</span>${name}</span>
+        <span style="color:var(--text2)">${pct.toFixed(1)}% · $${Math.round(mv/10000)}萬</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+        <div style="width:${pct.toFixed(1)}%;background:${color};height:100%;border-radius:4px;transition:width .5s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = rows || '<div style="color:var(--text2);text-align:center;padding:20px">無持倉資料</div>';
+}
+
+function renderRegionAlloc() {
+  const el = document.getElementById('regionAllocDetail');
+  if (!el) return;
+
+  const twMV     = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV     = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+  const bankMV   = SHEET_ALLOC.ready ? SHEET_ALLOC.bank   : 0;
+  const total    = twMV + usMV + cryptoMV + bankMV;
+
+  // Sub-categories for Taiwan
+  const twBonds = TW_HOLD.filter(h => ['00937B','00725B','00751B','00720B'].includes(h.code))
+    .reduce((s, h) => s + (h.mv || 0), 0);
+  const twStocks = twMV - twBonds;
+
+  const regions = [
+    { label: '🇹🇼 台灣股票', mv: twStocks, color: '#58a6ff' },
+    { label: '🇹🇼 台灣債券 ETF', mv: twBonds, color: '#79c0ff' },
+    { label: '🇺🇸 美股 Firstrade', mv: [...US_MAIN].reduce((s,h) => s+(h.mv||0),0)*USD_TWD, color: '#3fb950' },
+    { label: '🇺🇸 美股 複委託', mv: [...US_ROY].reduce((s,h) => s+(h.mv||0),0)*USD_TWD, color: '#56d364' },
+    { label: '₿ 加密貨幣', mv: cryptoMV, color: '#e3b341' },
+    { label: '🏦 銀行存款', mv: bankMV, color: '#f85149' },
+  ].filter(r => r.mv > 0).sort((a, b) => b.mv - a.mv);
+
+  const rows = regions.map(r => {
+    const pct = total > 0 ? r.mv / total * 100 : 0;
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span>${r.label}</span>
+        <span style="color:var(--text2)">${pct.toFixed(1)}%</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+        <div style="width:${pct.toFixed(1)}%;background:${r.color};height:100%;border-radius:4px;transition:width .5s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Concentration alert
+  const twPct  = total > 0 ? (twMV  / total * 100) : 0;
+  const usPct  = total > 0 ? (usMV  / total * 100) : 0;
+  let alert = '';
+  if (twPct > 70) alert = `<div class="alert alert-danger" style="margin-top:10px"><div class="alert-icon">🔴</div><div>台灣集中度 ${twPct.toFixed(1)}% — 地緣政治風險過高，建議降至 60% 以下</div></div>`;
+  else if (twPct > 60) alert = `<div class="alert alert-warn" style="margin-top:10px"><div class="alert-icon">⚠️</div><div>台灣 ${twPct.toFixed(1)}% 偏高，目標 55~60%</div></div>`;
+  if (usPct < 20) alert += `<div class="alert alert-info" style="margin-top:6px"><div class="alert-icon">💡</div><div>美股 ${usPct.toFixed(1)}% 偏低，建議增至 25~35%</div></div>`;
+
+  el.innerHTML = rows + alert;
+}
+
+function renderPerfAttribution() {
+  const el = document.getElementById('perfAttributionDetail');
+  if (!el) return;
+
+  // Compute PnL for each holding
+  const items = [];
+  TW_HOLD.forEach(h => {
+    const cost  = (h.avg || 0) * (h.shares || 0);
+    const pnl   = (h.mv || 0) - cost;
+    if (Math.abs(pnl) > 100)
+      items.push({ name: h.name, code: h.code, pnl, pct: h.pct || 0, mv: h.mv || 0, region: '台股' });
+  });
+  [...US_MAIN, ...US_ROY].forEach(h => {
+    const pnl = ((h.pnl != null ? h.pnl : h.mv - h.cost) || 0) * USD_TWD;
+    if (Math.abs(pnl) > 100)
+      items.push({ name: h.sym, code: h.sym, pnl, pct: h.pct || 0, mv: (h.mv || 0) * USD_TWD, region: '美股' });
+  });
+
+  items.sort((a, b) => b.pnl - a.pnl);
+  const maxPnl = Math.max(...items.map(i => Math.abs(i.pnl)), 1);
+
+  const topGainers = items.filter(i => i.pnl > 0).slice(0, 8);
+  const topLosers  = items.filter(i => i.pnl < 0).sort((a, b) => a.pnl - b.pnl).slice(0, 5);
+
+  const makeRow = (item) => {
+    const barWidth = (Math.abs(item.pnl) / maxPnl * 100).toFixed(1);
+    const isGain = item.pnl >= 0;
+    return `<tr>
+      <td><span class="ticker">${item.code}</span></td>
+      <td style="font-size:11px;color:var(--text2)">${item.name}</td>
+      <td style="font-size:11px;color:var(--text2)">${item.region}</td>
+      <td class="${isGain ? 'up' : 'down'}" style="font-family:monospace;white-space:nowrap">${isGain ? '+' : ''}$${Math.round(item.pnl).toLocaleString()}</td>
+      <td class="${isGain ? 'up' : 'down'}">${item.pct >= 0 ? '+' : ''}${item.pct.toFixed(1)}%</td>
+      <td style="min-width:120px">
+        <div class="attr-bar" style="width:${barWidth}%;background:${isGain ? 'var(--green)' : 'var(--red)'}"></div>
+      </td>
+    </tr>`;
+  };
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">📈 主要獲利貢獻（未實現）</div>
+        <table style="width:100%">
+          <thead><tr><th>代號</th><th>名稱</th><th>市場</th><th>損益(TWD)</th><th>損益%</th><th>相對貢獻</th></tr></thead>
+          <tbody>${topGainers.map(makeRow).join('')}</tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--red);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)">📉 主要虧損（未實現）</div>
+        <table style="width:100%">
+          <thead><tr><th>代號</th><th>名稱</th><th>市場</th><th>損益(TWD)</th><th>損益%</th><th>相對虧損</th></tr></thead>
+          <tbody>${topLosers.map(makeRow).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function renderTopHoldings() {
+  const el = document.getElementById('topHoldingsDetail');
+  if (!el) return;
+
+  const allItems = [];
+  TW_HOLD.forEach(h => {
+    if ((h.mv || 0) > 0)
+      allItems.push({ name: h.name, code: h.code, mv: h.mv, pct_gain: h.pct || 0, region: '台股' });
+  });
+  [...US_MAIN, ...US_ROY].forEach(h => {
+    if ((h.mv || 0) > 0)
+      allItems.push({ name: h.sym, code: h.sym, mv: (h.mv || 0) * USD_TWD, pct_gain: h.pct || 0, region: '美股' });
+  });
+
+  allItems.sort((a, b) => b.mv - a.mv);
+  const top10   = allItems.slice(0, 10);
+  const totalMV = allItems.reduce((s, i) => s + i.mv, 0);
+  const top10MV = top10.reduce((s, i) => s + i.mv, 0);
+  const concPct = totalMV > 0 ? top10MV / totalMV * 100 : 0;
+
+  let cumPct = 0;
+  const rows = top10.map((item, i) => {
+    const pct = totalMV > 0 ? item.mv / totalMV * 100 : 0;
+    cumPct += pct;
+    return `<tr>
+      <td style="color:var(--text2);font-size:12px">${i + 1}</td>
+      <td><span class="ticker">${item.code}</span></td>
+      <td>${item.name}</td>
+      <td style="font-size:11px;color:var(--text2)">${item.region}</td>
+      <td style="font-family:monospace">$${Math.round(item.mv/10000)}萬</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:12px;color:var(--text2)">${pct.toFixed(1)}%</span>
+          <div style="flex:1;background:var(--surface2);border-radius:4px;height:6px;overflow:hidden;min-width:60px">
+            <div style="width:${pct.toFixed(1)}%;background:var(--blue);height:100%;border-radius:4px"></div>
+          </div>
+        </div>
+      </td>
+      <td style="font-size:11px;color:var(--text2)">${cumPct.toFixed(1)}%</td>
+      <td class="${item.pct_gain >= 0 ? 'up' : 'down'}">${item.pct_gain >= 0 ? '+' : ''}${item.pct_gain.toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  const concAlert = concPct > 80
+    ? `<div class="alert alert-danger"><div class="alert-icon">🔴</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度極高</div></div>`
+    : concPct > 65
+    ? `<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度偏高</div></div>`
+    : `<div class="alert alert-success"><div class="alert-icon">✅</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度合理</div></div>`;
+
+  el.innerHTML = `
+    ${concAlert}
+    <div style="overflow-x:auto;margin-top:10px">
+      <table>
+        <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderCorrelationMatrix(corrData) {
+  const el = document.getElementById('correlationMatrix');
+  if (!el) return;
+  if (!corrData) {
+    el.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px">需同步試算表並有各類資產逐月資料才可計算相關係數</div>';
+    return;
+  }
+  const { cats, labels, corr } = corrData;
+
+  const bgColor = (v) => {
+    if (v === 1) return '#1a7f37';
+    if (v >= 0.7) return '#27a845';
+    if (v >= 0.4) return '#6cc686';
+    if (v >= 0.1) return '#c3e8c8';
+    if (v >= -0.1) return '#21262d';
+    if (v >= -0.4) return '#fddede';
+    if (v >= -0.7) return '#f44336';
+    return '#b71c1c';
+  };
+  const fgColor = (v) => Math.abs(v) >= 0.4 ? '#fff' : 'var(--text)';
+
+  let html = `<table style="border-collapse:separate;border-spacing:4px">
+    <thead><tr><td></td>
+      ${cats.map(c => `<th class="corr-label">${labels[c]||c}</th>`).join('')}
+    </tr></thead><tbody>`;
+
+  cats.forEach(rowC => {
+    html += `<tr><td class="corr-label">${labels[rowC]||rowC}</td>`;
+    cats.forEach(colC => {
+      const v = rowC === colC ? 1 : corr(corrData.series[rowC], corrData.series[colC]);
+      html += `<td class="corr-cell" style="background:${bgColor(v)};color:${fgColor(v)}">${v.toFixed(2)}</td>`;
+    });
+    html += `</tr>`;
+  });
+
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function initRiskPage() {
+  const stats   = riskCalcStats();
+  const cf      = riskCalcCashFlow();
+  const bench   = riskBuildBenchmarkSeries();
+  const corrData = riskBuildCorrelationData();
+
+  renderRiskKPIs(stats);
+  renderBenchmarkSummary(bench, stats);
+  renderBenchmarkChart(bench);
+  renderCashFlow(cf);
+  renderRollingReturns(stats);
+  renderMonthlyHeatmap();
+  renderSectorAlloc();
+  renderRegionAlloc();
+  renderPerfAttribution();
+  renderTopHoldings();
+  renderCorrelationMatrix(corrData);
+}
+
+// ─────── END RISK ANALYSIS ENGINE ───────
 
 function generateChatResponse(question) {
   const q = question.toLowerCase();
