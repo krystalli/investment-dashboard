@@ -806,6 +806,18 @@
     </div>
   </div>
 
+  <!-- Medium: Dividend Calendar -->
+  <div class="card">
+    <div class="card-title">📆 股息日曆 <span class="badge">各月預估配息收入</span></div>
+    <div id="dividendCalendarDetail"></div>
+  </div>
+
+  <!-- Medium: Rebalancing Action Plan -->
+  <div class="card">
+    <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span></div>
+    <div id="rebalancingDetail"></div>
+  </div>
+
   <!-- Level 2: Monthly Return Heatmap -->
   <div class="card">
     <div class="card-title">🗓️ 月報酬熱圖 <span class="badge">顏色深淺代表漲跌幅</span></div>
@@ -1096,74 +1108,96 @@ const STOCK_PROFILES = {
   'BOXX':  { type:'bond',    thesis:'現金替代品，短期國庫券策略，穩定持有' },
 };
 
-function advisorRec(s, isUS) {
+function advisorRec(s, isUS, posWt) {
   const code = isUS ? s.sym : s.code;
   const profile = STOCK_PROFILES[code] || {};
   const type = profile.type || 'unknown';
   const thesis = profile.thesis || '';
   const pct = s.pct || 0;
   const p = pct.toFixed(1);
+  posWt = posWt || 0;
+
+  let r;
 
   // 債券 ETF — 降息環境持有，輕易不動
   if (type === 'bond') {
-    if (pct > 5)   return { rec: 'HOLD', reason: `${thesis}，降息環境利多，繼續持有領息待價差` };
-    if (pct > -5)  return { rec: 'HOLD', reason: `${thesis}，短期波動正常，持有等降息資本利得` };
-    if (pct > -15) return { rec: 'ADD',  reason: `${thesis}，跌幅 ${p}% 反而是加碼機會，降息後反彈` };
-    return             { rec: 'EVAL', reason: `${thesis}，跌幅 ${p}% 超預期，重新評估利率走向` };
+    if (pct > 5)   r = { rec: 'HOLD', reason: `${thesis}，降息環境利多，繼續持有領息待價差` };
+    else if (pct > -5)  r = { rec: 'HOLD', reason: `${thesis}，短期波動正常，持有等降息資本利得` };
+    else if (pct > -15) r = { rec: 'ADD',  reason: `${thesis}，跌幅 ${p}% 反而是加碼機會，降息後反彈` };
+    else r = { rec: 'EVAL', reason: `${thesis}，跌幅 ${p}% 超預期，重新評估利率走向` };
   }
 
   // 高息 ETF — 核心存股，逢低加碼
-  if (type === 'div-etf') {
-    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利但月配息持續流入，核心存股不動` };
-    if (pct > -5)  return { rec: 'ADD',  reason: `${thesis}，持續定期定額，股息再投入複利加速` };
-    return             { rec: 'ADD',  reason: `${thesis}，下跌提升殖利率，逢低加碼更划算` };
+  else if (type === 'div-etf') {
+    if (pct > 30)  r = { rec: 'HOLD', reason: `${thesis}，${p}% 獲利但月配息持續流入，核心存股不動` };
+    else if (pct > -5)  r = { rec: 'ADD',  reason: `${thesis}，持續定期定額，股息再投入複利加速` };
+    else r = { rec: 'ADD',  reason: `${thesis}，下跌提升殖利率，逢低加碼更划算` };
   }
 
   // 寬基指數 ETF — 長期持有，大跌才加碼
-  if (type === 'etf-tw' || type === 'etf-us') {
-    if (pct > 100) return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅獲利，可分批了結 20-30% 鎖利，保留核心` };
-    if (pct > 50)  return { rec: 'TRIM', reason: `${thesis}，${p}% 顯著獲利，考慮了結 15-20% 提高現金水位` };
-    if (pct > 0)   return { rec: 'HOLD', reason: `${thesis}，表現良好，長期持有勿追高` };
-    return             { rec: 'ADD',  reason: `${thesis}，指數逢跌是買點，加碼攤低成本` };
+  else if (type === 'etf-tw' || type === 'etf-us') {
+    if (pct > 100) r = { rec: 'TRIM', reason: `${thesis}，${p}% 大幅獲利，可分批了結 20-30% 鎖利，保留核心` };
+    else if (pct > 50)  r = { rec: 'TRIM', reason: `${thesis}，${p}% 顯著獲利，考慮了結 15-20% 提高現金水位` };
+    else if (pct > 0)   r = { rec: 'HOLD', reason: `${thesis}，表現良好，長期持有勿追高` };
+    else r = { rec: 'ADD',  reason: `${thesis}，指數逢跌是買點，加碼攤低成本` };
   }
 
   // 成長股 — 基本面優，跌幅是機會
-  if (type === 'growth') {
-    if (pct > 80)  return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅領先，可了結 15-25% 保護利潤，保留核心` };
-    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 良好，基本面持續支撐，繼續持有` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，基本面無變，持有` };
-    if (pct > -30) return { rec: 'ADD',  reason: `${thesis}，${p}% 回調幅度大，基本面強勁，分批加碼機會` };
-    return             { rec: 'EVAL', reason: `${thesis}，${p}% 深度回調，確認基本面是否惡化，設停損` };
+  else if (type === 'growth') {
+    if (pct > 80)  r = { rec: 'TRIM', reason: `${thesis}，${p}% 大幅領先，可了結 15-25% 保護利潤，保留核心` };
+    else if (pct > 30)  r = { rec: 'HOLD', reason: `${thesis}，${p}% 良好，基本面持續支撐，繼續持有` };
+    else if (pct > -15) r = { rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，基本面無變，持有` };
+    else if (pct > -30) r = { rec: 'ADD',  reason: `${thesis}，${p}% 回調幅度大，基本面強勁，分批加碼機會` };
+    else r = { rec: 'EVAL', reason: `${thesis}，${p}% 深度回調，確認基本面是否惡化，設停損` };
   }
 
   // 價值股/配息股 — 看殖利率，不追跌
-  if (type === 'value' || type === 'div') {
-    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利加股息，持有勿輕易賣` };
-    if (pct > -20) return { rec: 'HOLD', reason: `${thesis}，${p}% 波動正常，殖利率撐住，長期存股` };
-    return             { rec: 'EVAL', reason: `${thesis}，${p}% 回跌，重新評估殖利率與基本面` };
+  else if (type === 'value' || type === 'div') {
+    if (pct > 20)  r = { rec: 'HOLD', reason: `${thesis}，${p}% 獲利加股息，持有勿輕易賣` };
+    else if (pct > -20) r = { rec: 'HOLD', reason: `${thesis}，${p}% 波動正常，殖利率撐住，長期存股` };
+    else r = { rec: 'EVAL', reason: `${thesis}，${p}% 回跌，重新評估殖利率與基本面` };
   }
 
   // 景氣循環股 — 等週期回升
-  if (type === 'cyclical') {
-    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，景氣回升已反映，持有等下一波` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，景氣低谷期，持有等待週期反轉` };
-    if (pct > -35) return { rec: 'EVAL', reason: `${thesis}，${p}% 跌幅，評估景氣反轉時間點，設停損` };
-    return             { rec: 'STOP', reason: `${thesis}，${p}% 深度虧損，景氣未見底，建議停損出場` };
+  else if (type === 'cyclical') {
+    if (pct > 20)  r = { rec: 'HOLD', reason: `${thesis}，景氣回升已反映，持有等下一波` };
+    else if (pct > -15) r = { rec: 'HOLD', reason: `${thesis}，景氣低谷期，持有等待週期反轉` };
+    else if (pct > -35) r = { rec: 'EVAL', reason: `${thesis}，${p}% 跌幅，評估景氣反轉時間點，設停損` };
+    else r = { rec: 'STOP', reason: `${thesis}，${p}% 深度虧損，景氣未見底，建議停損出場` };
   }
 
   // 投機/高風險 — 嚴格停損
-  if (type === 'speculative') {
-    if (pct > 30)  return { rec: 'TRIM', reason: `${thesis}，${p}% 獲利，投機部位應分批了結，鎖定利潤` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 小幅回調，暫持有但設緊止損點` };
-    if (pct > -30) return { rec: 'STOP', reason: `${thesis}，${p}% 跌幅超預期，投機部位應停損出場` };
-    return             { rec: 'SELL', reason: `${thesis}，${p}% 嚴重虧損，投機部位無縫手，認賠出場` };
+  else if (type === 'speculative') {
+    if (pct > 30)  r = { rec: 'TRIM', reason: `${thesis}，${p}% 獲利，投機部位應分批了結，鎖定利潤` };
+    else if (pct > -15) r = { rec: 'HOLD', reason: `${thesis}，${p}% 小幅回調，暫持有但設緊止損點` };
+    else if (pct > -30) r = { rec: 'STOP', reason: `${thesis}，${p}% 跌幅超預期，投機部位應停損出場` };
+    else r = { rec: 'SELL', reason: `${thesis}，${p}% 嚴重虧損，投機部位無縫手，認賠出場` };
   }
 
   // 未知股票 fallback — 保守策略
-  if (pct > 50)  return { rec: 'TRIM', reason: `+${p}% 大幅獲利，分批了結 20-30% 鎖利` };
-  if (pct > -15) return { rec: 'HOLD', reason: `${p}% 在合理波動範圍，繼續持有` };
-  if (pct > -30) return { rec: 'EVAL', reason: `${p}% 明顯虧損，設定停損點避免擴大` };
-  return             { rec: 'STOP', reason: `${p}% 深度虧損，嚴格停損評估` };
+  else {
+    if (pct > 50)  r = { rec: 'TRIM', reason: `+${p}% 大幅獲利，分批了結 20-30% 鎖利` };
+    else if (pct > -15) r = { rec: 'HOLD', reason: `${p}% 在合理波動範圍，繼續持有` };
+    else if (pct > -30) r = { rec: 'EVAL', reason: `${p}% 明顯虧損，設定停損點避免擴大` };
+    else r = { rec: 'STOP', reason: `${p}% 深度虧損，嚴格停損評估` };
+  }
+
+  return _applyPosWt(r, posWt, pct);
+}
+
+function _applyPosWt(result, posWt, pct) {
+  if (!posWt || posWt < 5) return result;
+  const isNeg = ['EVAL','STOP','SELL'].includes(result.rec);
+  const isMid = ['TRIM'].includes(result.rec);
+  if (posWt >= 15 && isNeg) {
+    result.rec    = result.rec === 'EVAL' ? 'STOP' : result.rec;
+    result.reason = `【⚠️ 重大部位 ${posWt.toFixed(0)}%，優先處理】${result.reason}`;
+  } else if (posWt >= 10 && isNeg) {
+    result.reason = `【佔比 ${posWt.toFixed(0)}%，建議優先關注】${result.reason}`;
+  } else if (posWt >= 5 && (isNeg || (isMid && pct < 0))) {
+    result.reason = `【佔比 ${posWt.toFixed(0)}%】${result.reason}`;
+  }
+  return result;
 }
 
 function showPage(id) {
@@ -3241,7 +3275,19 @@ function riskCalcStats() {
   const best   = Math.max(...returns);
   const worst  = Math.min(...returns);
 
-  return { returns, cagr, annualVol, sharpe, sortino, maxDD, winRate, best, worst, months, totalReturn };
+  // Value at Risk — parametric (normal dist) and historical (5th percentile)
+  const z95 = 1.645;
+  const varMonthParam = monthlyVol * z95;                                      // % per month
+  const varYearParam  = annualVol  * z95;                                      // % per year
+  const sorted5th     = [...returns].sort((a, b) => a - b);
+  const histVaR95     = -sorted5th[Math.max(0, Math.floor(n * 0.05) - 1)];    // positive value = loss
+
+  // TWD amount at risk (from latest portfolio value)
+  const latestVal = MONTHLY[MONTHLY.length - 1]?.v || 0;
+  const varMonthTWD = Math.round(latestVal * varMonthParam / 100);
+
+  return { returns, cagr, annualVol, sharpe, sortino, maxDD, winRate, best, worst,
+           months, totalReturn, varMonthParam, varYearParam, histVaR95, varMonthTWD };
 }
 
 function riskCalcCashFlow() {
@@ -3345,9 +3391,11 @@ function renderRiskKPIs(stats) {
   }
 
   const sharpeColor = stats.sharpe >= 1 ? 'var(--green)' : stats.sharpe >= 0.5 ? 'var(--yellow)' : 'var(--red)';
-  const ddColor = stats.maxDD > 15 ? 'var(--red)' : stats.maxDD > 8 ? 'var(--yellow)' : 'var(--green)';
+  const ddColor     = stats.maxDD > 15 ? 'var(--red)' : stats.maxDD > 8 ? 'var(--yellow)' : 'var(--green)';
   const sharpeLabel = stats.sharpe >= 1.5 ? '優秀' : stats.sharpe >= 1 ? '良好' : stats.sharpe >= 0.5 ? '尚可' : '偏低';
-  const ddLabel = stats.maxDD > 15 ? '高回撤風險' : stats.maxDD > 8 ? '中等回撤' : '回撤可控';
+  const ddLabel     = stats.maxDD > 15 ? '高回撤風險' : stats.maxDD > 8 ? '中等回撤' : '回撤可控';
+  const dataWarn    = stats.months < 24 ? `⚠️ 僅 ${stats.months} 個月，可靠性低` : `無風險利率 3%`;
+  const varColor    = stats.varMonthParam > 10 ? 'var(--red)' : stats.varMonthParam > 6 ? 'var(--yellow)' : 'var(--green)';
 
   el.innerHTML = `
     <div class="kpi-card">
@@ -3363,12 +3411,12 @@ function renderRiskKPIs(stats) {
     <div class="kpi-card">
       <div class="kpi-label">Sharpe Ratio</div>
       <div class="kpi-value" style="color:${sharpeColor}">${stats.sharpe.toFixed(2)}</div>
-      <div class="kpi-sub neutral">${sharpeLabel}（無風險利率 3%）</div>
+      <div class="kpi-sub ${stats.months < 24 ? 'down' : 'neutral'}">${sharpeLabel} · ${dataWarn}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">Sortino Ratio</div>
       <div class="kpi-value" style="color:${stats.sortino >= 1 ? 'var(--green)' : 'var(--yellow)'}">${stats.sortino.toFixed(2)}</div>
-      <div class="kpi-sub neutral">下行風險調整報酬</div>
+      <div class="kpi-sub ${stats.months < 24 ? 'down' : 'neutral'}">下行風險調整 · ${dataWarn}</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">最大回撤</div>
@@ -3379,6 +3427,16 @@ function renderRiskKPIs(stats) {
       <div class="kpi-label">月勝率</div>
       <div class="kpi-value ${stats.winRate >= 60 ? 'up' : 'neutral'}">${stats.winRate.toFixed(0)}%</div>
       <div class="kpi-sub neutral">最佳 ${stats.best >= 0 ? '+' : ''}${stats.best.toFixed(1)}% / 最差 ${stats.worst.toFixed(1)}%</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">月 95% VaR（參數法）</div>
+      <div class="kpi-value" style="color:${varColor}">-${stats.varMonthParam.toFixed(1)}%</div>
+      <div class="kpi-sub neutral">≈ -$${stats.varMonthTWD.toLocaleString()} TWD</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">年 95% VaR（參數法）</div>
+      <div class="kpi-value" style="color:${stats.varYearParam > 30 ? 'var(--red)' : 'var(--yellow)'}">-${stats.varYearParam.toFixed(1)}%</div>
+      <div class="kpi-sub neutral">歷史最差月 -${stats.histVaR95.toFixed(1)}% (5th pct)</div>
     </div>`;
 }
 
@@ -3749,6 +3807,11 @@ function renderTopHoldings() {
   const rows = top10.map((item, i) => {
     const pct = totalMV > 0 ? item.mv / totalMV * 100 : 0;
     cumPct += pct;
+    const isTW = item.region === '台股';
+    const mockS = isTW ? { code: item.code, pct: item.pct_gain } : { sym: item.code, pct: item.pct_gain };
+    const ar = advisorRec(mockS, !isTW, pct);
+    const recColors = { HOLD:'var(--blue)', ADD:'var(--green)', TRIM:'var(--yellow)', EVAL:'var(--orange)', STOP:'var(--red)', SELL:'var(--red)' };
+    const recBadge = `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${recColors[ar.rec]||'var(--text2)'};color:#fff;white-space:nowrap">${ar.rec}</span>`;
     return `<tr>
       <td style="color:var(--text2);font-size:12px">${i + 1}</td>
       <td><span class="ticker">${item.code}</span></td>
@@ -3765,6 +3828,8 @@ function renderTopHoldings() {
       </td>
       <td style="font-size:11px;color:var(--text2)">${cumPct.toFixed(1)}%</td>
       <td class="${item.pct_gain >= 0 ? 'up' : 'down'}">${item.pct_gain >= 0 ? '+' : ''}${item.pct_gain.toFixed(1)}%</td>
+      <td>${recBadge}</td>
+      <td style="color:var(--text2);font-size:11px;max-width:180px">${ar.reason}</td>
     </tr>`;
   }).join('');
 
@@ -3778,7 +3843,7 @@ function renderTopHoldings() {
     ${concAlert}
     <div style="overflow-x:auto;margin-top:10px">
       <table>
-        <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th></tr></thead>
+        <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th><th>建議</th><th>分析師備註</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
@@ -3823,6 +3888,247 @@ function renderCorrelationMatrix(corrData) {
   el.innerHTML = html;
 }
 
+// ─────── DIVIDEND CALENDAR ───────
+const DIV_SCHEDULE = {
+  // 月配
+  '00878': { yield:5.58, mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  '00900': { yield:7.0,  mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  '00937B':{ yield:3.2,  mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  '00725B':{ yield:3.0,  mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  '00751B':{ yield:3.5,  mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  '00720B':{ yield:3.5,  mo:[1,2,3,4,5,6,7,8,9,10,11,12] },
+  // 季配
+  '00713': { yield:5.04, mo:[3,6,9,12] },
+  '00916': { yield:4.5,  mo:[3,6,9,12] },
+  '00981A':{ yield:3.0,  mo:[3,6,9,12] },
+  '00991A':{ yield:3.5,  mo:[3,6,9,12] },
+  '0050':  { yield:3.5,  mo:[1,4,7,10] },
+  '2330':  { yield:2.5,  mo:[1,4,7,10] },
+  // 半年配
+  '006208':{ yield:4.0,  mo:[1,7] },
+  // 年配
+  '0052':  { yield:2.5,  mo:[7] },
+  '00924': { yield:1.5,  mo:[7] },
+  '00646': { yield:2.5,  mo:[7] },
+  '00858': { yield:2.0,  mo:[7] },
+  '2881':  { yield:4.5,  mo:[7] },
+  '2890':  { yield:4.5,  mo:[7] },
+  '2603':  { yield:5.0,  mo:[7] },
+  '1301':  { yield:5.0,  mo:[7] },
+  '1537':  { yield:4.0,  mo:[7] },
+  '1580':  { yield:3.5,  mo:[7] },
+  '1513':  { yield:3.0,  mo:[7] },
+  '2357':  { yield:3.5,  mo:[7] },
+  '5871':  { yield:4.0,  mo:[7] },
+  '6763':  { yield:3.0,  mo:[7] },
+  '2348':  { yield:0,    mo:[] },
+  // 美股（USD，轉換台幣）
+  'SCHD':  { yield:3.5,  mo:[3,6,9,12], usd:true },
+  'SPY':   { yield:1.3,  mo:[3,6,9,12], usd:true },
+  'MSFT':  { yield:0.8,  mo:[3,6,9,12], usd:true },
+  'NVDA':  { yield:0.03, mo:[3,6,9,12], usd:true },
+  'QQQ':   { yield:0.5,  mo:[3,6,9,12], usd:true },
+};
+
+function renderDividendCalendar() {
+  const el = document.getElementById('dividendCalendarDetail');
+  if (!el) return;
+
+  const income = Array(12).fill(0);
+  const items  = Array.from({ length: 12 }, () => []);
+
+  const addDiv = (code, mv_twd) => {
+    const s = DIV_SCHEDULE[code];
+    if (!s || s.yield === 0 || mv_twd <= 0) return;
+    const perPeriod = mv_twd * s.yield / 100 / s.mo.length;
+    s.mo.forEach(m => {
+      income[m - 1] += perPeriod;
+      items[m - 1].push({ code, amount: perPeriod });
+    });
+  };
+
+  TW_HOLD.forEach(h => addDiv(h.code, h.mv || 0));
+  [...US_MAIN, ...US_ROY].forEach(h => addDiv(h.sym, (h.mv || 0) * USD_TWD));
+
+  const annualTotal = income.reduce((a, b) => a + b, 0);
+  const maxIncome   = Math.max(...income, 1);
+  const MO_ZH = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const now    = new Date();
+  const curMo  = now.getMonth(); // 0-indexed
+
+  const bars = income.map((v, i) => {
+    const pct = (v / maxIncome * 100).toFixed(0);
+    const isCur = i === curMo;
+    const topItems = items[i].sort((a, b) => b.amount - a.amount).slice(0, 4);
+    const tip = topItems.map(it => `${it.code} $${Math.round(it.amount).toLocaleString()}`).join(' · ');
+    return `<div style="flex:1;text-align:center;min-width:52px" title="${tip}">
+      <div style="font-size:10px;color:${isCur ? 'var(--blue)' : 'var(--text2)'};font-weight:${isCur ? 700 : 400};margin-bottom:3px">${MO_ZH[i]}</div>
+      <div style="height:72px;display:flex;align-items:flex-end;justify-content:center">
+        <div style="width:28px;background:${isCur ? 'var(--blue)' : 'var(--purple)'};border-radius:4px 4px 0 0;
+          height:${Math.max(pct, v > 0 ? 4 : 0)}%;opacity:${v > 0 ? 1 : 0.15};transition:height .4s"></div>
+      </div>
+      <div style="font-size:10px;font-weight:600;color:${v > 0 ? 'var(--text)' : 'var(--text2)'};margin-top:3px">
+        ${v > 0 ? '$' + (v >= 10000 ? Math.round(v/10000) + '萬' : Math.round(v/1000) + 'K') : '—'}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Top contributors
+  const allContrib = {};
+  TW_HOLD.forEach(h => {
+    const s = DIV_SCHEDULE[h.code]; if (!s || !s.yield) return;
+    allContrib[h.name] = (h.mv || 0) * s.yield / 100;
+  });
+  [...US_MAIN, ...US_ROY].forEach(h => {
+    const s = DIV_SCHEDULE[h.sym]; if (!s || !s.yield) return;
+    allContrib[h.sym] = (h.mv || 0) * USD_TWD * s.yield / 100;
+  });
+  const topDiv = Object.entries(allContrib).sort((a,b) => b[1]-a[1]).slice(0, 6);
+
+  el.innerHTML = `
+    <div style="display:flex;gap:2px;padding:4px 0 0">${bars}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--text2)">預估年股息總收入</div>
+      <div style="font-size:18px;font-weight:700;color:var(--purple)">$${Math.round(annualTotal).toLocaleString()} TWD</div>
+    </div>
+    <div style="margin-top:12px">
+      <div style="font-size:11px;color:var(--text2);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px">主要股息來源</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${topDiv.map(([name, amt]) => `<span style="background:var(--surface2);border-radius:6px;padding:3px 8px;font-size:11px">
+          ${name} <span style="color:var(--purple);font-weight:600">$${Math.round(amt/1000)}K</span>
+        </span>`).join('')}
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text2);margin-top:8px">＊依現持倉市值 × 估算殖利率，月份為配息入帳月（約略估算）。實際依各ETF公告為準。</div>`;
+}
+
+// ─────── REBALANCING ACTION PLAN ───────
+function renderRebalancingPlan() {
+  const el = document.getElementById('rebalancingDetail');
+  if (!el) return;
+
+  const twMV     = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV     = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const bankMV   = SHEET_ALLOC.ready ? SHEET_ALLOC.bank   : 0;
+  const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+  const total    = twMV + usMV + bankMV + cryptoMV;
+  if (total === 0) { el.innerHTML = '<div style="color:var(--text2);text-align:center;padding:20px">無持倉資料</div>'; return; }
+
+  // Target allocation (%)
+  const TARGETS = { tw:58, us:32, bank:7, crypto:3 };
+  const curr = {
+    tw:     twMV / total * 100,
+    us:     usMV / total * 100,
+    bank:   bankMV / total * 100,
+    crypto: cryptoMV / total * 100,
+  };
+
+  // Allocation comparison table
+  const META = {
+    tw:     { label:'🇹🇼 台股',      color:'var(--blue)' },
+    us:     { label:'🇺🇸 美股',      color:'var(--green)' },
+    bank:   { label:'🏦 銀行現金',   color:'var(--red)' },
+    crypto: { label:'₿ 加密貨幣',   color:'var(--yellow)' },
+  };
+
+  const tableRows = Object.entries(TARGETS).map(([k, tgt]) => {
+    const c = curr[k];
+    const d = c - tgt;
+    const ok = Math.abs(d) < 2;
+    const statusTxt   = ok ? '✅ 達標' : d > 0 ? `↑ 超配 ${d.toFixed(1)}%` : `↓ 低配 ${Math.abs(d).toFixed(1)}%`;
+    const statusColor = ok ? 'var(--green)' : d > 0 ? 'var(--red)' : 'var(--yellow)';
+    const amtTWD      = Math.abs(d) / 100 * total;
+    return `<tr>
+      <td><span style="color:${META[k].color}">●</span> ${META[k].label}</td>
+      <td style="font-family:monospace;font-weight:600">${c.toFixed(1)}%</td>
+      <td style="font-family:monospace;color:var(--text2)">${tgt}%</td>
+      <td class="${d > 0 ? 'down' : d < -0.5 ? 'up' : 'neutral'}" style="font-family:monospace">
+        ${d > 0 ? '+' : ''}${d.toFixed(1)}%
+      </td>
+      <td style="font-family:monospace;color:var(--text2)">$${Math.round(amtTWD/10000)}萬</td>
+      <td style="color:${statusColor};font-weight:600;font-size:12px">${statusTxt}</td>
+    </tr>`;
+  }).join('');
+
+  // Action items
+  const actions = [];
+
+  // Over-allocated Taiwan → suggest trimming
+  const twDelta = curr.tw - TARGETS.tw;
+  if (twDelta > 2) {
+    const trimTWD = total * twDelta / 100;
+    const candidates = [...TW_HOLD]
+      .filter(h => (h.mv || 0) > 50000)
+      .sort((a, b) => {
+        // Priority: TRIM/STOP first, then by gain desc
+        const aScore = ['TRIM','STOP'].includes(a.rec) ? 1000 + a.pct : a.pct;
+        const bScore = ['TRIM','STOP'].includes(b.rec) ? 1000 + b.pct : b.pct;
+        return bScore - aScore;
+      })
+      .slice(0, 4);
+
+    actions.push({
+      type: 'sell', icon: '⬇️', cls: 'alert-warn',
+      title: `台股超配 +${twDelta.toFixed(1)}%，需減倉約 $${Math.round(trimTWD/10000)}萬`,
+      lines: candidates.map(h => {
+        const trimShares = Math.ceil(trimTWD * 0.25 / candidates.length / (h.price || h.avg) / 1000) * 1000;
+        return `<strong>${h.name}(${h.code})</strong> +${h.pct.toFixed(1)}%，市值 $${Math.round((h.mv||0)/10000)}萬 → 減倉 ${trimShares} 股（約 $${Math.round(trimShares*(h.price||h.avg)/10000)}萬）`;
+      }),
+    });
+  }
+
+  // Under-allocated US → suggest buying
+  const usDelta = TARGETS.us - curr.us;
+  if (usDelta > 2) {
+    const buyTWD = total * usDelta / 100;
+    const buyUSD = Math.round(buyTWD / USD_TWD);
+    const qqqEntry = [...US_MAIN, ...US_ROY].filter(s => s.sym === 'QQQ').reduce((s,h) => s+(h.mv||0), 0);
+    const qqqGap   = Math.max(0, QQQ_TARGETS.QQQ - qqqEntry);
+
+    actions.push({
+      type: 'buy', icon: '⬆️', cls: 'alert-info',
+      title: `美股低配 -${usDelta.toFixed(1)}%，建議增倉 ~$${buyUSD.toLocaleString()} USD`,
+      lines: [
+        `QQQ：補至策略目標 $${QQQ_TARGETS.QQQ.toLocaleString()} USD（差 $${Math.round(qqqGap).toLocaleString()} USD ≈ ${Math.ceil(qqqGap/([...US_MAIN,...US_ROY].find(s=>s.sym==='QQQ')?.price||570))} 股）`,
+        `SPY：作為 S&P500 核心配置，可持續定期定額`,
+        `SCHD：美股高股息，補足至 $3,000+ USD`,
+      ],
+    });
+  }
+
+  // Stop-loss urgency
+  const stopList = TW_HOLD.filter(h => (h.rec === 'STOP' || h.pct < -30) && (h.mv || 0) > 30000);
+  if (stopList.length > 0) {
+    actions.push({
+      type: 'stop', icon: '🛑', cls: 'alert-danger',
+      title: `${stopList.length} 檔部位建議停損評估（單倉 > $3萬，回撤 > -30%）`,
+      lines: stopList.map(h => `<strong>${h.name}(${h.code})</strong> ${h.pct.toFixed(1)}%，市值 $${Math.round((h.mv||0)/10000)}萬 → ${h.reason.slice(0,45)}`),
+    });
+  }
+
+  const actionsHTML = actions.length
+    ? actions.map(a => `<div class="alert ${a.cls}" style="margin-bottom:8px">
+        <div class="alert-icon">${a.icon}</div>
+        <div>
+          <div style="font-weight:600;margin-bottom:5px">${a.title}</div>
+          ${a.lines.map(l => `<div style="font-size:12px;margin-top:3px;padding-left:4px">· ${l}</div>`).join('')}
+        </div>
+      </div>`).join('')
+    : `<div class="alert alert-success"><div class="alert-icon">✅</div><div>目前配置接近目標，無需大幅調整</div></div>`;
+
+  el.innerHTML = `
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table>
+        <thead><tr><th>類別</th><th>現況</th><th>目標</th><th>偏差</th><th>調整金額</th><th>狀態</th></tr></thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+    </div>
+    ${actionsHTML}
+    <div style="font-size:11px;color:var(--text2);margin-top:8px">
+      目標配置：台股 58% / 美股 32% / 銀行現金 7% / 加密 3%（偏差 <2% 視為達標）
+    </div>`;
+}
+
 function initRiskPage() {
   const stats    = riskCalcStats();
   const cf       = riskCalcCashFlow();
@@ -3840,6 +4146,8 @@ function initRiskPage() {
   renderPerfAttribution();
   renderTopHoldings();
   renderCorrelationMatrix(corrData);
+  renderDividendCalendar();
+  renderRebalancingPlan();
 
   // Show last-fetch time label
   const lbl = document.getElementById('benchLastUpdate');
