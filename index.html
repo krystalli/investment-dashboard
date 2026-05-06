@@ -218,6 +218,12 @@
   .bt-value { font-size: 20px; font-weight: 700; }
   .bt-return { font-size: 12px; margin-top: 2px; }
 
+  /* ACTION DRAWER */
+  .action-drawer { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:var(--surface); border-left:1px solid var(--border); z-index:2000; transition:right .25s; overflow-y:auto; padding:20px; box-sizing:border-box; }
+  .action-drawer.open { right:0; }
+  .action-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1999; display:none; }
+  .action-overlay.open { display:block; }
+
   /* TICKER BADGE */
   .ticker { font-family: monospace; font-size: 11px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--blue); }
 
@@ -300,6 +306,12 @@
       <div class="kpi-value neutral" id="kpiUsPct">—</div>
       <div class="kpi-sub neutral">Firstrade + Binance</div>
     </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">🤖 AI 洞察摘要</div>
+    <div id="aiInsightPanel" style="margin-bottom:12px"></div>
+    <button onclick="showActionPlan()" style="width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.5px">⚡ 今日行動建議 →</button>
   </div>
 
   <div class="grid-2">
@@ -4537,6 +4549,14 @@ function generateChatResponse(question) {
     <input type="text" id="chatInput" placeholder="輸入投資問題..." onkeypress="chatKeypress(event)">
     <button onclick="sendChat()">送出</button>
   </div>
+</div>
+<div class="action-overlay" id="actionOverlay" onclick="closeActionPlan()"></div>
+<div class="action-drawer" id="actionDrawer">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-weight:700;font-size:16px">⚡ 今日行動建議</div>
+    <button onclick="closeActionPlan()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer">✕</button>
+  </div>
+  <div id="actionDrawerContent">載入中…</div>
 </div>
 </body>
 </html>
