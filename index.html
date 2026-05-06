@@ -1521,6 +1521,7 @@ function renderOverviewKPIs() {
     const tot = twMV + mainMV + royMV;
     if (tot > 0) set('kpiUsPct', ((mainMV + royMV) / tot * 100).toFixed(1) + '%', 'kpi-value neutral');
   }
+  renderAiInsights();
 }
 
 function renderAllocDetail() {
@@ -1667,11 +1668,45 @@ function buildAllocData() {
 }
 
 function buildGrowthData() {
-  return {
-    labels: MONTHLY.map(r => r.m),
-    datasets: [{ label: '總資產', data: MONTHLY.map(r => r.v),
-      borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 4 }]
+  const hasRealSPY  = BENCHMARK_DATA.SPY  && Object.keys(BENCHMARK_DATA.SPY).length  > 2;
+  const hasRealTW50 = BENCHMARK_DATA.TW50 && Object.keys(BENCHMARK_DATA.TW50).length > 2;
+  const spyTable    = hasRealSPY  ? BENCHMARK_DATA.SPY  : SP500_MONTHLY;
+  const tw50Table   = hasRealTW50 ? BENCHMARK_DATA.TW50 : TW50_MONTHLY;
+  const hasBench    = MONTHLY.length > 1;
+
+  const buildBenchLine = (table) => {
+    const vals = [MONTHLY[0].v];
+    MONTHLY.slice(1).forEach(r => {
+      const ret = table[r.m] != null ? table[r.m] : 0;
+      vals.push(+(vals[vals.length - 1] * (1 + ret / 100)).toFixed(0));
+    });
+    return vals.map(Number);
   };
+
+  const datasets = [
+    { label: '總資產', data: MONTHLY.map(r => r.v),
+      borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 4 }
+  ];
+
+  if (hasBench) {
+    datasets.push({
+      label: 'S&P500',
+      data: buildBenchLine(spyTable),
+      borderColor: '#f0883e', backgroundColor: 'transparent',
+      fill: false, tension: 0.4, pointRadius: 2, borderDash: [5, 3]
+    });
+    datasets.push({
+      label: '0050',
+      data: buildBenchLine(tw50Table),
+      borderColor: '#3fb950', backgroundColor: 'transparent',
+      fill: false, tension: 0.4, pointRadius: 2, borderDash: [3, 3]
+    });
+  }
+
+  const gb = document.getElementById('growthBadge');
+  if (gb && hasBench) gb.textContent = '含基準比較';
+
+  return { labels: MONTHLY.map(r => r.m), datasets };
 }
 
 function rerenderCharts() {
@@ -4518,6 +4553,219 @@ function generateChatResponse(question) {
     • ${twByLoss[0]?.name} ${twByLoss[0]?.pct?.toFixed(1)}% — ${advisorRec(twByLoss[0],false).reason}<br>
     • ${twByLoss[1]?.name} ${twByLoss[1]?.pct?.toFixed(1)}% — ${advisorRec(twByLoss[1],false).reason}` });
   return r.slice(0,3);
+}
+
+function computeAiInsights() {
+  const insights = [];
+
+  const allUS   = [...US_MAIN, ...US_ROY];
+  const twMV    = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV    = allUS.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const totalMV = twMV + usMV;
+
+  // 1. Portfolio vs S&P500
+  if (MONTHLY.length > 1) {
+    const portRet = (MONTHLY[MONTHLY.length - 1].v - MONTHLY[0].v) / MONTHLY[0].v * 100;
+    const hasRealSPY = BENCHMARK_DATA.SPY && Object.keys(BENCHMARK_DATA.SPY).length > 2;
+    const spyTable   = hasRealSPY ? BENCHMARK_DATA.SPY : SP500_MONTHLY;
+    let spyCompound = 1;
+    MONTHLY.slice(1).forEach(r => {
+      const ret = spyTable[r.m] != null ? spyTable[r.m] : 0;
+      spyCompound *= (1 + ret / 100);
+    });
+    const spyRet  = (spyCompound - 1) * 100;
+    const diff    = portRet - spyRet;
+    const pX = portRet.toFixed(1), pY = spyRet.toFixed(1), pZ = Math.abs(diff).toFixed(1);
+    if (diff > 5) {
+      insights.push({ type: 'success', text: `🏆 你的報酬 +${pX}% 跑贏 S&P500（+${pY}%），超額 +${pZ}%` });
+    } else if (diff < -5) {
+      insights.push({ type: 'warn', text: `📉 你的報酬 +${pX}% 落後 S&P500（+${pY}%），落差 ${pZ}%` });
+    }
+  }
+
+  // 2. Deep-loss positions (pct < -30)
+  const deepLoss = TW_HOLD.filter(h => h.pct < -30);
+  if (deepLoss.length > 0) {
+    const names = deepLoss.map(h => h.name).join('、');
+    insights.push({ type: 'danger', text: `🚨 ${names} 跌幅超 -30%，建議重新評估停損` });
+  }
+
+  // 3. Monthly streak (last 3 months)
+  if (MONTHLY.length >= 4) {
+    const last3 = MONTHLY.slice(-3);
+    const prev3 = MONTHLY.slice(-4, -3);
+    const rets   = last3.map((r, i) => r.v - (i === 0 ? prev3[0].v : last3[i - 1].v));
+    if (rets.every(d => d > 0)) {
+      insights.push({ type: 'success', text: '📈 連續 3 個月成長' });
+    } else if (rets.every(d => d < 0)) {
+      insights.push({ type: 'danger', text: '⚠️ 連續 3 個月下滑，留意趨勢' });
+    }
+  }
+
+  // 4. Top position concentration
+  if (totalMV > 0) {
+    const allHoldings = [
+      ...TW_HOLD.map(h => ({ name: h.name, mv: h.mv || 0 })),
+      ...allUS.map(h => ({ name: h.sym, mv: (h.mv || 0) * USD_TWD }))
+    ];
+    const top = allHoldings.reduce((a, b) => a.mv > b.mv ? a : b, { mv: 0 });
+    const topPct = (top.mv / totalMV * 100);
+    if (topPct > 20) {
+      insights.push({ type: 'warn', text: `⚠️ ${top.name} 單一部位 ${topPct.toFixed(1)}%，集中風險偏高` });
+    }
+  }
+
+  // 5. Sharpe ratio
+  const stats = riskCalcStats();
+  if (stats && stats.months >= 12) {
+    const sharpeStr = stats.sharpe.toFixed(2);
+    if (stats.sharpe < 0.5) {
+      insights.push({ type: 'warn', text: `📊 夏普比率 ${sharpeStr} 偏低，風險報酬比待改善` });
+    } else if (stats.sharpe >= 1.5) {
+      insights.push({ type: 'success', text: `✨ 夏普比率 ${sharpeStr}，風險調整後報酬優秀` });
+    }
+  }
+
+  // 6. ADD opportunities (pct < -5)
+  const addOpp = [...TW_HOLD, ...allUS].filter(h => {
+    const r = advisorRec(h, allUS.includes(h));
+    return r.rec === 'ADD' && h.pct < -5;
+  });
+  if (addOpp.length > 0) {
+    insights.push({ type: 'info', text: `💡 ${addOpp.length} 檔持倉具加碼機會，詳見行動建議` });
+  }
+
+  return insights;
+}
+
+function renderAiInsights() {
+  const el = document.getElementById('aiInsightPanel');
+  if (!el) return;
+  const insights = computeAiInsights();
+  if (!insights.length) { el.innerHTML = '<div style="color:var(--text2);font-size:13px">暫無特別洞察</div>'; return; }
+  const bgMap = {
+    success: 'rgba(63,185,80,.1)',
+    warn:    'rgba(227,179,65,.1)',
+    danger:  'rgba(248,81,73,.1)',
+    info:    'rgba(88,166,255,.1)'
+  };
+  const clrMap = {
+    success: 'var(--green)',
+    warn:    'var(--yellow)',
+    danger:  'var(--red)',
+    info:    'var(--blue)'
+  };
+  el.innerHTML = insights.map(ins => `
+    <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-radius:8px;margin-bottom:6px;background:${bgMap[ins.type]}">
+      <span style="color:${clrMap[ins.type]};font-size:14px;line-height:1.5">${ins.text}</span>
+    </div>`).join('');
+}
+
+function computeActionPlan() {
+  const allUS  = [...US_MAIN, ...US_ROY];
+  const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV   = allUS.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const total  = twMV + usMV;
+  const twPct  = total > 0 ? twMV / total * 100 : 0;
+  const usPctV = total > 0 ? usMV / total * 100 : 0;
+
+  // 今日總結
+  let verdict = '';
+  if (MONTHLY.length >= 2) {
+    const last2 = MONTHLY.slice(-2);
+    const trend = last2[1].v > last2[0].v ? '上升' : '下滑';
+    const stats = riskCalcStats();
+    const sharpeOk = stats && stats.sharpe >= 1.0;
+    verdict = `近期組合走勢${trend}，${sharpeOk ? '風險調整後表現良好' : '風險報酬比尚待優化'}，建議聚焦以下行動。`;
+  } else {
+    verdict = '資料不足，請同步後查看完整建議。';
+  }
+
+  // ADD recommendations
+  const addRecs = [];
+  TW_HOLD.forEach(h => {
+    const r = advisorRec(h, false);
+    if (r.rec === 'ADD') addRecs.push({ name: h.name, ticker: h.code, pct: h.pct, reason: r.reason, isUS: false });
+  });
+  allUS.forEach(h => {
+    const r = advisorRec(h, true);
+    if (r.rec === 'ADD') addRecs.push({ name: h.sym, ticker: h.sym, pct: h.pct, reason: r.reason, isUS: true });
+  });
+  addRecs.sort((a, b) => a.pct - b.pct);
+  const topAdd = addRecs.slice(0, 3);
+
+  // TRIM/STOP/EVAL recommendations
+  const reduceRecs = [];
+  TW_HOLD.forEach(h => {
+    const r = advisorRec(h, false);
+    if (['TRIM','STOP','EVAL'].includes(r.rec)) reduceRecs.push({ name: h.name, ticker: h.code, pct: h.pct, rec: r.rec, reason: r.reason });
+  });
+  allUS.forEach(h => {
+    const r = advisorRec(h, true);
+    if (['TRIM','STOP','EVAL'].includes(r.rec)) reduceRecs.push({ name: h.sym, ticker: h.sym, pct: h.pct, rec: r.rec, reason: r.reason });
+  });
+  reduceRecs.sort((a, b) => a.pct - b.pct);
+  const topReduce = reduceRecs.slice(0, 3);
+
+  // Rebalance hints
+  const rebalance = [];
+  if (twPct < 50) rebalance.push(`台股佔比 ${twPct.toFixed(1)}% 偏低（目標 50-65%），可適度加碼台股 ETF`);
+  else if (twPct > 65) rebalance.push(`台股佔比 ${twPct.toFixed(1)}% 偏高（目標 50-65%），可適度減碼獲利部位`);
+  if (usPctV < 25) rebalance.push(`美股佔比 ${usPctV.toFixed(1)}% 偏低（目標 25-40%），可加碼 QQQ/SPY`);
+  else if (usPctV > 40) rebalance.push(`美股佔比 ${usPctV.toFixed(1)}% 偏高（目標 25-40%），可適度減倉`);
+  if (!rebalance.length) rebalance.push('台股/美股比例均在目標範圍，維持現有配置');
+
+  return { verdict, topAdd, topReduce, rebalance };
+}
+
+function showActionPlan() {
+  document.getElementById('actionDrawer').classList.add('open');
+  document.getElementById('actionOverlay').classList.add('open');
+  const plan = computeActionPlan();
+  const recColor = { ADD:'var(--green)', TRIM:'var(--yellow)', STOP:'var(--red)', EVAL:'var(--purple)' };
+
+  const addRows = plan.topAdd.length
+    ? plan.topAdd.map(h => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
+            <span style="color:${h.pct>=0?'var(--green)':'var(--red)'};font-size:12px">${h.pct>0?'+':''}${h.pct.toFixed(1)}%</span>
+          </div>
+          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
+        </div>`).join('')
+    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無明顯加碼機會</div>';
+
+  const reduceRows = plan.topReduce.length
+    ? plan.topReduce.map(h => `
+        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
+            <span style="display:flex;align-items:center;gap:6px">
+              <span style="color:${recColor[h.rec]||'var(--text2)'};font-weight:700;font-size:11px">${h.rec}</span>
+              <span style="color:var(--red);font-size:12px">${h.pct.toFixed(1)}%</span>
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
+        </div>`).join('')
+    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無需緊急減碼</div>';
+
+  const rebalRows = plan.rebalance.map(t => `<div style="font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">${t}</div>`).join('');
+
+  document.getElementById('actionDrawerContent').innerHTML = `
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
+      ${plan.verdict}
+    </div>
+    <div style="font-weight:700;font-size:13px;color:var(--green);margin-bottom:8px">🟢 建議加碼</div>
+    ${addRows}
+    <div style="font-weight:700;font-size:13px;color:var(--red);margin:16px 0 8px">🔴 建議減碼/停損</div>
+    ${reduceRows}
+    <div style="font-weight:700;font-size:13px;color:var(--yellow);margin:16px 0 8px">⚖️ 再平衡提示</div>
+    ${rebalRows}`;
+}
+
+function closeActionPlan() {
+  document.getElementById('actionDrawer').classList.remove('open');
+  document.getElementById('actionOverlay').classList.remove('open');
 }
 </script>
 
