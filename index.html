@@ -776,7 +776,8 @@
   </div>
 
   <!-- Level 1: Risk KPIs -->
-  <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:16px"></div>
+  <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:8px"></div>
+  <div id="riskKpiExplain" style="margin-bottom:16px"></div>
 
   <!-- Level 1: Benchmark Comparison -->
   <div class="card">
@@ -3519,6 +3520,49 @@ function renderRiskKPIs(stats) {
       <div class="kpi-value" style="color:${stats.varYearParam > 30 ? 'var(--red)' : 'var(--yellow)'}">-${stats.varYearParam.toFixed(1)}%</div>
       <div class="kpi-sub neutral">歷史最差月 -${stats.histVaR95.toFixed(1)}% (5th pct)</div>
     </div>`;
+
+  // Append explanation panel below KPI grid
+  const explainEl = document.getElementById('riskKpiExplain');
+  if (explainEl) explainEl.innerHTML = `
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer;font-size:12px;color:var(--text2);padding:6px 0;user-select:none">
+        📖 指標說明（點擊展開）
+      </summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:10px;font-size:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">年化報酬 (CAGR)</div>
+          <div style="color:var(--text2);line-height:1.6">把近期月份的漲跌換算成「每年平均賺幾%」。例如 +15% 代表若持續這個速度，一年後資產成長 15%。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">年化波動率</div>
+          <div style="color:var(--text2);line-height:1.6">資產每個月漲跌幅的「不穩定程度」換算成年度。數字越大代表起伏越劇烈。台股一般在 15-25%，波動率 &lt;15% 算穩健。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">Sharpe Ratio（夏普比率）</div>
+          <div style="color:var(--text2);line-height:1.6">「承擔每一單位風險，能賺多少超額報酬」。數字越高越好：≥1.5 優秀、≥1.0 良好、≥0.5 尚可、&lt;0.5 偏低（風險太高或報酬太低）。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">Sortino Ratio（索提諾比率）</div>
+          <div style="color:var(--text2);line-height:1.6">和夏普比率類似，但只計算「下跌的風險」，忽略上漲波動。比夏普更能反映真正令人擔心的虧損風險。通常 Sortino 比 Sharpe 高是好現象。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">最大回撤（Max Drawdown）</div>
+          <div style="color:var(--text2);line-height:1.6">歷史上從最高點跌到最低點的最大跌幅。例如 -12% 代表曾有一段時間資產比最高點少了 12%。這是衡量「最壞情況」的指標。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">月勝率</div>
+          <div style="color:var(--text2);line-height:1.6">過去這幾個月中，有幾%的月份是正報酬。例如 70% 代表 10 個月有 7 個月是賺錢的。穩健型投資組合通常 60% 以上。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">月 95% VaR（風險值）</div>
+          <div style="color:var(--text2);line-height:1.6">「在正常市場下，下個月有 95% 機率損失不會超過這個數字」。例如 -8% 代表正常情況下單月虧損幾乎不會超過 8%（極端黑天鵝除外）。</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px">
+          <div style="font-weight:600;color:var(--text);margin-bottom:4px">年 95% VaR（風險值）</div>
+          <div style="color:var(--text2);line-height:1.6">同上但換算成整年度的風險。月 VaR × √12。括號內的「歷史最差月」是實際數據中最差的 5% 月份平均值，作為補充驗證。</div>
+        </div>
+      </div>
+    </details>`;
 }
 
 function renderBenchmarkSummary(bench, stats) {
@@ -3914,6 +3958,18 @@ function renderTopHoldings() {
     </tr>`;
   }).join('');
 
+  const recLegend = `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text2)">
+      <span style="font-weight:600;color:var(--text);margin-right:4px">建議說明：</span>
+      <span><span style="background:var(--green);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">ADD</span> 加碼買進</span>
+      <span><span style="background:var(--blue);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">HOLD</span> 持有不動</span>
+      <span><span style="background:var(--yellow);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">TRIM</span> 分批減碼獲利了結</span>
+      <span><span style="background:var(--orange);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">EVAL</span> 重新評估，考慮停損</span>
+      <span><span style="background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">STOP</span> 執行停損出場</span>
+      <span><span style="background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">SELL</span> 認賠賣出</span>
+      <span style="margin-left:8px">⚠️ 佔比≥15%的負面部位會自動升級緊急程度</span>
+    </div>`;
+
   const concAlert = concPct > 80
     ? `<div class="alert alert-danger"><div class="alert-icon">🔴</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度極高</div></div>`
     : concPct > 65
@@ -3922,6 +3978,7 @@ function renderTopHoldings() {
 
   el.innerHTML = `
     ${concAlert}
+    ${recLegend}
     <div style="overflow-x:auto;margin-top:10px">
       <table>
         <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th><th>建議</th><th>分析師備註</th></tr></thead>
