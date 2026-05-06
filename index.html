@@ -387,26 +387,26 @@
     <div><strong>AI 美股分析師：</strong>以下建議基於持倉成本、產業景氣及宏觀環境（關稅、Fed利率政策）。目前美股面臨關稅不確定性，建議保持靈活應對。</div>
   </div>
 
-  <div class="kpi-grid">
+  <div class="kpi-grid" id="usKpiGrid">
     <div class="kpi-card">
-      <div class="kpi-label">Firstrade 總市值</div>
-      <div class="kpi-value">$41,088</div>
-      <div class="kpi-sub neutral">USD · 約 TWD $1,314K</div>
+      <div class="kpi-label">美股總市值 (USD)</div>
+      <div class="kpi-value" id="usKpiTotal">—</div>
+      <div class="kpi-sub neutral" id="usKpiTotalSub">載入中…</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">未實現損益</div>
-      <div class="kpi-value down">-$2,105</div>
-      <div class="kpi-sub down">-4.87%</div>
+      <div class="kpi-value neutral" id="usKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="usKpiPnlPct">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">最大虧損</div>
-      <div class="kpi-value down">MSFT -17%</div>
-      <div class="kpi-sub neutral">-$764.20</div>
+      <div class="kpi-value neutral" id="usKpiWorst">—</div>
+      <div class="kpi-sub neutral" id="usKpiWorstSub">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">最大獲利</div>
-      <div class="kpi-value up">BOXX +0.19%</div>
-      <div class="kpi-sub neutral">穩定現金替代品</div>
+      <div class="kpi-value neutral" id="usKpiBest">—</div>
+      <div class="kpi-sub neutral" id="usKpiBestSub">—</div>
     </div>
   </div>
 
@@ -436,17 +436,11 @@
 
   <div class="card">
     <div class="card-title">🎯 美股整體策略建議</div>
-    <div class="alert alert-warn">
-      <div class="alert-icon">⚠️</div>
-      <div><strong>關稅風險：</strong>2026年初美國關稅政策不確定性高，科技股（MSFT、MAGS、NVDA）短期承壓。建議保留現有部位，等待明確後再加碼。</div>
-    </div>
-    <div class="alert alert-success">
-      <div class="alert-icon">✅</div>
-      <div><strong>核心配置維持：</strong>QQQ + SPY 為指數核心，建議長期持有。BOXX 作為現金替代品功能正常，繼續持有。</div>
-    </div>
-    <div class="alert alert-info">
-      <div class="alert-icon">💡</div>
-      <div><strong>NVDA 長期邏輯：</strong>AI 算力需求持續，NVDA 雖短期下跌 -7.5%，但長線 AI 基礎設施主題不變。逢低可考慮分批加碼。</div>
+    <div id="usStrategyAlerts">
+      <div class="alert alert-info">
+        <div class="alert-icon">⏳</div>
+        <div>載入持倉資料中…</div>
+      </div>
     </div>
   </div>
 </div>
@@ -562,13 +556,13 @@
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">當前總資產</div>
-      <div class="kpi-value">$10.16M</div>
+      <div class="kpi-value" id="btKpiBase">—</div>
       <div class="kpi-sub neutral">TWD · 起始基數</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">當前年投入</div>
-      <div class="kpi-value">~$500K</div>
-      <div class="kpi-sub neutral">預估每年新增資金</div>
+      <div class="kpi-label">5年後（穩健11%）</div>
+      <div class="kpi-value up" id="btKpi5y">—</div>
+      <div class="kpi-sub up" id="btKpi5yPct">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">台股 (0050 CAGR)</div>
@@ -585,39 +579,39 @@
   <!-- Projection Tables -->
   <div class="card">
     <div class="card-title">🔮 投資組合試算（不含新增資金）</div>
-    <div class="grid-3">
+    <div class="grid-3" id="btScenariosGrid">
       <div class="bt-scenario">
         <div class="bt-year">保守（CAGR 8%）</div>
-        <div class="bt-value" style="color:var(--text2)">5年後：$14.9M</div>
-        <div class="bt-return up">+47%</div>
+        <div class="bt-value" id="bt8y5"  style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y5p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--text2)">10年後：$21.9M</div>
-        <div class="bt-return up">+116%</div>
+        <div class="bt-value" id="bt8y10" style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y10p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--text2)">15年後：$32.2M</div>
-        <div class="bt-return up">+217%</div>
+        <div class="bt-value" id="bt8y15" style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y15p">—</div>
       </div>
       <div class="bt-scenario">
         <div class="bt-year">穩健（CAGR 11%）</div>
-        <div class="bt-value" style="color:var(--green)">5年後：$17.1M</div>
-        <div class="bt-return up">+68%</div>
+        <div class="bt-value" id="bt11y5"  style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y5p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--green)">10年後：$28.7M</div>
-        <div class="bt-return up">+183%</div>
+        <div class="bt-value" id="bt11y10" style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y10p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--green)">15年後：$48.2M</div>
-        <div class="bt-return up">+375%</div>
+        <div class="bt-value" id="bt11y15" style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y15p">—</div>
       </div>
       <div class="bt-scenario">
         <div class="bt-year">積極（CAGR 15%）</div>
-        <div class="bt-value" style="color:var(--purple)">5年後：$20.5M</div>
-        <div class="bt-return up">+102%</div>
+        <div class="bt-value" id="bt15y5"  style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y5p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--purple)">10年後：$41.1M</div>
-        <div class="bt-return up">+305%</div>
+        <div class="bt-value" id="bt15y10" style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y10p">—</div>
         <div style="margin-top:12px"></div>
-        <div class="bt-value" style="color:var(--purple)">15年後：$82.4M</div>
-        <div class="bt-return up">+711%</div>
+        <div class="bt-value" id="bt15y15" style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y15p">—</div>
       </div>
     </div>
   </div>
@@ -685,22 +679,22 @@
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">累計實現損益</div>
-      <div class="kpi-value up">$2,131,479</div>
-      <div class="kpi-sub neutral">2020 - 2025</div>
+      <div class="kpi-value up" id="histKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="histKpiPnlSub">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">歷年股息</div>
-      <div class="kpi-value up">$606,327</div>
-      <div class="kpi-sub neutral">含 2020-2025</div>
+      <div class="kpi-value up" id="histKpiDiv">—</div>
+      <div class="kpi-sub neutral" id="histKpiDivSub">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">最佳年份</div>
-      <div class="kpi-value" style="color:var(--yellow)">2025</div>
-      <div class="kpi-sub up">$880,071 實現損益</div>
+      <div class="kpi-value" id="histKpiBestYear" style="color:var(--yellow)">—</div>
+      <div class="kpi-sub up" id="histKpiBestSub">—</div>
     </div>
     <div class="kpi-card">
       <div class="kpi-label">出借收益</div>
-      <div class="kpi-value up">$7,615</div>
+      <div class="kpi-value up" id="histKpiLend">—</div>
       <div class="kpi-sub neutral">股票出借收入</div>
     </div>
   </div>
@@ -1771,6 +1765,59 @@ function renderUsStocks() {
   };
   render(US_MAIN, 'usMainTable');
   render(US_ROY, 'usRoyTable');
+  renderUsPageKPIs();
+}
+
+function renderUsPageKPIs() {
+  const allUS  = [...US_MAIN, ...US_ROY];
+  const totalMV  = allUS.reduce((s, h) => s + (h.mv  || 0), 0);
+  const totalCost= allUS.reduce((s, h) => s + (h.cost || 0), 0);
+  const totalPnl = totalMV - totalCost;
+  const pnlPct   = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
+  const twdApprox = Math.round(totalMV * USD_TWD / 1000);
+
+  const s = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
+  s('usKpiTotal',    `$${totalMV.toLocaleString(undefined,{maximumFractionDigits:0})}`,
+                     'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  s('usKpiTotalSub', `USD · 約 TWD $${twdApprox.toLocaleString()}K`);
+  s('usKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString(undefined,{maximumFractionDigits:0})}`,
+                     'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  s('usKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`,
+                     'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+
+  const withPct = allUS.filter(h => h.mv && h.pct != null);
+  if (withPct.length) {
+    const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
+    const best  = withPct.reduce((a, b) => b.pct > a.pct ? b : a);
+    s('usKpiWorst',    `${worst.sym} ${worst.pct >= 0 ? '+' : ''}${worst.pct.toFixed(1)}%`, 'kpi-value down');
+    s('usKpiWorstSub', `${worst.pnl >= 0 ? '+' : ''}$${worst.pnl.toFixed(2)}`);
+    s('usKpiBest',     `${best.sym} +${best.pct.toFixed(2)}%`, 'kpi-value up');
+    s('usKpiBestSub',  `${STOCK_PROFILES[best.sym]?.thesis || '持有中'}`);
+  }
+
+  // Dynamic strategy alerts
+  const alertEl = document.getElementById('usStrategyAlerts');
+  if (!alertEl) return;
+  const losers  = withPct.filter(h => h.pct < 0).sort((a,b) => a.pct - b.pct).slice(0,3);
+  const winners = withPct.filter(h => h.pct > 0).sort((a,b) => b.pct - a.pct).slice(0,3);
+  const etfs    = withPct.filter(h => ['QQQ','SPY','BOXX','QLD','TQQQ'].includes(h.sym));
+
+  let html = '';
+  if (losers.length) {
+    const names = losers.map(h => `${h.sym} ${h.pct.toFixed(1)}%`).join('、');
+    html += `<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div><strong>需關注虧損部位：</strong>${names}。建議檢視基本面，評估是否執行停損或加碼攤低。</div></div>`;
+  }
+  if (etfs.length) {
+    const etfNames = etfs.map(h => `${h.sym} ${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`).join('、');
+    html += `<div class="alert alert-success"><div class="alert-icon">✅</div><div><strong>核心指數 ETF：</strong>${etfNames}。長期持有為主策略，大跌才加碼。</div></div>`;
+  }
+  if (winners.length) {
+    const w = winners[0];
+    const profile = STOCK_PROFILES[w.sym] || {};
+    html += `<div class="alert alert-info"><div class="alert-icon">💡</div><div><strong>${w.sym} 最佳獲利：</strong>+${w.pct.toFixed(1)}%，${profile.thesis || '持續持有'}。可考慮分批了結部分鎖利。</div></div>`;
+  }
+  if (!html) html = '<div class="alert alert-info"><div class="alert-icon">💡</div><div>請先同步持倉資料以查看策略建議。</div></div>';
+  alertEl.innerHTML = html;
 }
 
 // ─────── CRYPTO ───────
@@ -1943,6 +1990,21 @@ function initBacktestChart() {
   const years = [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
   const base = MONTHLY.length ? MONTHLY[MONTHLY.length-1].v : 10000000;
   const compound = (cagr, yr) => Math.round(base * Math.pow(1 + cagr/100, yr));
+
+  // Fill dynamic KPIs and scenario cards
+  const fmtM = v => '$' + (v / 1000000).toFixed(2) + 'M';
+  const fmtPct = v => '+' + ((v / base - 1) * 100).toFixed(0) + '%';
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('btKpiBase', fmtM(base));
+  set('btKpi5y',   fmtM(compound(11, 5)));
+  set('btKpi5yPct', fmtPct(compound(11, 5)));
+  [[8,'8'],[11,'11'],[15,'15']].forEach(([cagr, tag]) => {
+    [5,10,15].forEach(yr => {
+      const v = compound(cagr, yr);
+      set(`bt${tag}y${yr}`,  `${yr}年後：${fmtM(v)}`);
+      set(`bt${tag}y${yr}p`, fmtPct(v));
+    });
+  });
 
   window._btChart = new Chart(document.getElementById('chartProjection'), {
     type: 'line',
@@ -2124,7 +2186,26 @@ function renderYearlyTable() {
   });
 }
 
+function renderHistoryKPIs() {
+  if (!YEARLY.length) return;
+  const totalPnl  = YEARLY.reduce((s, y) => s + (y.pnl  || 0), 0);
+  const totalDiv  = YEARLY.reduce((s, y) => s + (y.div  || 0), 0);
+  const totalLend = YEARLY.reduce((s, y) => s + (y.lend || 0), 0);
+  const bestYr    = YEARLY.reduce((a, b) => (b.pnl || 0) > (a.pnl || 0) ? b : a);
+  const minYr     = YEARLY[0].y;
+  const maxYr     = YEARLY[YEARLY.length-1].y;
+  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  s('histKpiPnl',      '$' + totalPnl.toLocaleString());
+  s('histKpiPnlSub',   `${minYr} - ${maxYr}`);
+  s('histKpiDiv',      '$' + totalDiv.toLocaleString());
+  s('histKpiDivSub',   `含 ${minYr}-${maxYr}`);
+  s('histKpiBestYear', bestYr.y);
+  s('histKpiBestSub',  `$${(bestYr.pnl||0).toLocaleString()} 實現損益`);
+  s('histKpiLend',     totalLend ? '$' + totalLend.toLocaleString() : '—');
+}
+
 function initHistoryCharts() {
+  renderHistoryKPIs();
   // Yearly PnL bar
   if (window._yearlyPnlChart) { window._yearlyPnlChart.destroy(); window._yearlyPnlChart = null; }
   window._yearlyPnlChart = new Chart(document.getElementById('chartYearlyPnl'), {
