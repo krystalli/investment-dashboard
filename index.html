@@ -2571,23 +2571,29 @@ async function syncSheets() {
   const base = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=`;
   const results = [];
 
-  const fetchWithTimeout = (url, ms = 15000) => {
+  const fetchWithTimeout = (url, ms = 30000) => {
     const ctrl = new AbortController();
     const id = setTimeout(() => ctrl.abort(), ms);
     return fetch(url, { signal: ctrl.signal })
       .then(r => { clearTimeout(id); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
-      .catch(e => { clearTimeout(id); throw new Error(e.name === 'AbortError' ? '請求逾時（15秒）' : e.message); });
+      .catch(e => { clearTimeout(id); throw new Error(e.name === 'AbortError' ? '請求逾時（30秒），試算表可能仍在計算中' : e.message); });
   };
 
   try {
+    console.log('[sync] 開始抓台股...');
     showStatus('⏳ 讀取台股持股...', 'loading');
     const twText = await fetchWithTimeout(base + SHEET_GIDS.tw).catch(e => { throw new Error('台股表：' + e.message); });
+    console.log('[sync] 台股OK，長度:', twText.length);
 
+    console.log('[sync] 開始抓美股...');
     showStatus('⏳ 讀取美股持股...', 'loading');
     const usText = await fetchWithTimeout(base + SHEET_GIDS.us).catch(e => { throw new Error('美股表：' + e.message); });
+    console.log('[sync] 美股OK，長度:', usText.length);
 
+    console.log('[sync] 開始抓歷年...');
     showStatus('⏳ 讀取歷年損益...', 'loading');
     const histText = await fetchWithTimeout(base + SHEET_GIDS.history).catch(e => { throw new Error('歷年表：' + e.message); });
+    console.log('[sync] 歷年OK，長度:', histText.length);
 
     showStatus('⏳ 解析資料中...', 'loading');
 
