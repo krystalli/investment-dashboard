@@ -2366,6 +2366,7 @@ const SHEET_GIDS = {
 // ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
 async function fetchOnePrice(sym) {
+  const isGitHubPages = location.hostname.includes('github.io');
   const proxies = [
     u => 'https://corsproxy.io/?' + encodeURIComponent(u),
     u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
@@ -2375,18 +2376,19 @@ async function fetchOnePrice(sym) {
     if (!r.ok) return null;
     try { const d = await r.json(); return d.chart?.result?.[0]?.meta?.regularMarketPrice || null; } catch(e) { return null; }
   };
-  // .TW 股票自動試 .TWO fallback（上櫃債券 ETF 如 00725B）
+  // .TW 上市股票自動補 .TWO 上櫃 fallback
   const syms = [sym];
   if (sym.endsWith('.TW')) syms.push(sym.replace(/\.TW$/, '.TWO'));
 
   for (const s of syms) {
     const url = makeUrl(s);
-    // 先試直連（本機開發有效）
-    try {
-      const p = await fetch(url, { headers: { Accept: 'application/json' } }).then(parsePrice);
-      if (p) return p;
-    } catch(e) {}
-    // 再試 proxy（GitHub Pages 需要）
+    // GitHub Pages 直接跳 proxy（直連必被 CORS 擋）
+    if (!isGitHubPages) {
+      try {
+        const p = await fetch(url, { headers: { Accept: 'application/json' } }).then(parsePrice);
+        if (p) return p;
+      } catch(e) {}
+    }
     for (const proxy of proxies) {
       try {
         const p = await fetch(proxy(url)).then(parsePrice);
