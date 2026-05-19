@@ -2376,9 +2376,15 @@ async function fetchOnePrice(sym) {
     if (!r.ok) return null;
     try { const d = await r.json(); return d.chart?.result?.[0]?.meta?.regularMarketPrice || null; } catch(e) { return null; }
   };
-  // .TW 上市股票自動補 .TWO 上櫃 fallback
-  const syms = [sym];
-  if (sym.endsWith('.TW')) syms.push(sym.replace(/\.TW$/, '.TWO'));
+  // 判斷是否應優先試 .TWO（上櫃）
+  // 規則：含字母結尾（00937B、00725B…）或代號 4xxx/5xxx/6xxx 開頭
+  const isTWO = (s) => {
+    const code = s.replace(/\.(TW|TWO)$/,'');
+    return /[A-Za-z]$/.test(code) || /^[456]/.test(code);
+  };
+  const syms = sym.endsWith('.TW')
+    ? (isTWO(sym) ? [sym.replace('.TW','.TWO'), sym] : [sym, sym.replace('.TW','.TWO')])
+    : [sym];
 
   for (const s of syms) {
     const url = makeUrl(s);
