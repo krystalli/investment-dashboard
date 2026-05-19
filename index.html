@@ -4731,9 +4731,78 @@ function computeActionPlan() {
   return { verdict, topAdd, topReduce, rebalance };
 }
 
-function showActionPlan() {
+async function showActionPlan() {
   document.getElementById('actionDrawer').classList.add('open');
   document.getElementById('actionOverlay').classList.add('open');
+
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  if (apiKey) {
+    // ── AI 模式 ──
+    document.getElementById('actionDrawerContent').innerHTML =
+      `<div style="text-align:center;padding:40px 0;color:var(--text2)">
+        <div style="font-size:28px;margin-bottom:12px">🤖</div>
+        <div style="font-size:13px">AI 分析中，請稍候…</div>
+       </div>`;
+    try {
+      const allUS  = [...US_MAIN, ...US_ROY];
+      const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
+      const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
+      const total  = twMV + usMV;
+      const twPct  = total > 0 ? (twMV/total*100).toFixed(1) : 0;
+      const usPct  = total > 0 ? (usMV/total*100).toFixed(1) : 0;
+      const stats  = riskCalcStats();
+
+      const fmtTW = h => `${h.name}(${h.code}) 持${h.shares}股 均${h.avg} 現${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
+      const fmtUS = h => `${h.sym} 持${h.shares}股 均$${h.avg} 現$${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
+
+      const prompt = `你是一位專業投資顧問，請根據以下持倉數據，給出「今日行動建議」。
+
+【投資組合概況】
+總市值：${(total/10000).toFixed(0)}萬 TWD
+台股佔比：${twPct}%，美股佔比：${usPct}%
+${stats ? `年化報酬：${stats.cagr?.toFixed(1)}%，波動：${stats.annualVol?.toFixed(1)}%，夏普：${stats.sharpe?.toFixed(2)}，最大回撤：-${stats.maxDD?.toFixed(1)}%` : ''}
+
+【台股持倉】
+${TW_HOLD.map(fmtTW).join('\n')}
+
+【美股持倉】
+${allUS.map(fmtUS).join('\n')}
+
+請用繁體中文，直接給出今天最重要的 3-5 個具體操作建議，格式如下：
+1. 每條建議要有明確的標的、方向（加碼/減碼/觀望/停損）和理由
+2. 結尾給一句整體策略方向
+語氣簡潔、像顧問對話，不要贅述，可以用 emoji 增加可讀性。`;
+
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+      const data = await res.json();
+      const reply = data.choices[0].message.content
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      document.getElementById('actionDrawerContent').innerHTML =
+        `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">🤖 由 Groq AI 根據你的即時持倉生成 · ${new Date().toLocaleTimeString('zh-TW')}</div>
+         <div style="font-size:13px;line-height:1.8">${reply}</div>`;
+    } catch(e) {
+      document.getElementById('actionDrawerContent').innerHTML =
+        `<div style="color:var(--red);font-size:13px;padding:12px">AI 分析失敗：${escHtml(e.message)}<br><br>請確認 API Key 是否正確，或改用規則建議。</div>
+         <button onclick="showActionPlanFallback()" style="margin-top:8px;padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:12px">改用規則建議</button>`;
+    }
+  } else {
+    // ── 無 API Key：規則引擎 ──
+    showActionPlanFallback();
+  }
+}
+
+function showActionPlanFallback() {
   const plan = computeActionPlan();
   const recColor = { ADD:'var(--green)', TRIM:'var(--yellow)', STOP:'var(--red)', EVAL:'var(--purple)' };
 
@@ -4765,6 +4834,7 @@ function showActionPlan() {
   const rebalRows = plan.rebalance.map(t => `<div style="font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">${t}</div>`).join('');
 
   document.getElementById('actionDrawerContent').innerHTML = `
+    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">📊 規則引擎模式 · 設定 API Key 可啟用 AI 分析</div>
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
       ${plan.verdict}
     </div>
