@@ -2366,23 +2366,33 @@ const SHEET_GIDS = {
 // ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
 async function fetchOnePrice(sym) {
-  const enc = encodeURIComponent(sym);
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?range=1d&interval=1d`;
   const proxies = [
     u => 'https://corsproxy.io/?' + encodeURIComponent(u),
     u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   ];
-  // 先試直連
-  try {
-    const r = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (r.ok) { const d = await r.json(); const p = d.chart?.result?.[0]?.meta?.regularMarketPrice; if (p) return p; }
-  } catch(e) {}
-  // 逐個 proxy 嘗試
-  for (const proxy of proxies) {
+  const makeUrl = s => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=1d&interval=1d`;
+  const parsePrice = async r => {
+    if (!r.ok) return null;
+    try { const d = await r.json(); return d.chart?.result?.[0]?.meta?.regularMarketPrice || null; } catch(e) { return null; }
+  };
+  // .TW 股票自動試 .TWO fallback（上櫃債券 ETF 如 00725B）
+  const syms = [sym];
+  if (sym.endsWith('.TW')) syms.push(sym.replace(/\.TW$/, '.TWO'));
+
+  for (const s of syms) {
+    const url = makeUrl(s);
+    // 先試直連（本機開發有效）
     try {
-      const r = await fetch(proxy(url));
-      if (r.ok) { const d = await r.json(); const p = d.chart?.result?.[0]?.meta?.regularMarketPrice; if (p) return p; }
+      const p = await fetch(url, { headers: { Accept: 'application/json' } }).then(parsePrice);
+      if (p) return p;
     } catch(e) {}
+    // 再試 proxy（GitHub Pages 需要）
+    for (const proxy of proxies) {
+      try {
+        const p = await fetch(proxy(url)).then(parsePrice);
+        if (p) return p;
+      } catch(e) {}
+    }
   }
   return null;
 }
