@@ -2378,9 +2378,10 @@ async function fetchOnePrice(sym) {
   };
   // 判斷是否應優先試 .TWO（上櫃）
   // 規則：含字母結尾（00937B、00725B…）或代號 4xxx/5xxx/6xxx 開頭
+  const KNOWN_TWO = new Set(['1580','00858']);
   const isTWO = (s) => {
     const code = s.replace(/\.(TW|TWO)$/,'');
-    return /[A-Za-z]$/.test(code) || /^[456]/.test(code);
+    return /[A-Za-z]$/.test(code) || /^[456]/.test(code) || KNOWN_TWO.has(code);
   };
   const syms = sym.endsWith('.TW')
     ? (isTWO(sym) ? [sym.replace('.TW','.TWO'), sym] : [sym, sym.replace('.TW','.TWO')])
