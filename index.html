@@ -484,7 +484,7 @@
         <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
         <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
         <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
-        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.07）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$41.59</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
         <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
         <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
         <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
@@ -2356,6 +2356,26 @@ renderUsStocks();
   } catch(e) {}
 })();
 
+// 頁面載入時靜默更新 benchmark（SPY / 0050 月報酬），超過 1 天就重抓
+(async () => {
+  try {
+    const stale = Date.now() - (BENCHMARK_DATA.lastFetch || 0) > 1 * 86400 * 1000;
+    const empty = Object.keys(BENCHMARK_DATA.SPY || {}).length === 0;
+    if (stale || empty) {
+      await syncBenchmarkData();
+    }
+  } catch(e) {}
+})();
+
+// 頁面載入時自動刷新股價，超過 4 小時未更新就重抓
+(async () => {
+  try {
+    const last  = parseInt(localStorage.getItem('inv_last_price_refresh') || '0');
+    const stale = Date.now() - last > 2 * 3600 * 1000;
+    if (stale) await refreshPrices();
+  } catch(e) {}
+})();
+
 // ─────── GOOGLE SHEETS CONFIG ───────
 const SHEET_ID = '1hTju16nqdRegue7QHNE43amiUodgm6hv1amOX8uBxBk';
 const SHEET_GIDS = {
@@ -2408,7 +2428,7 @@ async function fetchOnePrice(sym) {
 
 async function refreshPrices() {
   const btn = document.querySelector('.btn-refresh');
-  btn.textContent = '⏳ 更新中...'; btn.disabled = true;
+  if (btn) { btn.textContent = '⏳ 更新中...'; btn.disabled = true; }
   showStatus('⏳ 正在抓取即時股價...', 'loading');
   try {
     // 美股
@@ -2438,18 +2458,23 @@ async function refreshPrices() {
       usUpdated++;
     });
 
-    // 更新台股持倉
+    // 更新台股持倉（含動態建議）
     let twUpdated = 0;
+    const twTotalMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
     TW_HOLD.forEach(s => {
       const p = twPriceMap[s.code];
       if (!p) return;
       s.price = p;
       s.mv    = Math.round(p * s.shares);
       s.pct   = (p - s.avg) / s.avg * 100;
+      const posWt = s.mv / twTotalMV * 100;
+      const a = advisorRec(s, false, posWt);
+      s.rec = a.rec; s.reason = a.reason;
       twUpdated++;
     });
+    try { localStorage.setItem('inv_tw_hold', JSON.stringify(TW_HOLD)); } catch(e) {}
 
-    // 更新台股觀察清單
+    // 更新台股觀察清單（更新現價，rec/reason 保留人工設定）
     TW_WATCH.forEach(s => {
       const p = twPriceMap[s.code];
       if (p) { s.price = p; s.live = true; }
@@ -2464,13 +2489,16 @@ async function refreshPrices() {
     const failed = (allUsSym.length + twSym.length) - Object.keys(priceMap).length - Object.keys(twPriceMap).length;
     showStatus(`✅ 已更新 美股${usUpdated}支、台股${twUpdated}支${nasdaq ? `，QQQ $${nasdaq}` : ''}${failed > 0 ? `（${failed} 支失敗）` : ''}`, 'success');
 
+    // 記錄本次更新時間
+    try { localStorage.setItem('inv_last_price_refresh', Date.now()); } catch(e) {}
+
     // 若有 API Key，自動更新觀察清單 AI 建議
     const apiKey = localStorage.getItem('inv_gemini_key');
     if (apiKey) refreshWatchAI(apiKey);
   } catch(e) {
     showStatus('❌ 股價更新失敗：' + e.message, 'error');
   } finally {
-    btn.textContent = '🔄 刷新股價'; btn.disabled = false;
+    if (btn) { btn.textContent = '🔄 刷新股價'; btn.disabled = false; }
   }
 }
 
@@ -4368,8 +4396,8 @@ function initRiskPage() {
     }
   }
 
-  // Auto-fetch if data is older than 7 days or missing
-  const stale = Date.now() - (BENCHMARK_DATA.lastFetch || 0) > 7 * 86400 * 1000;
+  // Auto-fetch if data is older than 1 day or missing（開 risk tab 時也會觸發）
+  const stale = Date.now() - (BENCHMARK_DATA.lastFetch || 0) > 1 * 86400 * 1000;
   const empty = Object.keys(BENCHMARK_DATA.SPY || {}).length === 0;
   if (stale || empty) syncBenchmarkData();
 }
