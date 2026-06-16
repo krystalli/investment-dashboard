@@ -292,11 +292,6 @@
       <div class="kpi-sub neutral" id="kpiTwPnlPct">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">台股已實現損益</div>
-      <div class="kpi-value neutral" id="kpiTwRealized">—</div>
-      <div class="kpi-sub neutral" id="kpiTwRealizedSub">含交易手續費</div>
-    </div>
-    <div class="kpi-card">
       <div class="kpi-label">美股未實現損益</div>
       <div class="kpi-value neutral" id="kpiUsPnl">—</div>
       <div class="kpi-sub neutral" id="kpiUsPnlPct">—</div>
@@ -1513,15 +1508,6 @@ function renderOverviewKPIs() {
       const pct = (twPnl / twCost * 100).toFixed(2);
       set('kpiTwPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
     }
-  }
-
-  // ── 台股已實現損益（從試算表同步的 已實現損益 欄加總）──
-  const twHasRealized = TW_HOLD.some(h => h.realizedPnl != null);
-  if (twHasRealized) {
-    const twRealized = TW_HOLD.reduce((s, h) => s + (h.realizedPnl || 0), 0);
-    const sign = twRealized >= 0;
-    set('kpiTwRealized', (sign ? '+' : '') + '$' + Math.abs(Math.round(twRealized)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
-    set('kpiTwRealizedSub', '含手續費，同步自試算表', 'kpi-sub neutral');
   }
 
   // ── 美股未實現損益（US_MAIN + US_ROY，換算台幣）──
