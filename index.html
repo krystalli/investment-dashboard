@@ -292,6 +292,11 @@
       <div class="kpi-sub neutral" id="kpiTwPnlPct">—</div>
     </div>
     <div class="kpi-card">
+      <div class="kpi-label">台股已實現損益</div>
+      <div class="kpi-value neutral" id="kpiTwRealized">—</div>
+      <div class="kpi-sub neutral" id="kpiTwRealizedSub">含交易手續費</div>
+    </div>
+    <div class="kpi-card">
       <div class="kpi-label">美股未實現損益</div>
       <div class="kpi-value neutral" id="kpiUsPnl">—</div>
       <div class="kpi-sub neutral" id="kpiUsPnlPct">—</div>
@@ -1492,16 +1497,31 @@ function renderOverviewKPIs() {
     }
   }
 
-  // ── 台股未實現損益（從持股計算）──
+  // ── 台股未實現損益（優先用表格的未實現損益欄，否則用現價-均價×股數）──
   if (TW_HOLD.length > 0) {
-    const twPnl  = TW_HOLD.reduce((s, h) => s + ((h.price || h.avg) - h.avg) * (h.shares || 0), 0);
-    const twCost = TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+    const hasPnl = TW_HOLD.some(h => h.pnl != null);
+    const twPnl  = hasPnl
+      ? TW_HOLD.reduce((s, h) => s + (h.pnl != null ? h.pnl : ((h.price || h.avg) - h.avg) * (h.shares || 0)), 0)
+      : TW_HOLD.reduce((s, h) => s + ((h.price || h.avg) - h.avg) * (h.shares || 0), 0);
+    const hasCost = TW_HOLD.some(h => h.cost != null);
+    const twCost = hasCost
+      ? TW_HOLD.reduce((s, h) => s + (h.cost != null ? h.cost : (h.avg || 0) * (h.shares || 0)), 0)
+      : TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
     const sign = twPnl >= 0;
     set('kpiTwPnl', (sign ? '+' : '') + '$' + Math.abs(Math.round(twPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (twCost > 0) {
       const pct = (twPnl / twCost * 100).toFixed(2);
       set('kpiTwPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
     }
+  }
+
+  // ── 台股已實現損益（從試算表同步的 已實現損益 欄加總）──
+  const twHasRealized = TW_HOLD.some(h => h.realizedPnl != null);
+  if (twHasRealized) {
+    const twRealized = TW_HOLD.reduce((s, h) => s + (h.realizedPnl || 0), 0);
+    const sign = twRealized >= 0;
+    set('kpiTwRealized', (sign ? '+' : '') + '$' + Math.abs(Math.round(twRealized)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    set('kpiTwRealizedSub', '含手續費，同步自試算表', 'kpi-sub neutral');
   }
 
   // ── 美股未實現損益（US_MAIN + US_ROY，換算台幣）──
@@ -2585,22 +2605,38 @@ function updateNasdaqDisplay(price) {
     : isSell ? '退場訊號觸發，賣出 QLD/TQQQ'
     : `QQQ $${price.toFixed(2)} 低於進場門檻 $${entry}，槓桿暫不啟動`;
 
+  // ── 從實際持倉計算缺口 ──
+  const _allUS   = [...US_MAIN, ...US_ROY];
+  const _qqqMV   = _allUS.filter(s => s.sym === 'QQQ').reduce((s, h) => s + (h.mv || 0), 0);
+  const _qldMV   = _allUS.filter(s => s.sym === 'QLD').reduce((s, h) => s + (h.mv || 0), 0);
+  const _tqqqMV  = _allUS.filter(s => s.sym === 'TQQQ').reduce((s, h) => s + (h.mv || 0), 0);
+  const _qldGap  = Math.max(0, QQQ_TARGETS.QLD  - _qldMV);
+  const _tqqqGap = Math.max(0, QQQ_TARGETS.TQQQ - _tqqqMV);
+  const _leverGap = _qldGap + _tqqqGap;
+  const _totalTarget = QQQ_TARGETS.QQQ + QQQ_TARGETS.QLD + QQQ_TARGETS.TQQQ;
+
   // ── 目前建議配置 badge ──
   if (el('allocBadge')) el('allocBadge').textContent =
-    `$30,000 USD · 訊號：${isBuy ? '✅ 進場' : isSell ? '🔴 退場' : '⏸ 等待'}`;
+    `$${_totalTarget.toLocaleString()} USD · 訊號：${isBuy ? '✅ 進場' : isSell ? '🔴 退場' : '⏸ 等待'}`;
 
   // ── 建議配置 alert ──
   const alertEl = el('allocAlert'), iconEl = el('allocAlertIcon'), txtEl = el('allocAlertText');
   if (alertEl && iconEl && txtEl) {
     if (isBuy) {
       alertEl.className = 'alert alert-success'; iconEl.textContent = '✅';
-      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）已突破進場門檻（$${entry}），<strong>槓桿啟動！</strong> 建議立即建立 QLD + TQQQ 部位，把剩餘 40% 資金（$12,000）配置到位。`;
+      const gapTxt = _leverGap > 0
+        ? `尚差 <strong>$${Math.round(_leverGap).toLocaleString()}</strong>（QLD $${Math.round(_qldGap).toLocaleString()} + TQQQ $${Math.round(_tqqqGap).toLocaleString()}）未到位`
+        : 'QLD + TQQQ 已達目標配置 ✅';
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）已突破進場門檻（$${entry}），<strong>槓桿啟動！</strong> ${gapTxt}。`;
     } else if (isSell) {
       alertEl.className = 'alert alert-danger'; iconEl.textContent = '🔴';
-      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）跌破退場門檻（$${exit}），<strong>退場訊號觸發！</strong> 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金。`;
+      const holdTxt = (_qldMV + _tqqqMV) > 0
+        ? `現有 QLD $${Math.round(_qldMV).toLocaleString()} + TQQQ $${Math.round(_tqqqMV).toLocaleString()}，建議全部賣出。`
+        : '目前無 QLD / TQQQ 部位。';
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）跌破退場門檻（$${exit}），<strong>退場訊號觸發！</strong> ${holdTxt}`;
     } else {
       alertEl.className = 'alert alert-warn'; iconEl.textContent = '⏸';
-      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）低於進場門檻（$${entry}），<strong>槓桿部位暫不啟動</strong>。剩餘 40% 建議留現金或暫放 QQQ，待突破 $${entry} 再建 QLD/TQQQ。`;
+      txtEl.innerHTML = `QQQ（<strong>$${price.toFixed(2)}</strong>）低於進場門檻（$${entry}），<strong>槓桿部位暫不啟動</strong>。待突破 $${entry} 再建 QLD $${QQQ_TARGETS.QLD.toLocaleString()} + TQQQ $${QQQ_TARGETS.TQQQ.toLocaleString()}。`;
     }
   }
 
@@ -2609,18 +2645,26 @@ function updateNasdaqDisplay(price) {
   if (qldG) {
     qldG.style.opacity = isBuy ? '1' : '0.4';
     if (el('qldName'))  el('qldName').textContent  = isBuy ? 'QLD ✅ 建倉' : 'QLD ⏸ 待機';
-    if (el('qldText'))  el('qldText').textContent  = isBuy ? '訊號成立，建倉 $9,000' : '條件未達，暫不建倉';
+    if (el('qldText'))  el('qldText').textContent  = isBuy
+      ? (_qldGap > 0 ? `尚差 $${Math.round(_qldGap).toLocaleString()}（目標 $${QQQ_TARGETS.QLD.toLocaleString()}）` : `已達目標 $${QQQ_TARGETS.QLD.toLocaleString()} ✅`)
+      : '條件未達，暫不建倉';
   }
   if (tqqqG) {
     tqqqG.style.opacity = isBuy ? '1' : '0.4';
     if (el('tqqqName')) el('tqqqName').textContent = isBuy ? 'TQQQ ✅ 建倉' : 'TQQQ ⏸ 待機';
-    if (el('tqqqText')) el('tqqqText').textContent = isBuy ? '訊號成立，建倉 $3,000' : '條件未達，暫不建倉';
+    if (el('tqqqText')) el('tqqqText').textContent = isBuy
+      ? (_tqqqGap > 0 ? `尚差 $${Math.round(_tqqqGap).toLocaleString()}（目標 $${QQQ_TARGETS.TQQQ.toLocaleString()}）` : `已達目標 $${QQQ_TARGETS.TQQQ.toLocaleString()} ✅`)
+      : '條件未達，暫不建倉';
   }
 
   // ── QQQ 股數計算 ──
-  const qqqData = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
+  const qqqData = _allUS.find(s => s.sym === 'QQQ');
   const livePrice = qqqData?.price || price;
-  if (el('qqqSharesCalc')) el('qqqSharesCalc').textContent = `≈ ${(18000/livePrice).toFixed(1)} 股 @$${livePrice.toFixed(0)}`;
+  const qqqGapAmt = Math.max(0, QQQ_TARGETS.QQQ - _qqqMV);
+  if (el('qqqSharesCalc')) el('qqqSharesCalc').textContent =
+    qqqGapAmt > 0
+      ? `尚差 $${Math.round(qqqGapAmt).toLocaleString()}（≈ ${(qqqGapAmt/livePrice).toFixed(1)} 股 @$${livePrice.toFixed(0)}）`
+      : `已達目標 $${QQQ_TARGETS.QQQ.toLocaleString()} ✅`;
 }
 
 // ─────── 同步 Google Sheets（三張表）───────
@@ -2669,7 +2713,10 @@ async function syncSheets() {
         avg:    findCol(h, ['均價','買入均價','avg','平均成本']),
         price:  findCol(h, ['現價','price','市價']),
         mv:     findCol(h, ['市值','mv']),
-        pct:    findCol(h, ['未實現損益率','總損益率','損益率']),
+        cost:   findCol(h, ['支出','交易成本','cost','實際成本']),
+        pnl:      findCol(h, ['未實現損益','unrealized_pnl']),
+        realized: findCol(h, ['已實現損益','realized_pnl','realized']),
+        pct:      findCol(h, ['未實現損益率','總損益率','損益率']),
         rec:    findCol(h, ['建議','rec','操作']),
         reason: findCol(h, ['說明','備註','reason']),
       };
@@ -2686,15 +2733,18 @@ async function syncSheets() {
         const shares = parseNum(row[idx.shares]);
         // 試算表可能有重複代號行（如第二個彙總表）：保留股數最多的那筆
         if (holdMap.has(code) && holdMap.get(code).shares >= shares) return;
-        const mv = parseNum(row[idx.mv]) || Math.round(price * shares);
-        const pct = idx.pct >= 0 ? parseNum(row[idx.pct]) : (avg ? (price-avg)/avg*100 : 0);
+        const mv    = parseNum(row[idx.mv])   || Math.round(price * shares);
+        const cost        = idx.cost     >= 0 ? parseNum(row[idx.cost])     : null;
+        const pnl         = idx.pnl      >= 0 ? parseNum(row[idx.pnl])      : null;
+        const realizedPnl = idx.realized >= 0 ? parseNum(row[idx.realized]) : null;
+        const pct   = idx.pct  >= 0 ? parseNum(row[idx.pct])   : (avg ? (price-avg)/avg*100 : 0);
         const sheetRec = row[idx.rec]?.trim().toUpperCase();
         const sheetReason = row[idx.reason]?.trim();
         const tempStock = { code, pct };
         const advisor = advisorRec(tempStock, false);
         const rec    = (sheetRec && sheetRec !== 'HOLD') ? sheetRec : advisor.rec;
         const reason = sheetReason || advisor.reason;
-        holdMap.set(code, { code, shares, avg, price, mv, pct, name: row[idx.name]?.trim() || code, rec, reason });
+        holdMap.set(code, { code, shares, avg, price, mv, cost, pnl, realizedPnl, pct, name: row[idx.name]?.trim() || code, rec, reason });
       });
       const newHold = [...holdMap.values()].filter(s => s.shares > 0);
       if (newHold.length) { TW_HOLD.splice(0, TW_HOLD.length, ...newHold); results.push(`台股 ${newHold.length} 筆`); }
