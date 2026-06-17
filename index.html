@@ -3506,16 +3506,21 @@ function riskCalcStats() {
 }
 
 function riskCalcCashFlow() {
-  const twCost = TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+  // 台股成本：優先用試算表「支出」欄，否則用均價×股數
+  const hasCost = TW_HOLD.some(h => h.cost != null);
+  const twCost = hasCost
+    ? TW_HOLD.reduce((s, h) => s + (h.cost != null ? h.cost : (h.avg || 0) * (h.shares || 0)), 0)
+    : TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
   const usCost = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.cost || 0), 0) * USD_TWD;
   const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
   const usMV   = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
   const bankMV   = SHEET_ALLOC.ready ? SHEET_ALLOC.bank   : 0;
+  // 幣安：從歷年損益表最新月份取得市值（SHEET_ALLOC.binance），以市值代替投入成本（無原始成本資料）
   const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
 
-  const totalCost = twCost + usCost;
-  const investedMV = twMV + usMV; // Only where we have cost data
-  const unrealizedGain = investedMV - totalCost;
+  const totalCost = twCost + usCost + cryptoMV; // crypto 以市值計（無原始成本追蹤）
+  const investedMV = twMV + usMV + cryptoMV;
+  const unrealizedGain = (twMV - twCost) + (usMV - usCost); // crypto 損益不計（成本不明）
 
   const totalDivs    = YEARLY.reduce((s, y) => s + (y.div   || 0), 0);
   const realizedGain = YEARLY.reduce((s, y) => s + (y.pnl   || 0), 0);
@@ -3768,7 +3773,8 @@ function renderCashFlow(cf) {
       <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:11px;color:var(--text2);margin-bottom:4px">💼 投入成本（可追蹤）</div>
         <div style="font-size:20px;font-weight:700;color:var(--blue)">${f(cf.totalCost)}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">台股 ${f(cf.twCost)} + 美股 ${f(cf.usCost)}</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">台股 ${f(cf.twCost)} + 美股 ${f(cf.usCost)}${cf.cryptoMV > 0 ? ` + 幣安 ${f(cf.cryptoMV)}` : ''}</div>
+        ${cf.cryptoMV > 0 ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">幣安以最新市值計（無原始成本）</div>` : ''}
       </div>
       <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
         <div style="font-size:11px;color:var(--text2);margin-bottom:4px">📈 未實現資本增值</div>
