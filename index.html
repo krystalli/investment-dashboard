@@ -1768,6 +1768,7 @@ function rerenderCharts() {
 // ─────── TAIWAN STOCKS ───────
 function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
+  tbody.innerHTML = '';
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
     tbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
@@ -1810,6 +1811,7 @@ function renderTwStocks() {
 function renderUsStocks() {
   const render = (data, tbodyId) => {
     const tbody = document.getElementById(tbodyId);
+    tbody.innerHTML = '';
     data.forEach(s => {
       // Apply advisorRec if rec is missing/HOLD with no reason
       if (!s.reason || s.rec === 'HOLD') {
