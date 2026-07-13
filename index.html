@@ -1884,23 +1884,46 @@ function cycleThesisStatus(key) {
   renderThesisTracker();
 }
 
-function copyThesisPrompt(key, name, pct, mv) {
+async function analyzeThesis(key, name, pct, mv) {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  if (!apiKey) { alert('請先在右上角設定 Groq API Key'); return; }
+
   const t = THESIS_DATA[key] || {};
   const status = THESIS_STATUS[t.status || 'none'].label;
-  const text = `請幫我分析以下持倉，判斷是否應繼續持有：
+  const resultId = `thesis-result-${key}`;
+  const btnId    = `thesis-btn-${key}`;
+
+  const btn = document.getElementById(btnId);
+  const el  = document.getElementById(resultId);
+  if (btn) { btn.textContent = '⏳ 分析中…'; btn.disabled = true; }
+  if (el)  { el.style.display = 'block'; el.style.cssText = 'background:var(--surface2);border-radius:8px;padding:12px;font-size:12px;line-height:1.7;margin-top:8px'; el.textContent = '分析中…'; }
+
+  const prompt = `請分析以下持倉，給出簡潔的持有建議（繁體中文，200字以內）：
 
 股票：${key} ${name}
 目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}
 論點狀態：${status}
 
-請提供：
-1. 目前股價反映了哪些市場預期？
-2. 近期產業或基本面有哪些重要變化？
-3. 繼續持有的理由 vs 出場的理由
-4. 操作建議（加碼/持有/減碼/停損）`;
-  navigator.clipboard.writeText(text).then(() => {
-    alert(`已複製「${name}」的分析 Prompt，貼到 Claude 即可分析`);
-  }).catch(() => alert('複製失敗，請手動複製'));
+請回答：近期該股/產業有哪些重要變化？現在應該持有、加碼、還是減碼/停損？`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    el.innerHTML = data.choices[0].message.content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  } catch(e) {
+    el.textContent = `分析失敗：${e.message}`;
+  } finally {
+    if (btn) { btn.textContent = '🤖 分析'; btn.disabled = false; }
+  }
 }
 
 function renderThesisTracker() {
@@ -1917,17 +1940,21 @@ function renderThesisTracker() {
       const t  = THESIS_DATA[key] || {};
       const st = THESIS_STATUS[t.status || 'none'];
 
-      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="display:flex;gap:12px;align-items:center">
-          <span style="font-weight:600;font-size:13px;min-width:48px">${isUS ? h.sym : h.code}</span>
-          ${isUS ? '' : `<span style="font-size:12px;color:var(--text2)">${h.name}</span>`}
-          <span style="font-size:12px;color:${pct >= 0 ? 'var(--green)' : 'var(--red)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>
+      const prevResult = document.getElementById(`thesis-result-${key}`)?.innerHTML || '';
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center">
+          <div style="display:flex;gap:12px;align-items:center">
+            <span style="font-weight:600;font-size:13px;min-width:48px">${isUS ? h.sym : h.code}</span>
+            ${isUS ? '' : `<span style="font-size:12px;color:var(--text2)">${h.name}</span>`}
+            <span style="font-size:12px;color:${pct >= 0 ? 'var(--green)' : 'var(--red)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>
+          </div>
+          <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding:4px 8px;border:1px solid ${st.color};border-radius:6px">${st.label}</div>
+          <button id="thesis-btn-${key}" onclick="analyzeThesis('${key}','${name.replace(/'/g,"\\'")}',${pct},${mv})"
+            style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1);white-space:nowrap">
+            🤖 分析
+          </button>
         </div>
-        <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding:4px 8px;border:1px solid ${st.color};border-radius:6px">${st.label}</div>
-        <button onclick="copyThesisPrompt('${key}','${name.replace(/'/g,"\\'")}',${pct},${mv})"
-          style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1);white-space:nowrap">
-          📋 複製 Prompt
-        </button>
+        ${prevResult ? `<div id="thesis-result-${key}" style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12px;line-height:1.7;margin-top:8px">${prevResult}</div>` : `<div id="thesis-result-${key}" style="display:none"></div>`}
       </div>`;
     }).join('');
   };
