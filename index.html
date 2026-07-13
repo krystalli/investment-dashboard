@@ -370,7 +370,7 @@
 
   <div class="card" id="twThesisCard">
     <div class="card-title">📋 投資論點追蹤 <span class="badge">持倉論點</span>
-      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換 ｜ 點擊論點編輯</span>
+      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換</span>
     </div>
     <div id="twThesisBody"></div>
   </div>
@@ -455,7 +455,7 @@
 
   <div class="card" id="usThesisCard">
     <div class="card-title">📋 投資論點追蹤 <span class="badge">美股論點</span>
-      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換 ｜ 點擊論點編輯</span>
+      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換</span>
     </div>
     <div id="usThesisBody"></div>
   </div>
@@ -1884,33 +1884,22 @@ function cycleThesisStatus(key) {
   renderThesisTracker();
 }
 
-function editThesis(key, name) {
-  const cur = (THESIS_DATA[key] || {}).thesis || '';
-  const val = prompt(`${name} 的投資買入理由：`, cur);
-  if (val === null) return;
-  if (!THESIS_DATA[key]) THESIS_DATA[key] = {};
-  THESIS_DATA[key].thesis = val;
-  THESIS_DATA[key].date = new Date().toISOString().slice(0, 10);
-  saveThesis();
-  renderThesisTracker();
-}
-
 function copyThesisPrompt(key, name, pct, mv) {
   const t = THESIS_DATA[key] || {};
-  const text = `請幫我檢視以下持倉的投資論點是否仍然成立：
+  const status = THESIS_STATUS[t.status || 'none'].label;
+  const text = `請幫我分析以下持倉，判斷是否應繼續持有：
 
 股票：${key} ${name}
-買入理由（當初）：${t.thesis || '（尚未填寫）'}
-目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 ${mv ? '$' + Math.round(mv).toLocaleString() : '—'}
-論點建立日期：${t.date || '未記錄'}
+目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}
+論點狀態：${status}
 
-請判斷：
-1. 原始買入理由是否已改變？
-2. 目前股價反映了哪些預期？
+請提供：
+1. 目前股價反映了哪些市場預期？
+2. 近期產業或基本面有哪些重要變化？
 3. 繼續持有的理由 vs 出場的理由
 4. 操作建議（加碼/持有/減碼/停損）`;
   navigator.clipboard.writeText(text).then(() => {
-    alert(`已複製「${name}」的追蹤 Prompt，貼到 Claude 即可分析`);
+    alert(`已複製「${name}」的分析 Prompt，貼到 Claude 即可分析`);
   }).catch(() => alert('複製失敗，請手動複製'));
 }
 
@@ -1925,24 +1914,16 @@ function renderThesisTracker() {
       const name   = isUS ? h.sym : h.name;
       const pct    = h.pct ?? 0;
       const mv     = isUS ? (h.mv || 0) * USD_TWD : (h.mv || 0);
-      const t      = THESIS_DATA[key] || {};
-      const st     = THESIS_STATUS[t.status || 'none'];
-      const thesis = t.thesis || '';
-      const date   = t.date   || '';
+      const t  = THESIS_DATA[key] || {};
+      const st = THESIS_STATUS[t.status || 'none'];
 
-      return `<div style="display:grid;grid-template-columns:80px 1fr auto auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid var(--border)">
-        <div>
-          <div style="font-weight:600;font-size:13px">${isUS ? h.sym : h.code}</div>
-          <div style="font-size:11px;color:var(--text2)">${isUS ? '' : h.name}</div>
-          <div style="font-size:11px;color:${pctCls(pct).includes('up') ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text2)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+      return `<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-weight:600;font-size:13px;min-width:48px">${isUS ? h.sym : h.code}</span>
+          ${isUS ? '' : `<span style="font-size:12px;color:var(--text2)">${h.name}</span>`}
+          <span style="font-size:12px;color:${pct >= 0 ? 'var(--green)' : 'var(--red)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>
         </div>
-        <div onclick="editThesis('${key}','${name.replace(/'/g,"\\'")}');event.stopPropagation()" style="cursor:pointer;min-height:36px">
-          ${thesis
-            ? `<div style="font-size:12px;color:var(--text1);line-height:1.5">${thesis}</div>
-               ${date ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">記錄於 ${date}</div>` : ''}`
-            : `<div style="font-size:12px;color:var(--text3);font-style:italic">點擊填寫買入理由…</div>`}
-        </div>
-        <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding-top:2px">${st.label}</div>
+        <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding:4px 8px;border:1px solid ${st.color};border-radius:6px">${st.label}</div>
         <button onclick="copyThesisPrompt('${key}','${name.replace(/'/g,"\\'")}',${pct},${mv})"
           style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1);white-space:nowrap">
           📋 複製 Prompt
