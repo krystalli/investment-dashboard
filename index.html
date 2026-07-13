@@ -368,6 +368,13 @@
     </div>
   </div>
 
+  <div class="card" id="twThesisCard">
+    <div class="card-title">📋 投資論點追蹤 <span class="badge">持倉論點</span>
+      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換 ｜ 點擊論點編輯</span>
+    </div>
+    <div id="twThesisBody"></div>
+  </div>
+
   <div class="card">
     <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">已賣出 + 建議清單</span></div>
     <div style="overflow-x:auto">
@@ -444,6 +451,13 @@
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
+  </div>
+
+  <div class="card" id="usThesisCard">
+    <div class="card-title">📋 投資論點追蹤 <span class="badge">美股論點</span>
+      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換 ｜ 點擊論點編輯</span>
+    </div>
+    <div id="usThesisBody"></div>
   </div>
 
   <div class="card">
@@ -943,6 +957,17 @@ const YEARLY = [
   { y:2024, pnl:555631, div:212738, lend:7615, total:775984 },
   { y:2025, pnl:600450, div:279621, lend:0,    total:880071 },
 ];
+
+// 投資論點追蹤（key: 股票代號或美股代碼，value: { thesis, date, status, note }）
+// status: 'valid'=✅成立 | 'watch'=⚠️待觀察 | 'invalid'=❌失效
+let THESIS_DATA = {};
+try {
+  const _t = localStorage.getItem('inv_thesis');
+  if (_t) THESIS_DATA = JSON.parse(_t) || {};
+} catch(e) {}
+function saveThesis() {
+  try { localStorage.setItem('inv_thesis', JSON.stringify(THESIS_DATA)); } catch(e) {}
+}
 
 // Taiwan stock holdings (代號, 名稱, 持股, 均價, 現價, 未實現%, 市值)
 const TW_HOLD = [
@@ -1805,6 +1830,7 @@ function renderTwStocks() {
   document.getElementById('twTopLosers').innerHTML = losers.map(s =>
     `<div class="summary-row"><span>${s.name}</span><span class="down">${s.pct.toFixed(1)}% · ${recTag[s.rec]}</span></div>`
   ).join('');
+  renderThesisTracker();
 }
 
 // ─────── US STOCKS ───────
@@ -1836,6 +1862,97 @@ function renderUsStocks() {
   render(US_MAIN, 'usMainTable');
   render(US_ROY, 'usRoyTable');
   renderUsPageKPIs();
+  renderThesisTracker();
+}
+
+// ─────── THESIS TRACKER ───────
+const THESIS_STATUS = {
+  valid:   { label: '✅ 成立',   color: 'var(--green)' },
+  watch:   { label: '⚠️ 待觀察', color: 'var(--yellow)' },
+  invalid: { label: '❌ 失效',   color: 'var(--red)' },
+  none:    { label: '— 未設定',  color: 'var(--text2)' },
+};
+const THESIS_CYCLE = ['none', 'valid', 'watch', 'invalid'];
+
+function cycleThesisStatus(key) {
+  const cur = (THESIS_DATA[key] || {}).status || 'none';
+  const next = THESIS_CYCLE[(THESIS_CYCLE.indexOf(cur) + 1) % THESIS_CYCLE.length];
+  if (!THESIS_DATA[key]) THESIS_DATA[key] = {};
+  THESIS_DATA[key].status = next;
+  if (!THESIS_DATA[key].date) THESIS_DATA[key].date = new Date().toISOString().slice(0, 10);
+  saveThesis();
+  renderThesisTracker();
+}
+
+function editThesis(key, name) {
+  const cur = (THESIS_DATA[key] || {}).thesis || '';
+  const val = prompt(`${name} 的投資買入理由：`, cur);
+  if (val === null) return;
+  if (!THESIS_DATA[key]) THESIS_DATA[key] = {};
+  THESIS_DATA[key].thesis = val;
+  THESIS_DATA[key].date = new Date().toISOString().slice(0, 10);
+  saveThesis();
+  renderThesisTracker();
+}
+
+function copyThesisPrompt(key, name, pct, mv) {
+  const t = THESIS_DATA[key] || {};
+  const text = `請幫我檢視以下持倉的投資論點是否仍然成立：
+
+股票：${key} ${name}
+買入理由（當初）：${t.thesis || '（尚未填寫）'}
+目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 ${mv ? '$' + Math.round(mv).toLocaleString() : '—'}
+論點建立日期：${t.date || '未記錄'}
+
+請判斷：
+1. 原始買入理由是否已改變？
+2. 目前股價反映了哪些預期？
+3. 繼續持有的理由 vs 出場的理由
+4. 操作建議（加碼/持有/減碼/停損）`;
+  navigator.clipboard.writeText(text).then(() => {
+    alert(`已複製「${name}」的追蹤 Prompt，貼到 Claude 即可分析`);
+  }).catch(() => alert('複製失敗，請手動複製'));
+}
+
+function renderThesisTracker() {
+  const renderSection = (holdings, bodyId, isUS) => {
+    const el = document.getElementById(bodyId);
+    if (!el) return;
+    if (!holdings.length) { el.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">無持倉資料</div>'; return; }
+
+    el.innerHTML = holdings.map(h => {
+      const key    = isUS ? h.sym : h.code;
+      const name   = isUS ? h.sym : h.name;
+      const pct    = h.pct ?? 0;
+      const mv     = isUS ? (h.mv || 0) * USD_TWD : (h.mv || 0);
+      const t      = THESIS_DATA[key] || {};
+      const st     = THESIS_STATUS[t.status || 'none'];
+      const thesis = t.thesis || '';
+      const date   = t.date   || '';
+
+      return `<div style="display:grid;grid-template-columns:80px 1fr auto auto;gap:8px;align-items:start;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <div style="font-weight:600;font-size:13px">${isUS ? h.sym : h.code}</div>
+          <div style="font-size:11px;color:var(--text2)">${isUS ? '' : h.name}</div>
+          <div style="font-size:11px;color:${pctCls(pct).includes('up') ? 'var(--green)' : pct < 0 ? 'var(--red)' : 'var(--text2)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</div>
+        </div>
+        <div onclick="editThesis('${key}','${name.replace(/'/g,"\\'")}');event.stopPropagation()" style="cursor:pointer;min-height:36px">
+          ${thesis
+            ? `<div style="font-size:12px;color:var(--text1);line-height:1.5">${thesis}</div>
+               ${date ? `<div style="font-size:10px;color:var(--text3);margin-top:2px">記錄於 ${date}</div>` : ''}`
+            : `<div style="font-size:12px;color:var(--text3);font-style:italic">點擊填寫買入理由…</div>`}
+        </div>
+        <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding-top:2px">${st.label}</div>
+        <button onclick="copyThesisPrompt('${key}','${name.replace(/'/g,"\\'")}',${pct},${mv})"
+          style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1);white-space:nowrap">
+          📋 複製 Prompt
+        </button>
+      </div>`;
+    }).join('');
+  };
+
+  renderSection(TW_HOLD, 'twThesisBody', false);
+  renderSection([...US_MAIN, ...US_ROY], 'usThesisBody', true);
 }
 
 function renderUsPageKPIs() {
