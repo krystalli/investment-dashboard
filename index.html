@@ -273,6 +273,20 @@
 </nav>
 <div id="syncStatus" class="sync-status" style="display:none"></div>
 
+<!-- ═══ AI 分析 Modal ═══ -->
+<div id="analysisModal" onclick="if(event.target===this)closeAnalysisModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface1);border-radius:14px;width:100%;max-width:580px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)">
+      <div>
+        <div style="font-weight:700;font-size:15px" id="modalTitle">🤖 AI 持倉分析</div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px" id="modalSub"></div>
+      </div>
+      <button onclick="closeAnalysisModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2);line-height:1">×</button>
+    </div>
+    <div id="modalBody" style="padding:20px;overflow-y:auto;font-size:13px;line-height:1.8;flex:1"></div>
+  </div>
+</div>
+
 <!-- ═══ PAGE: OVERVIEW ═══ -->
 <div id="page-overview" class="page active">
   <div class="kpi-grid">
@@ -360,19 +374,12 @@
     <table>
       <thead>
         <tr>
-          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th><th>建議</th><th>操作理由</th>
+          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th><th>建議</th><th>操作理由</th><th></th>
         </tr>
       </thead>
       <tbody id="twHoldTable"></tbody>
     </table>
     </div>
-  </div>
-
-  <div class="card" id="twThesisCard">
-    <div class="card-title">📋 投資論點追蹤 <span class="badge">持倉論點</span>
-      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換</span>
-    </div>
-    <div id="twThesisBody"></div>
   </div>
 
   <div class="card">
@@ -434,7 +441,7 @@
     <div style="overflow-x:auto">
     <table>
       <thead>
-        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr>
+        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr>
       </thead>
       <tbody id="usMainTable"></tbody>
     </table>
@@ -446,18 +453,11 @@
     <div style="overflow-x:auto">
     <table>
       <thead>
-        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr>
+        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr>
       </thead>
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
-  </div>
-
-  <div class="card" id="usThesisCard">
-    <div class="card-title">📋 投資論點追蹤 <span class="badge">美股論點</span>
-      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)">點擊狀態切換</span>
-    </div>
-    <div id="usThesisBody"></div>
   </div>
 
   <div class="card">
@@ -1805,6 +1805,7 @@ function renderTwStocks() {
       <td>$${s.mv.toLocaleString()}</td>
       <td>${recTag[s.rec]}</td>
       <td style="color:var(--text2);max-width:200px;font-size:11px">${s.reason}</td>
+      <td><button onclick="analyzeThesis('${s.code}','${s.name.replace(/'/g,"\\'")}',${s.pct},${s.mv},false)" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">🤖</button></td>
     </tr>`;
   });
 
@@ -1830,7 +1831,6 @@ function renderTwStocks() {
   document.getElementById('twTopLosers').innerHTML = losers.map(s =>
     `<div class="summary-row"><span>${s.name}</span><span class="down">${s.pct.toFixed(1)}% · ${recTag[s.rec]}</span></div>`
   ).join('');
-  renderThesisTracker();
 }
 
 // ─────── US STOCKS ───────
@@ -1856,13 +1856,13 @@ function renderUsStocks() {
         <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
         <td>${recTag[s.rec] || s.rec}</td>
         <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
+        <td><button onclick="analyzeThesis('${s.sym}','${s.sym}',${s.pct},${(s.mv||0)*USD_TWD},true)" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">🤖</button></td>
       </tr>`;
     });
   };
   render(US_MAIN, 'usMainTable');
   render(US_ROY, 'usRoyTable');
   renderUsPageKPIs();
-  renderThesisTracker();
 }
 
 // ─────── THESIS TRACKER ───────
@@ -1881,30 +1881,49 @@ function cycleThesisStatus(key) {
   THESIS_DATA[key].status = next;
   if (!THESIS_DATA[key].date) THESIS_DATA[key].date = new Date().toISOString().slice(0, 10);
   saveThesis();
-  renderThesisTracker();
 }
 
-async function analyzeThesis(key, name, pct, mv) {
+function closeAnalysisModal() {
+  const m = document.getElementById('analysisModal');
+  if (m) m.style.display = 'none';
+}
+
+async function analyzeThesis(key, name, pct, mv, isUS) {
   const apiKey = localStorage.getItem('inv_gemini_key');
   if (!apiKey) { alert('請先在右上角設定 Groq API Key'); return; }
 
-  const t = THESIS_DATA[key] || {};
-  const status = THESIS_STATUS[t.status || 'none'].label;
-  const resultId = `thesis-result-${key}`;
-  const btnId    = `thesis-btn-${key}`;
+  const modal = document.getElementById('analysisModal');
+  const body  = document.getElementById('modalBody');
+  const title = document.getElementById('modalTitle');
+  const sub   = document.getElementById('modalSub');
 
-  const btn = document.getElementById(btnId);
-  const el  = document.getElementById(resultId);
-  if (btn) { btn.textContent = '⏳ 分析中…'; btn.disabled = true; }
-  if (el)  { el.style.display = 'block'; el.style.cssText = 'background:var(--surface2);border-radius:8px;padding:12px;font-size:12px;line-height:1.7;margin-top:8px'; el.textContent = '分析中…'; }
+  title.textContent = `🤖 ${name}${isUS ? '' : ' ' + key} 持倉分析`;
+  sub.textContent   = `損益 ${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%  ·  市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}`;
+  body.innerHTML    = '<div style="color:var(--text2);text-align:center;padding:24px">分析中…</div>';
+  modal.style.display = 'flex';
 
-  const prompt = `請分析以下持倉，給出簡潔的持有建議（繁體中文，200字以內）：
+  // 找持倉完整資料
+  const hold = isUS
+    ? [...US_MAIN, ...US_ROY].find(h => h.sym === key)
+    : TW_HOLD.find(h => h.code === key);
 
-股票：${key} ${name}
+  const extraContext = hold
+    ? isUS
+      ? `持股 ${hold.shares} 股，均價 $${hold.avg?.toFixed(2)}，現價 $${hold.price?.toFixed(2)}，建議：${hold.rec}，理由：${hold.reason}`
+      : `持股 ${hold.shares} 股，均價 $${hold.avg?.toFixed(0)}，現價 $${hold.price?.toFixed(0)}，建議：${hold.rec}，理由：${hold.reason}`
+    : '';
+
+  const prompt = `你是一位專業投資分析師。請針對以下${isUS ? '美股' : '台股'}持倉，進行全面分析（繁體中文，300字以內）：
+
+股票：${isUS ? key : key + ' ' + name}
+${extraContext}
 目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}
-論點狀態：${status}
 
-請回答：近期該股/產業有哪些重要變化？現在應該持有、加碼、還是減碼/停損？`;
+請回答：
+1. 近期該股或所在產業有哪些重要變化或催化劑？
+2. 技術面或基本面目前處於哪個位置？
+3. 繼續持有的理由 vs 出場的理由各為何？
+4. 操作建議（加碼 / 持有 / 減碼 / 停損）並說明理由`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -1912,55 +1931,18 @@ async function analyzeThesis(key, name, pct, mv) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 512,
+        max_tokens: 700,
         messages: [{ role: 'user', content: prompt }]
       })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
-    el.innerHTML = data.choices[0].message.content.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    body.innerHTML = data.choices[0].message.content
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   } catch(e) {
-    el.textContent = `分析失敗：${e.message}`;
-  } finally {
-    if (btn) { btn.textContent = '🤖 分析'; btn.disabled = false; }
+    body.innerHTML = `<span style="color:var(--red)">分析失敗：${e.message}</span>`;
   }
-}
-
-function renderThesisTracker() {
-  const renderSection = (holdings, bodyId, isUS) => {
-    const el = document.getElementById(bodyId);
-    if (!el) return;
-    if (!holdings.length) { el.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">無持倉資料</div>'; return; }
-
-    el.innerHTML = holdings.map(h => {
-      const key    = isUS ? h.sym : h.code;
-      const name   = isUS ? h.sym : h.name;
-      const pct    = h.pct ?? 0;
-      const mv     = isUS ? (h.mv || 0) * USD_TWD : (h.mv || 0);
-      const t  = THESIS_DATA[key] || {};
-      const st = THESIS_STATUS[t.status || 'none'];
-
-      const prevResult = document.getElementById(`thesis-result-${key}`)?.innerHTML || '';
-      return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
-        <div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center">
-          <div style="display:flex;gap:12px;align-items:center">
-            <span style="font-weight:600;font-size:13px;min-width:48px">${isUS ? h.sym : h.code}</span>
-            ${isUS ? '' : `<span style="font-size:12px;color:var(--text2)">${h.name}</span>`}
-            <span style="font-size:12px;color:${pct >= 0 ? 'var(--green)' : 'var(--red)'}">${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%</span>
-          </div>
-          <div onclick="cycleThesisStatus('${key}')" style="cursor:pointer;font-size:12px;color:${st.color};white-space:nowrap;padding:4px 8px;border:1px solid ${st.color};border-radius:6px">${st.label}</div>
-          <button id="thesis-btn-${key}" onclick="analyzeThesis('${key}','${name.replace(/'/g,"\\'")}',${pct},${mv})"
-            style="font-size:11px;padding:4px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1);white-space:nowrap">
-            🤖 分析
-          </button>
-        </div>
-        ${prevResult ? `<div id="thesis-result-${key}" style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12px;line-height:1.7;margin-top:8px">${prevResult}</div>` : `<div id="thesis-result-${key}" style="display:none"></div>`}
-      </div>`;
-    }).join('');
-  };
-
-  renderSection(TW_HOLD, 'twThesisBody', false);
-  renderSection([...US_MAIN, ...US_ROY], 'usThesisBody', true);
 }
 
 function renderUsPageKPIs() {
