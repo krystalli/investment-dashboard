@@ -1907,23 +1907,42 @@ async function analyzeThesis(key, name, pct, mv, isUS) {
     ? [...US_MAIN, ...US_ROY].find(h => h.sym === key)
     : TW_HOLD.find(h => h.code === key);
 
-  const extraContext = hold
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const holdInfo = hold
     ? isUS
-      ? `持股 ${hold.shares} 股，均價 $${hold.avg?.toFixed(2)}，現價 $${hold.price?.toFixed(2)}，建議：${hold.rec}，理由：${hold.reason}`
-      : `持股 ${hold.shares} 股，均價 $${hold.avg?.toFixed(0)}，現價 $${hold.price?.toFixed(0)}，建議：${hold.rec}，理由：${hold.reason}`
-    : '';
+      ? `持股 ${hold.shares} 股 ／ 均價 $${hold.avg?.toFixed(2)} ／ 現價 $${hold.price?.toFixed(2)} ／ 未實現損益 ${pct >= 0 ? '+' : ''}${pct?.toFixed(2)}% ／ 持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}`
+      : `持股 ${hold.shares} 股 ／ 均價 NT$${hold.avg?.toFixed(0)} ／ 現價 NT$${hold.price?.toFixed(0)} ／ 未實現損益 ${pct >= 0 ? '+' : ''}${pct?.toFixed(2)}% ／ 持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}`
+    : `未實現損益 ${pct >= 0 ? '+' : ''}${pct?.toFixed(2)}%，持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}`;
 
-  const prompt = `你是一位專業投資分析師。請針對以下${isUS ? '美股' : '台股'}持倉，進行全面分析（繁體中文，300字以內）：
+  const system = `你是一位擁有20年法人操作經驗的資深證券分析師與財經專家，曾任職於頂尖投行與資產管理公司。
+分析日期：${today}。
+你的分析風格：專業嚴謹、直白不廢話、觀點有所依據、若缺乏即時數據會明確說明。
+請以繁體中文回覆。`;
 
-股票：${isUS ? key : key + ' ' + name}
-${extraContext}
-目前損益：${pct >= 0 ? '+' : ''}${pct?.toFixed(2) ?? '—'}%，持倉市值 NT$${mv ? Math.round(mv).toLocaleString() : '—'}
+  const prompt = `我目前持有：${isUS ? '美股' : '台股'} ${isUS ? key : key + '（' + name + '）'}
+持倉狀況：${holdInfo}
 
-請回答：
-1. 近期該股或所在產業有哪些重要變化或催化劑？
-2. 技術面或基本面目前處於哪個位置？
-3. 繼續持有的理由 vs 出場的理由各為何？
-4. 操作建議（加碼 / 持有 / 減碼 / 停損）並說明理由`;
+請針對這檔股票進行「持有股健康檢查與投資策略分析」，嚴謹回答以下五大問題：
+
+**1.【核心投資論點檢視】**
+這家公司目前最強大的競爭優勢（護城河）是什麼？這個優勢在未來1-2年內，是否面臨被顛覆或減弱的風險？
+
+**2.【最新財務健診】**
+根據最新一季財報與法說會，營收成長性、毛利率走勢、EPS、現金流狀況如何？有無財務惡化的潛在警訊？
+
+**3.【未來成長動能與三大風險】**
+- 未來最核心的營收成長驅動引擎是什麼？
+- 目前面臨的三大主要風險（地緣政治、競爭者、供應鏈、政策監管等）？
+
+**4.【估值與技術/籌碼面評估】**
+- 目前P/E或PEG與同行及自身歷史相比，偏高、合理還是低估？
+- 市場共識的法人目標價區間？技術面呈現什麼走勢？
+
+**5.【最終操作決策與追蹤指標】**
+- 明確給出操作建議：加碼買入 / 續抱 / 分批減碼 / 立即清倉，並說明理由。
+- 未來1-2季應密切追蹤的三個關鍵數據或事件（Key Catalysts）？
+
+若缺乏即時數據，請直接說明。`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -1931,8 +1950,12 @@ ${extraContext}
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 700,
-        messages: [{ role: 'user', content: prompt }]
+        max_tokens: 1500,
+        temperature: 0.5,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user',   content: prompt }
+        ]
       })
     });
     const data = await res.json();
