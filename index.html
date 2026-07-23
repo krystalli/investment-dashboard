@@ -3348,100 +3348,151 @@ async function runTeamAIAnalysis() {
   const btn    = document.getElementById('teamAiBtn');
   const status = document.getElementById('teamAiStatus');
   const hint   = document.getElementById('teamAiKeyHint');
-
   const setStatus = (msg, color='var(--text2)') => { if (status) { status.textContent = msg; status.style.color = color; } };
 
-  if (!apiKey) {
-    setStatus('⚠️ 請先在聊天室 ⚙️ 設定 Groq API Key', 'var(--yellow)');
-    return;
-  }
+  if (!apiKey) { setStatus('⚠️ 請先在聊天室 ⚙️ 設定 Groq API Key', 'var(--yellow)'); return; }
 
   btn.disabled = true; btn.textContent = '⏳ 分析中…';
-  setStatus('🧠 六位顧問分析中，約 20–30 秒…', 'var(--text2)');
+  setStatus('🧠 六位顧問並行分析中，逐一顯示結果…', 'var(--text2)');
 
-  const prompt = `你是一個由6位專業投資顧問組成的AI分析團隊，分析日期：${new Date().toLocaleDateString('zh-TW')}。
+  const ctx = buildTeamAnalysisContext();
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
-⚠️ 鐵則：
-1. 「📊 持倉分析」只能分析「台股持倉清單」內的股票；絕對不可說用戶持有清單外的台股（清單外股票不存在於持倉中）
-2. 「💡 新投資機會」可以自由推薦觀察清單或任何市場上值得買的標的（台股/美股/加密貨幣均可）
-3. 每條分析必須附具體數字（損益%、目標價、佔比、幣種等）
-4. david 必須分析加密貨幣市場現況並給予 BTC/ETH 即時操作建議
+  // 每位顧問獨立角色與問題
+  const advisors = [
+    {
+      key: 'alex', ac: '#58a6ff',
+      system: `你是 Alex，一位資深技術分析師，專精 K 線型態、趨勢線、支撐壓力、RSI/MACD 等指標。今天是 ${today}。你只從技術面出發，不談基本面。每個觀點必須給出具體價位或信號。`,
+      question: `根據以下投資組合的即時價格，從技術分析角度：
+1. 分析 2-3 檔台股持倉目前的技術面位置（趨勢、支撐壓力、進出場時機）
+2. 分析美股/QQQ 技術面現況
+3. 推薦 1-2 個你從技術面看到機會的標的（含具體進場區間）
+4. 本週最重要的技術面操作訊號
 
-回覆格式：僅輸出以下JSON，不加任何其他文字或markdown符號：
-{"alex":"...","sophia":"...","max":"...","emma":"...","david":"...","ryan":"..."}
+${ctx}`,
+    },
+    {
+      key: 'sophia', ac: '#3fb950',
+      system: `你是 Sophia，基本面分析師，專精財報解讀、產業競爭力、估值（PE/PB/DCF）、護城河。今天是 ${today}。你從產業趨勢和公司基本面出發，給出有依據的估值觀點。`,
+      question: `根據以下持倉，從基本面角度：
+1. 評估 2-3 檔台股持倉目前的估值合理性（貴/便宜/合理，附估值依據）
+2. ${today.slice(0,7)} 當前最值得關注的產業趨勢為何？如何影響持倉？
+3. 推薦 1-2 個基本面強勁、目前被低估的標的
+4. 有哪些持倉的基本面出現了你需要警示的惡化跡象？
 
-每位顧問文字格式（用\\n換行，段落標題後直接換行接 1.）：
-📊 持倉分析：
-1. [分析持倉股票，附損益%]
-2. ...
+${ctx}`,
+    },
+    {
+      key: 'max', ac: '#f85149',
+      system: `你是 Max，風險管理專家，專注下行風險、集中度風險、相關性、最大回撤保護。今天是 ${today}。你的工作是找出組合最脆弱的地方並給出保護建議。語氣偏保守謹慎。`,
+      question: `審視以下投資組合，從風險管理角度：
+1. 目前組合最大的風險暴露點是什麼？（集中度、產業、匯率、流動性）
+2. 哪 2-3 檔持倉虧損最深或風險最高？建議如何處理（停損價位/減倉比例）
+3. ${today} 當前總體市場有哪些尾部風險需要防範？
+4. 建議如何調整組合比例來降低整體風險？
 
-💡 新投資機會：
-1. [推薦標的，附理由+目標價/進場區間]
-2. ...
+${ctx}`,
+    },
+    {
+      key: 'emma', ac: '#bc8cff',
+      system: `你是 Emma，股息投資策略師，專精高殖利率股、配息穩定性、股息再投入、退休被動收入規劃。今天是 ${today}。你偏好持有穩定配息股，對成長股較保守。`,
+      question: `從股息策略角度分析：
+1. 組合中的股息資產（ETF/高殖利率股）目前配息吸引力如何？有無風險？
+2. ${today.slice(0,7)} 升降息環境下，哪類股息資產較有利/不利？
+3. 推薦 1-2 個目前股息殖利率有吸引力的台股或美股標的（附殖利率估算）
+4. 給這個組合的股息收入成長建議
 
-🎯 本週操作重點：
-1. [最具體的1-2個行動]
+${ctx}`,
+    },
+    {
+      key: 'david', ac: '#e3b341',
+      system: `你是 David，總體經濟與加密貨幣分析師。今天是 ${today}。你負責解讀 Fed 政策、美元走勢、地緣政治風險，以及 BTC/ETH/山寨幣的當前市況與操作策略。你說話直接，不說廢話。`,
+      question: `根據 ${today} 的市場環境：
+1. 目前總體環境最關鍵的 2 個變數是什麼？對股票/加密幣的影響？
+2. BTC 和 ETH 目前的技術面與市場情緒如何？短線方向與重要價位？
+3. 台幣/美元匯率目前走勢對這個組合的影響？
+4. 是否有加密貨幣的新機會（山寨幣輪動/DeFi/敘事）值得關注？
+5. 對持倉美股的宏觀建議
 
-各顧問專責：
-- alex：技術分析（趨勢、支撐壓力、K線、進出場時機）
-- sophia：基本面（估值、財報、產業競爭力、護城河）
-- max：風險管理（集中度、停損、下行風險、組合平衡）
-- emma：股息策略（殖利率、配息穩定性、再投入規劃）
-- david：宏觀+加密（Fed/匯率/地緣政治 + BTC/ETH當前趨勢、加密市場機會）
-- ryan：QQQ/槓桿策略（SMA200訊號、QQQ/QLD/TQQQ動態配置）
+${ctx}`,
+    },
+    {
+      key: 'ryan', ac: '#f0883e',
+      system: `你是 Ryan，量化與槓桿 ETF 策略師，專精 QQQ/QLD/TQQQ 動態配置、SMA 趨勢跟隨、再平衡。今天是 ${today}。你用數據說話，每個建議都附條件和觸發價位。`,
+      question: `分析 QQQ 槓桿策略現況：
+1. 根據 QQQ 當前價格 vs SMA200，現在處於哪個策略階段？應該如何配置 QQQ/QLD/TQQQ？
+2. ${today} 近期 Nasdaq 的走勢型態和動能如何？訊號是否有變化的可能？
+3. 目前美股科技持倉（含 QQQ 策略）的整體槓桿暴露是否適當？
+4. 具體操作建議：下一個觸發加碼或減倉的價位條件是什麼？
 
-${buildTeamAnalysisContext()}`;
+${ctx}`,
+    },
+  ];
 
-  try {
+  // 所有顧問卡片先顯示「分析中」
+  advisors.forEach(a => {
+    const bodyEl = document.getElementById(`team-body-${a.key}`);
+    if (bodyEl) bodyEl.innerHTML = `<div style="color:var(--text2);font-size:12px;padding:8px 0">⏳ 分析中…</div>`;
+  });
+
+  const callGroq = async (advisor) => {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 3500,
-        temperature: 0.6,
-        messages: [{ role: 'user', content: prompt }]
+        max_tokens: 700,
+        temperature: 0.7,
+        messages: [
+          { role: 'system', content: advisor.system },
+          { role: 'user',   content: advisor.question }
+        ]
       })
     });
     if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
     const data = await res.json();
-    const raw = data.choices[0].message.content.trim();
+    return data.choices[0].message.content.trim();
+  };
 
-    // 解析 JSON（去除可能的 markdown wrapper）
-    const jsonStr = raw.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-    let advice;
-    try { advice = JSON.parse(jsonStr); }
-    catch(e) {
-      // JSON 解析失敗：把原始文字塞進第一個顧問卡顯示
-      const fallbackEl = document.getElementById('team-body-alex');
-      if (fallbackEl) fallbackEl.innerHTML = `<div class="team-section" style="grid-column:1/-1">
-        <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${escHtml(raw)}</div></div>`;
-      btn.disabled=false; btn.textContent='🔄 重新分析'; return;
-    }
+  let done = 0;
+  const total = advisors.length;
 
-    const advisors = [
-      {key:'alex',  ac:'#58a6ff'},
-      {key:'sophia',ac:'#3fb950'},
-      {key:'max',   ac:'#f85149'},
-      {key:'emma',  ac:'#bc8cff'},
-      {key:'david', ac:'#e3b341'},
-      {key:'ryan',  ac:'#f0883e'},
-    ];
-
-    // 更新各顧問卡片 body（保留卡片 header，只換內容）
-    advisors.forEach(a => {
+  // 並行發出，完成一個立刻渲染
+  await Promise.allSettled(advisors.map(async (a) => {
+    try {
+      const text = await callGroq(a);
       const bodyEl = document.getElementById(`team-body-${a.key}`);
-      if (bodyEl && advice[a.key]) bodyEl.innerHTML = fmtAiSection(advice[a.key], a.ac);
-    });
+      if (bodyEl) bodyEl.innerHTML = fmtAdvisorText(text, a.ac);
+      done++;
+      setStatus(`🧠 ${done}/${total} 位顧問完成…`, 'var(--text2)');
+    } catch(e) {
+      const bodyEl = document.getElementById(`team-body-${a.key}`);
+      if (bodyEl) bodyEl.innerHTML = `<div style="color:var(--red);font-size:12px">分析失敗：${escHtml(e.message)}</div>`;
+      done++;
+    }
+  }));
 
-    const timeStr = new Date().toLocaleTimeString('zh-TW');
-    setStatus(`✅ AI 分析完成 ${timeStr}`, 'var(--green)');
-    if (hint) { hint.textContent = `Groq llama-3.3-70b · ${timeStr}`; hint.style.color='var(--text2)'; }
-    btn.disabled=false; btn.textContent='🔄 重新分析';
-  } catch(e) {
-    setStatus(`❌ 分析失敗：${e.message}`, 'var(--red)');
-    btn.disabled = false; btn.textContent = '🔮 AI 即時深度分析';
-  }
+  const timeStr = new Date().toLocaleTimeString('zh-TW');
+  setStatus(`✅ 分析完成 ${timeStr}`, 'var(--green)');
+  if (hint) { hint.textContent = `Groq llama-3.3-70b · ${timeStr}`; hint.style.color='var(--text2)'; }
+  btn.disabled = false; btn.textContent = '🔄 重新分析';
+}
+
+// 將顧問自由格式文字轉成卡片 HTML
+function fmtAdvisorText(text, ac) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, `<strong style="color:${ac}">$1</strong>`)
+    .replace(/^(#{1,3})\s+(.+)$/gm, `<div style="font-weight:700;color:${ac};margin:10px 0 4px">$2</div>`)
+    .replace(/^(\d+)[.)]\s+(.+)$/gm, (_, n, body) =>
+      `<div style="display:flex;gap:8px;margin:7px 0;align-items:flex-start;line-height:1.65">
+        <span style="flex-shrink:0;min-width:20px;height:20px;border-radius:50%;background:${ac};color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px">${n}</span>
+        <span style="font-size:13px">${body.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</span></div>`)
+    .replace(/^[-•·▸]\s*(.+)$/gm, (_, body) =>
+      `<div style="display:flex;gap:8px;margin:6px 0;align-items:flex-start;line-height:1.65">
+        <span style="flex-shrink:0;color:${ac};font-size:12px;margin-top:2px">▸</span>
+        <span style="font-size:13px">${body.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</span></div>`)
+    .replace(/\n\n+/g, '<div style="height:8px"></div>')
+    .replace(/\n/g, '<br>');
 }
 
 // 更新 AI 分析頁面的 key 提示
