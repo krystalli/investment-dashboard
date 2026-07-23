@@ -322,10 +322,17 @@
     </div>
   </div>
 
+  <div class="card" style="margin-bottom:14px" id="actionOverviewCard">
+    <div class="card-title">⚡ 持倉操作概覽
+      <span style="float:right;font-size:12px;font-weight:400;color:var(--text2)" id="actionOverviewMeta"></span>
+    </div>
+    <div id="actionOverviewBody"></div>
+  </div>
+
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">🤖 AI 洞察摘要</div>
     <div id="aiInsightPanel" style="margin-bottom:12px"></div>
-    <button onclick="showActionPlan()" style="width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.5px">⚡ 今日行動建議 →</button>
+    <button onclick="showActionPlan()" style="width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.5px">⚡ 今日 AI 深度行動建議 →</button>
   </div>
 
   <div class="grid-2">
@@ -2482,6 +2489,7 @@ try {
 initOverviewCharts();
 initCatTrendChart();
 renderOverviewKPIs();
+renderActionOverview();
 window._overviewInit = true;
 renderTwStocks();
 renderUsStocks();
@@ -2623,6 +2631,7 @@ async function refreshPrices() {
 
     rerenderStockTables();
     renderOverviewKPIs();
+    renderActionOverview();
     updateNavDate();
     const failed = (allUsSym.length + twSym.length) - Object.keys(priceMap).length - Object.keys(twPriceMap).length;
     showStatus(`✅ 已更新 美股${usUpdated}支、台股${twUpdated}支${nasdaq ? `，QQQ $${nasdaq}` : ''}${failed > 0 ? `（${failed} 支失敗）` : ''}`, 'success');
@@ -3090,6 +3099,7 @@ function rerenderStockTables() {
     const el = document.getElementById(id); if (el) el.innerHTML = '';
   });
   renderUsStocks();
+  renderActionOverview();
   if (window._qqqInit) renderQQQHoldings();
 }
 
@@ -4934,6 +4944,69 @@ function renderAiInsights() {
     <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-radius:8px;margin-bottom:6px;background:${bgMap[ins.type]}">
       <span style="color:${clrMap[ins.type]};font-size:14px;line-height:1.5">${ins.text}</span>
     </div>`).join('');
+}
+
+function renderActionOverview() {
+  const el   = document.getElementById('actionOverviewBody');
+  const meta = document.getElementById('actionOverviewMeta');
+  if (!el) return;
+
+  // 合併台股＋美股，統一格式
+  const allHolds = [
+    ...TW_HOLD.map(h => ({
+      ticker: h.code, name: h.name,
+      pct: h.pct ?? 0, mv: h.mv || 0,
+      rec: h.rec || 'HOLD', reason: h.reason || '',
+      isUS: false,
+    })),
+    ...[...US_MAIN, ...US_ROY].map(h => ({
+      ticker: h.sym, name: h.sym,
+      pct: h.pct ?? 0, mv: (h.mv || 0) * USD_TWD,
+      rec: h.rec || 'HOLD', reason: h.reason || '',
+      isUS: true,
+    })),
+  ];
+
+  if (!allHolds.length) {
+    el.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px">無持倉資料，請先同步試算表</div>';
+    return;
+  }
+
+  // 分三區
+  const urgent  = allHolds.filter(h => ['STOP','TRIM'].includes(h.rec) || h.pct < -20);
+  const watch   = allHolds.filter(h => !urgent.includes(h) && (h.rec === 'EVAL' || (h.rec === 'HOLD' && h.pct < 0)));
+  const add     = allHolds.filter(h => ['ADD','BUY'].includes(h.rec));
+  const hold    = allHolds.filter(h => !urgent.includes(h) && !watch.includes(h) && !add.includes(h));
+
+  const recLabel = { STOP:'停損', TRIM:'減碼', EVAL:'觀察', HOLD:'持有', ADD:'加碼', BUY:'買入' };
+  const recBg    = { STOP:'var(--red)', TRIM:'#e3671a', EVAL:'var(--yellow)', HOLD:'var(--text3)', ADD:'var(--green)', BUY:'var(--green)' };
+
+  const row = h => `
+    <div style="display:grid;grid-template-columns:54px 1fr auto auto;gap:6px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <span style="font-family:monospace;font-weight:700;font-size:12px">${h.ticker}</span>
+        ${h.isUS ? '<span style="font-size:9px;color:var(--text3);margin-left:2px">US</span>' : ''}
+      </div>
+      <div style="font-size:12px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${h.isUS ? '' : h.name}${h.reason ? `<span style="color:var(--text3);font-size:11px"> · ${h.reason.slice(0, 45)}${h.reason.length > 45 ? '…' : ''}</span>` : ''}</div>
+      <div style="font-size:12px;font-weight:600;color:${h.pct >= 0 ? 'var(--green)' : 'var(--red)'}; white-space:nowrap">${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%</div>
+      <div style="font-size:11px;font-weight:700;color:#fff;background:${recBg[h.rec]||'var(--text3)'};padding:2px 7px;border-radius:10px;white-space:nowrap">${recLabel[h.rec]||h.rec}</div>
+    </div>`;
+
+  const section = (icon, label, color, items) => items.length ? `
+    <div style="font-size:12px;font-weight:700;color:${color};margin:12px 0 4px">${icon} ${label}（${items.length}）</div>
+    ${items.sort((a,b) => a.pct - b.pct).map(row).join('')}` : '';
+
+  el.innerHTML =
+    section('🔴', '需要行動', 'var(--red)',    urgent) +
+    section('🟢', '可考慮加碼', 'var(--green)', add) +
+    section('🟡', '持續觀察', 'var(--yellow)', watch) +
+    section('⚪', '正常持有', 'var(--text2)',  hold);
+
+  if (meta) {
+    const total = allHolds.length;
+    meta.textContent = `共 ${total} 筆 · ${urgent.length} 需行動 · ${add.length} 可加碼`;
+    meta.style.color = urgent.length > 0 ? 'var(--red)' : 'var(--text2)';
+  }
 }
 
 function computeActionPlan() {
