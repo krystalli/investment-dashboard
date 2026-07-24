@@ -257,12 +257,9 @@
   <div class="nav-brand">📊 投資儀表板</div>
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('overview')">總覽</button>
-    <button class="nav-tab" onclick="showPage('tw')">台股分析</button>
-    <button class="nav-tab" onclick="showPage('us')">美股分析</button>
-    <button class="nav-tab" onclick="showPage('qqq')">QQQ策略</button>
-    <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
-    <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
-    <button class="nav-tab" onclick="showPage('risk')">風險分析</button>
+    <button class="nav-tab" onclick="showPage('holdings')">持倉</button>
+    <button class="nav-tab" onclick="showPage('perf')">績效</button>
+    <button class="nav-tab" onclick="showPage('risk')">風險/策略</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -334,16 +331,6 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:14px" id="actionOverviewCard">
-    <div class="card-title">⚡ 持倉操作概覽
-      <span style="float:right;display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;font-weight:400;color:var(--text2)" id="actionOverviewMeta"></span>
-        <button onclick="runAllPortfolioAnalysis()" id="portfolioAnalysisBtn" style="font-size:11px;padding:4px 10px;background:var(--accent);border:none;border-radius:6px;cursor:pointer;color:#fff;font-weight:600">🔬 全組合分析</button>
-      </span>
-    </div>
-    <div id="actionOverviewBody"></div>
-  </div>
-
   <div class="card" style="margin-bottom:14px" id="morningScanCard">
     <div class="card-title">🌅 晨間操作掃描
       <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
@@ -367,30 +354,30 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" style="display:none">
     <div class="card-title">💼 資產配置明細</div>
-    <div id="allocDetail"></div>
+    <div id="allocDetail-old"></div>
   </div>
 
-  <div class="card">
+  <div class="card" style="display:none">
     <div class="card-title">📈 各類資產逐月趨勢 <span class="badge">對數刻度</span></div>
-    <div class="chart-wrap-lg"><canvas id="chartCatTrend"></canvas></div>
+    <div class="chart-wrap-lg"><canvas id="chartCatTrend-old"></canvas></div>
   </div>
 
   <!-- 配置建議 -->
-  <div class="card" id="allocAdvice"></div>
+  <div class="card" id="allocAdvice-old" style="display:none"></div>
 
-  <div class="card">
-    <div class="card-title">📅 逐月資產 <span class="badge" id="monthlyRangeBadge"></span></div>
+  <div class="card" style="display:none">
+    <div class="card-title">📅 逐月資產 <span class="badge" id="monthlyRangeBadge-old"></span></div>
     <table>
       <thead><tr><th>月份</th><th>總資產</th><th>月增減</th><th>月增率</th></tr></thead>
-      <tbody id="monthlyTable"></tbody>
+      <tbody id="monthlyTable-old"></tbody>
     </table>
   </div>
 </div>
 
-<!-- ═══ PAGE: TAIWAN STOCKS ═══ -->
-<div id="page-tw" class="page">
+<!-- ═══ PAGE: HOLDINGS (TW + US + CRYPTO) ═══ -->
+<div id="page-holdings" class="page">
   <div class="alert alert-info">
     <div class="alert-icon">🤖</div>
     <div><strong>AI 台股分析師：</strong>以下建議基於持倉成本、未實現損益、產業趨勢及技術面綜合評估。市場每日變動，請搭配即時行情做最終判斷。</div>
@@ -432,14 +419,9 @@
       <div id="twTopLosers"></div>
     </div>
   </div>
-</div>
 
-<!-- ═══ PAGE: US STOCKS ═══ -->
-<div id="page-us" class="page">
-  <div class="alert alert-info">
-    <div class="alert-icon">🤖</div>
-    <div><strong>AI 美股分析師：</strong>以下建議基於持倉成本、產業景氣及宏觀環境（關稅、Fed利率政策）。目前美股面臨關稅不確定性，建議保持靈活應對。</div>
-  </div>
+  <!-- ── 美股持倉 ── -->
+  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">🇺🇸 美股持倉</div>
 
   <div class="kpi-grid" id="usKpiGrid">
     <div class="kpi-card">
@@ -465,12 +447,10 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🇺🇸 美股持倉分析 — 主帳戶</div>
+    <div class="card-title">🇺🇸 美股持倉 — 主帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead>
-        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr>
-      </thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
       <tbody id="usMainTable"></tbody>
     </table>
     </div>
@@ -480,9 +460,7 @@
     <div class="card-title">🏦 美股持倉 — 複委託帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead>
-        <tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr>
-      </thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
@@ -491,245 +469,91 @@
   <div class="card">
     <div class="card-title">🎯 美股整體策略建議</div>
     <div id="usStrategyAlerts">
-      <div class="alert alert-info">
-        <div class="alert-icon">⏳</div>
-        <div>載入持倉資料中…</div>
-      </div>
+      <div class="alert alert-info"><div class="alert-icon">⏳</div><div>載入持倉資料中…</div></div>
     </div>
   </div>
+
+  <!-- ── 加密幣 ── -->
+  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">₿ 加密幣持倉</div>
+
+  <div class="kpi-grid" id="cryptoKpi"></div>
+
+  <div class="card">
+    <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
+    <table>
+      <thead><tr><th>代號</th><th>名稱</th><th>數量</th><th>均價</th><th>現價</th><th>成本(USD)</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>建議</th></tr></thead>
+      <tbody id="cryptoTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══ PAGE: US STOCKS (hidden, legacy) ═══ -->
+<div id="page-us-old" class="page" style="display:none!important">
+  <div class="kpi-grid" id="usKpiGrid-old">
+    <div class="kpi-card">
+      <div class="kpi-value" id="usKpiTotal-old">—</div>
+      <div class="kpi-sub neutral" id="usKpiTotalSub-old"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value neutral" id="usKpiPnl-old">—</div>
+      <div class="kpi-sub neutral" id="usKpiPnlPct-old">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value neutral" id="usKpiWorst-old">—</div>
+      <div class="kpi-sub neutral" id="usKpiWorstSub-old">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value neutral" id="usKpiBest-old">—</div>
+      <div class="kpi-sub neutral" id="usKpiBestSub-old">—</div>
+    </div>
+  </div>
+  <table><tbody id="usMainTable-old"></tbody></table>
+  <table><tbody id="usRoyTable-old"></tbody></table>
+  <div id="usStrategyAlerts-old"></div>
 </div>
 
 <!-- ═══ PAGE: QQQ STRATEGY ═══ -->
-<div id="page-qqq" class="page">
-  <div class="card">
-    <div class="card-title">📐 QQQ / QLD / TQQQ 動態槓桿策略 <span class="badge">$30,000 USD</span></div>
-    <p style="color:var(--text2);font-size:13px;line-height:1.7;margin-bottom:16px">
-      核心邏輯：用 Nasdaq 100 SMA200 作為市場趨勢判斷依據。強勢時加槓桿提升報酬；疲弱時退回 QQQ 降低風險。
-    </p>
-    <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:13px;line-height:1.8">
-      <div style="margin-bottom:8px"><strong style="color:var(--blue)">🔵 永久配置（60%）：</strong>QQQ $18,000 — 無論市場強弱，核心部位不動</div>
-      <div style="margin-bottom:8px"><strong style="color:var(--green)">🟢 進場條件（剩餘40%）：</strong>Nasdaq 指數 > SMA200 × 1.04 → QLD 30%（$9,000）+ TQQQ 10%（$3,000）</div>
-      <div><strong style="color:var(--red)">🔴 退場條件：</strong>Nasdaq 指數 &lt; SMA200 × 0.93（低於 SMA200 約 7%）→ 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金</div>
-    </div>
+<div id="page-qqq-old" class="page" style="display:none!important">
+  <div id="signalPanel-old" class="signal-panel hold">
+    <div id="signalText-old" class="signal-big hold">HOLD ◆</div>
+    <div id="signalDesc-old"></div>
   </div>
-
-  <!-- Current Signal -->
-  <div class="grid-2">
-    <div>
-      <div id="signalPanel" class="signal-panel hold">
-        <div class="signal-label">目前訊號</div>
-        <div id="signalText" class="signal-big hold">HOLD ◆</div>
-        <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
-      </div>
-      <div class="card">
-        <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
-        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
-        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
-        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
-        <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
-      <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
-        <div class="alert-icon" id="allocAlertIcon">⏸</div>
-        <div id="allocAlertText">QQQ 價格載入中…</div>
-      </div>
-      <div class="gauge-row">
-        <div class="gauge-item">
-          <div class="gauge-pct" style="color:var(--blue)">60%</div>
-          <div class="gauge-name">QQQ ✅ 持有</div>
-          <div class="gauge-amount">$18,000</div>
-          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
-        </div>
-        <div class="gauge-item" id="qldGauge" style="opacity:0.4">
-          <div class="gauge-pct" style="color:var(--purple)">30%</div>
-          <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
-          <div class="gauge-amount">$9,000</div>
-          <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-        </div>
-        <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
-          <div class="gauge-pct" style="color:var(--orange)">10%</div>
-          <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
-          <div class="gauge-amount">$3,000</div>
-          <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-        </div>
-      </div>
-      <div style="margin-top:8px">
-        <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">📈 策略回測（歷史模擬）<span class="badge">2015-2024</span></div>
-    <div class="alert alert-warn">
-      <div class="alert-icon">⚠️</div>
-      <div>以下為策略概念模擬，非精確回測。槓桿 ETF 有耗損效應（Decay），長期持有表現受市場波動影響大。實際績效需用完整回測工具驗證。</div>
-    </div>
-    <div class="grid-3" style="margin-top:12px">
-      <div class="card" style="text-align:center;margin-bottom:0">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">純 QQQ（10年）</div>
-        <div style="font-size:26px;font-weight:700;color:var(--green)">+387%</div>
-        <div style="font-size:12px;color:var(--text2)">CAGR ~17.2%/yr</div>
-      </div>
-      <div class="card" style="text-align:center;margin-bottom:0">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">本策略模擬（10年）</div>
-        <div style="font-size:26px;font-weight:700;color:var(--purple)">~+550%</div>
-        <div style="font-size:12px;color:var(--text2)">趨勢上行時加槓桿增幅</div>
-      </div>
-      <div class="card" style="text-align:center;margin-bottom:0">
-        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">最大回撤風險</div>
-        <div style="font-size:26px;font-weight:700;color:var(--red)">-60%</div>
-        <div style="font-size:12px;color:var(--text2)">TQQQ 熊市最大損失</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標</div>
-    <table>
-      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
-      <tbody id="qqqHoldingsBody"></tbody>
-    </table>
-  </div>
+  <span id="nasdaqPrice-old"></span>
+  <span id="nasdaqSMA-old"></span>
+  <span id="nasdaqEntry-old"></span>
+  <span id="nasdaqExit-old"></span>
+  <span id="nasdaqDiff-old"></span>
+  <span id="nasdaqVsSMA-old"></span>
+  <span id="nasdaqSignal-old"></span>
+  <span id="allocBadge-old"></span>
+  <div id="allocAlert-old"><div id="allocAlertIcon-old"></div><div id="allocAlertText-old"></div></div>
+  <div id="qqqSharesCalc-old"></div>
+  <div id="qldGauge-old"><div id="qldName-old"></div><div id="qldText-old"></div></div>
+  <div id="tqqqGauge-old"><div id="tqqqName-old"></div><div id="tqqqText-old"></div></div>
+  <canvas id="chartQQQAlloc-old"></canvas>
+  <tbody id="qqqHoldingsBody-old"></tbody>
 </div>
 
-<!-- ═══ PAGE: BACKTEST ═══ -->
-<div id="page-backtest" class="page">
-  <div class="alert alert-info">
-    <div class="alert-icon">📊</div>
-    <div><strong>回測說明：</strong>使用歷史平均年化報酬率進行複利試算。台股以0050歷史CAGR約11%，美股QQQ以17%，混合投資組合以12%為基準。過去績效不代表未來表現。</div>
-  </div>
-
-  <!-- Current Base -->
-  <div class="kpi-grid">
-    <div class="kpi-card">
-      <div class="kpi-label">當前總資產</div>
-      <div class="kpi-value" id="btKpiBase">—</div>
-      <div class="kpi-sub neutral">TWD · 起始基數</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">5年後（穩健11%）</div>
-      <div class="kpi-value up" id="btKpi5y">—</div>
-      <div class="kpi-sub up" id="btKpi5yPct">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">台股 (0050 CAGR)</div>
-      <div class="kpi-value" style="color:var(--blue)">11%</div>
-      <div class="kpi-sub neutral">歷史 10 年均值</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">美股 (QQQ CAGR)</div>
-      <div class="kpi-value" style="color:var(--purple)">17%</div>
-      <div class="kpi-sub neutral">歷史 10 年均值</div>
-    </div>
-  </div>
-
-  <!-- Projection Tables -->
-  <div class="card">
-    <div class="card-title">🔮 投資組合試算（不含新增資金）</div>
-    <div class="grid-3" id="btScenariosGrid">
-      <div class="bt-scenario">
-        <div class="bt-year">保守（CAGR 8%）</div>
-        <div class="bt-value" id="bt8y5"  style="color:var(--text2)">—</div>
-        <div class="bt-return up" id="bt8y5p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt8y10" style="color:var(--text2)">—</div>
-        <div class="bt-return up" id="bt8y10p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt8y15" style="color:var(--text2)">—</div>
-        <div class="bt-return up" id="bt8y15p">—</div>
-      </div>
-      <div class="bt-scenario">
-        <div class="bt-year">穩健（CAGR 11%）</div>
-        <div class="bt-value" id="bt11y5"  style="color:var(--green)">—</div>
-        <div class="bt-return up" id="bt11y5p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt11y10" style="color:var(--green)">—</div>
-        <div class="bt-return up" id="bt11y10p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt11y15" style="color:var(--green)">—</div>
-        <div class="bt-return up" id="bt11y15p">—</div>
-      </div>
-      <div class="bt-scenario">
-        <div class="bt-year">積極（CAGR 15%）</div>
-        <div class="bt-value" id="bt15y5"  style="color:var(--purple)">—</div>
-        <div class="bt-return up" id="bt15y5p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt15y10" style="color:var(--purple)">—</div>
-        <div class="bt-return up" id="bt15y10p">—</div>
-        <div style="margin-top:12px"></div>
-        <div class="bt-value" id="bt15y15" style="color:var(--purple)">—</div>
-        <div class="bt-return up" id="bt15y15p">—</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">📈 資產成長預測圖</div>
-    <div class="chart-wrap-lg"><canvas id="chartProjection"></canvas></div>
-  </div>
-
-  <!-- ETF Backtest -->
-  <div class="card">
-    <div class="card-title">🏷️ 主要 ETF 歷史回測（$100萬投入）</div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead>
-        <tr><th>ETF</th><th>名稱</th><th>年化(10yr)</th><th>5年後</th><th>10年後</th><th>15年後</th><th>特性</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><span class="ticker">006208</span></td><td>富邦台50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股大型股，低費用</td></tr>
-        <tr><td><span class="ticker">0050</span></td><td>元大台灣50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股最具代表性</td></tr>
-        <tr><td><span class="ticker">00878</span></td><td>國泰永續高股息</td><td class="up">+9%</td><td class="up">$154萬</td><td class="up">$237萬</td><td class="up">$365萬</td><td>月配息，ESG篩選</td></tr>
-        <tr><td><span class="ticker">QQQ</span></td><td>Nasdaq 100</td><td class="up" style="color:var(--purple)">+17%</td><td class="up" style="color:var(--purple)">$219萬</td><td class="up" style="color:var(--purple)">$480萬</td><td class="up" style="color:var(--purple)">$1,054萬</td><td>美科技主導，高波動</td></tr>
-        <tr><td><span class="ticker">SPY</span></td><td>S&P 500</td><td class="up">+13%</td><td class="up">$185萬</td><td class="up">$340萬</td><td class="up">$628萬</td><td>美股廣基指數</td></tr>
-        <tr><td><span class="ticker">00662</span></td><td>富邦NASDAQ</td><td class="up">+17%</td><td class="up">$219萬</td><td class="up">$480萬</td><td class="up">$1,054萬</td><td>台幣計價QQQ替代</td></tr>
-        <tr><td><span class="ticker">QLD</span></td><td>2× Nasdaq</td><td class="up" style="color:var(--orange)">+28%*</td><td class="up" style="color:var(--orange)">$345萬</td><td class="up" style="color:var(--orange)">$1,190萬</td><td class="up" style="color:var(--orange)">$4,110萬</td><td>⚠️ 2倍槓桿，高風險</td></tr>
-        <tr>
-          <td colspan="7" style="font-size:11px;color:var(--text2);padding-top:8px">* QLD/TQQQ 因槓桿耗損效應，長期報酬低於2×/3×理論值。以上為牛市情境估算，熊市可能虧損 50-90%。</td>
-        </tr>
-      </tbody>
-    </table>
-    </div>
-  </div>
-
-  <div class="grid-2">
-    <!-- Taiwan Stock Backtest -->
-    <div class="card">
-      <div class="card-title">🇹🇼 台股主力持倉回測</div>
-      <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr><th>代號</th><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr>
-        </thead>
-        <tbody id="twBacktestTable"></tbody>
-      </table>
-      </div>
-    </div>
-
-    <!-- US Stock Backtest -->
-    <div class="card">
-      <div class="card-title">🇺🇸 美股持倉回測（USD）</div>
-      <div style="overflow-x:auto">
-      <table>
-        <thead>
-          <tr><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr>
-        </thead>
-        <tbody id="usBacktestTable"></tbody>
-      </table>
-      </div>
-    </div>
-  </div>
+<!-- ═══ PAGE: BACKTEST (hidden, legacy) ═══ -->
+<div id="page-backtest-old" class="page" style="display:none!important">
+  <div id="btKpiBase-old"></div>
+  <div id="btKpi5y-old"></div><div id="btKpi5yPct-old"></div>
+  <div id="bt8y5-old"></div><div id="bt8y5p-old"></div>
+  <div id="bt8y10-old"></div><div id="bt8y10p-old"></div>
+  <div id="bt8y15-old"></div><div id="bt8y15p-old"></div>
+  <div id="bt11y5-old"></div><div id="bt11y5p-old"></div>
+  <div id="bt11y10-old"></div><div id="bt11y10p-old"></div>
+  <div id="bt11y15-old"></div><div id="bt11y15p-old"></div>
+  <div id="bt15y5-old"></div><div id="bt15y5p-old"></div>
+  <div id="bt15y10-old"></div><div id="bt15y10p-old"></div>
+  <div id="bt15y15-old"></div><div id="bt15y15p-old"></div>
+  <canvas id="chartProjection-old"></canvas>
+  <tbody id="twBacktestTable-old"></tbody>
+  <tbody id="usBacktestTable-old"></tbody>
 </div>
 
-<!-- ═══ PAGE: HISTORY ═══ -->
-<div id="page-history" class="page">
+<!-- ═══ PAGE: PERF (歷史績效 + 配置) ═══ -->
+<div id="page-perf" class="page">
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-label">累計實現損益</div>
@@ -777,6 +601,29 @@
     <div class="chart-wrap-lg"><canvas id="chartMonthly"></canvas></div>
   </div>
 
+  <!-- ── 配置明細與趨勢（從總覽移入） ── -->
+  <div style="margin:24px 0 12px;border-top:1px solid var(--border);padding-top:20px"></div>
+
+  <div class="card">
+    <div class="card-title">💼 資產配置明細</div>
+    <div id="allocDetail"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 各類資產逐月趨勢 <span class="badge">對數刻度</span></div>
+    <div class="chart-wrap-lg"><canvas id="chartCatTrend"></canvas></div>
+  </div>
+
+  <div class="card" id="allocAdvice"></div>
+
+  <div class="card">
+    <div class="card-title">📅 逐月資產 <span class="badge" id="monthlyRangeBadge"></span></div>
+    <table>
+      <thead><tr><th>月份</th><th>總資產</th><th>月增減</th><th>月增率</th></tr></thead>
+      <tbody id="monthlyTable"></tbody>
+    </table>
+  </div>
+
 </div>
 
 <!-- ═══ PAGE: AI TEAM ═══ -->
@@ -784,17 +631,14 @@
   <div id="teamContent"></div>
 </div>
 
-<!-- ═══ PAGE: CRYPTO ═══ -->
-<div id="page-crypto" class="page">
-  <!-- KPI 摘要 -->
-  <div class="kpi-grid" id="cryptoKpi"></div>
-
-  <!-- 持倉表格 -->
+<!-- ═══ PAGE: CRYPTO (hidden, legacy) ═══ -->
+<div id="page-crypto-old" class="page" style="display:none!important">
+  <div class="kpi-grid" id="cryptoKpi-old"></div>
   <div class="card">
-    <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
+    <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge-old">同步後更新</span></div>
     <table>
       <thead><tr><th>代號</th><th>名稱</th><th>數量</th><th>均價</th><th>現價</th><th>成本(USD)</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>建議</th></tr></thead>
-      <tbody id="cryptoTable"></tbody>
+      <tbody id="cryptoTable-old"></tbody>
     </table>
   </div>
 
@@ -905,6 +749,221 @@
       <div>相關係數基於月度資產類別變化估算，因資料點有限（<12個月），供方向性參考。1=完全正相關，-1=完全負相關，0=無相關。</div>
     </div>
     <div id="correlationMatrix" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- ── QQQ 槓桿策略 ── -->
+  <div style="margin:32px 0 16px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:24px">🎯 QQQ 動態槓桿策略</div>
+
+  <div class="card">
+    <div class="card-title">📐 QQQ / QLD / TQQQ 動態槓桿策略 <span class="badge">$30,000 USD</span></div>
+    <p style="color:var(--text2);font-size:13px;line-height:1.7;margin-bottom:16px">
+      核心邏輯：用 Nasdaq 100 SMA200 作為市場趨勢判斷依據。強勢時加槓桿提升報酬；疲弱時退回 QQQ 降低風險。
+    </p>
+    <div style="background:var(--surface2);border-radius:10px;padding:16px;font-size:13px;line-height:1.8">
+      <div style="margin-bottom:8px"><strong style="color:var(--blue)">🔵 永久配置（60%）：</strong>QQQ $18,000 — 無論市場強弱，核心部位不動</div>
+      <div style="margin-bottom:8px"><strong style="color:var(--green)">🟢 進場條件（剩餘40%）：</strong>Nasdaq 指數 > SMA200 × 1.04 → QLD 30%（$9,000）+ TQQQ 10%（$3,000）</div>
+      <div><strong style="color:var(--red)">🔴 退場條件：</strong>Nasdaq 指數 &lt; SMA200 × 0.93（低於 SMA200 約 7%）→ 賣出全部 QLD + TQQQ，資金移回 QQQ 或現金</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div>
+      <div id="signalPanel" class="signal-panel hold">
+        <div class="signal-label">目前訊號</div>
+        <div id="signalText" class="signal-big hold">HOLD ◆</div>
+        <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
+        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
+        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
+        <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
+      <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
+        <div class="alert-icon" id="allocAlertIcon">⏸</div>
+        <div id="allocAlertText">QQQ 價格載入中…</div>
+      </div>
+      <div class="gauge-row">
+        <div class="gauge-item">
+          <div class="gauge-pct" style="color:var(--blue)">60%</div>
+          <div class="gauge-name">QQQ ✅ 持有</div>
+          <div class="gauge-amount">$18,000</div>
+          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
+        </div>
+        <div class="gauge-item" id="qldGauge" style="opacity:0.4">
+          <div class="gauge-pct" style="color:var(--purple)">30%</div>
+          <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
+          <div class="gauge-amount">$9,000</div>
+          <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+        </div>
+        <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
+          <div class="gauge-pct" style="color:var(--orange)">10%</div>
+          <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
+          <div class="gauge-amount">$3,000</div>
+          <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+        </div>
+      </div>
+      <div style="margin-top:8px">
+        <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 策略回測（歷史模擬）<span class="badge">2015-2024</span></div>
+    <div class="alert alert-warn">
+      <div class="alert-icon">⚠️</div>
+      <div>以下為策略概念模擬，非精確回測。槓桿 ETF 有耗損效應（Decay），長期持有表現受市場波動影響大。實際績效需用完整回測工具驗證。</div>
+    </div>
+    <div class="grid-3" style="margin-top:12px">
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">純 QQQ（10年）</div>
+        <div style="font-size:26px;font-weight:700;color:var(--green)">+387%</div>
+        <div style="font-size:12px;color:var(--text2)">CAGR ~17.2%/yr</div>
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">本策略模擬（10年）</div>
+        <div style="font-size:26px;font-weight:700;color:var(--purple)">~+550%</div>
+        <div style="font-size:12px;color:var(--text2)">趨勢上行時加槓桿增幅</div>
+      </div>
+      <div class="card" style="text-align:center;margin-bottom:0">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px">最大回撤風險</div>
+        <div style="font-size:26px;font-weight:700;color:var(--red)">-60%</div>
+        <div style="font-size:12px;color:var(--text2)">TQQQ 熊市最大損失</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標</div>
+    <table>
+      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
+      <tbody id="qqqHoldingsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── 回測試算 ── -->
+  <div style="margin:32px 0 16px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:24px">📊 回測試算</div>
+
+  <div class="alert alert-info">
+    <div class="alert-icon">📊</div>
+    <div><strong>回測說明：</strong>使用歷史平均年化報酬率進行複利試算。台股以0050歷史CAGR約11%，美股QQQ以17%，混合投資組合以12%為基準。過去績效不代表未來表現。</div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">當前總資產</div>
+      <div class="kpi-value" id="btKpiBase">—</div>
+      <div class="kpi-sub neutral">TWD · 起始基數</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">5年後（穩健11%）</div>
+      <div class="kpi-value up" id="btKpi5y">—</div>
+      <div class="kpi-sub up" id="btKpi5yPct">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">台股 (0050 CAGR)</div>
+      <div class="kpi-value" style="color:var(--blue)">11%</div>
+      <div class="kpi-sub neutral">歷史 10 年均值</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">美股 (QQQ CAGR)</div>
+      <div class="kpi-value" style="color:var(--purple)">17%</div>
+      <div class="kpi-sub neutral">歷史 10 年均值</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔮 投資組合試算（不含新增資金）</div>
+    <div class="grid-3" id="btScenariosGrid">
+      <div class="bt-scenario">
+        <div class="bt-year">保守（CAGR 8%）</div>
+        <div class="bt-value" id="bt8y5"  style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y5p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt8y10" style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y10p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt8y15" style="color:var(--text2)">—</div>
+        <div class="bt-return up" id="bt8y15p">—</div>
+      </div>
+      <div class="bt-scenario">
+        <div class="bt-year">穩健（CAGR 11%）</div>
+        <div class="bt-value" id="bt11y5"  style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y5p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt11y10" style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y10p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt11y15" style="color:var(--green)">—</div>
+        <div class="bt-return up" id="bt11y15p">—</div>
+      </div>
+      <div class="bt-scenario">
+        <div class="bt-year">積極（CAGR 15%）</div>
+        <div class="bt-value" id="bt15y5"  style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y5p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt15y10" style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y10p">—</div>
+        <div style="margin-top:12px"></div>
+        <div class="bt-value" id="bt15y15" style="color:var(--purple)">—</div>
+        <div class="bt-return up" id="bt15y15p">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📈 資產成長預測圖</div>
+    <div class="chart-wrap-lg"><canvas id="chartProjection"></canvas></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏷️ 主要 ETF 歷史回測（$100萬投入）</div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr><th>ETF</th><th>名稱</th><th>年化(10yr)</th><th>5年後</th><th>10年後</th><th>15年後</th><th>特性</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="ticker">006208</span></td><td>富邦台50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股大型股，低費用</td></tr>
+        <tr><td><span class="ticker">0050</span></td><td>元大台灣50</td><td class="up">+11%</td><td class="up">$169萬</td><td class="up">$284萬</td><td class="up">$476萬</td><td>台股最具代表性</td></tr>
+        <tr><td><span class="ticker">00878</span></td><td>國泰永續高股息</td><td class="up">+9%</td><td class="up">$154萬</td><td class="up">$237萬</td><td class="up">$365萬</td><td>月配息，ESG篩選</td></tr>
+        <tr><td><span class="ticker">QQQ</span></td><td>Nasdaq 100</td><td class="up" style="color:var(--purple)">+17%</td><td class="up" style="color:var(--purple)">$219萬</td><td class="up" style="color:var(--purple)">$480萬</td><td class="up" style="color:var(--purple)">$1,054萬</td><td>美科技主導，高波動</td></tr>
+        <tr><td><span class="ticker">SPY</span></td><td>S&P 500</td><td class="up">+13%</td><td class="up">$185萬</td><td class="up">$340萬</td><td class="up">$628萬</td><td>美股廣基指數</td></tr>
+        <tr><td><span class="ticker">00662</span></td><td>富邦NASDAQ</td><td class="up">+17%</td><td class="up">$219萬</td><td class="up">$480萬</td><td class="up">$1,054萬</td><td>台幣計價QQQ替代</td></tr>
+        <tr><td><span class="ticker">QLD</span></td><td>2× Nasdaq</td><td class="up" style="color:var(--orange)">+28%*</td><td class="up" style="color:var(--orange)">$345萬</td><td class="up" style="color:var(--orange)">$1,190萬</td><td class="up" style="color:var(--orange)">$4,110萬</td><td>⚠️ 2倍槓桿，高風險</td></tr>
+        <tr><td colspan="7" style="font-size:11px;color:var(--text2);padding-top:8px">* QLD/TQQQ 因槓桿耗損效應，長期報酬低於2×/3×理論值。以上為牛市情境估算，熊市可能虧損 50-90%。</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🇹🇼 台股主力持倉回測</div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>代號</th><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr></thead>
+        <tbody id="twBacktestTable"></tbody>
+      </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">🇺🇸 美股持倉回測（USD）</div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>股票</th><th>現市值</th><th>CAGR</th><th>5年後</th><th>10年後</th><th>15年後</th></tr></thead>
+        <tbody id="usBacktestTable"></tbody>
+      </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1280,20 +1339,27 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   event.currentTarget.classList.add('active');
   if (id === 'overview' && !window._overviewInit) { initOverviewCharts(); window._overviewInit = true; }
-  if (id === 'history' && !window._historyInit) { initHistoryCharts(); window._historyInit = true; }
-  if (id === 'qqq' && !window._qqqInit) { initQQQChart(); window._qqqInit = true; }
-  if (id === 'backtest' && !window._btInit) { initBacktestChart(); window._btInit = true; }
-  if (id === 'team') { renderTeamPage(); updateTeamAiKeyHint(); }
-  if (id === 'crypto') { renderCrypto(); window._cryptoInit = true; }
-  if (id === 'risk' && !window._riskInit) { initRiskPage(); window._riskInit = true; }
+  if (id === 'holdings') { renderTwStocks(); renderUsStocks(); renderCrypto(); }
+  if (id === 'perf' && !window._perfInit) {
+    initHistoryCharts();
+    renderMonthlyTable();
+    renderAllocDetail();
+    renderAllocAdvice();
+    initCatTrendChart();
+    window._perfInit = true;
+  }
+  if (id === 'risk' && !window._riskInit) {
+    initRiskPage();
+    initQQQChart();
+    initBacktestChart();
+    window._riskInit = true;
+    window._qqqInit = true;
+    window._btInit = true;
+  }
 }
 
 // ─────── OVERVIEW ───────
 function initOverviewCharts() {
-  renderMonthlyTable();
-  renderAllocDetail();
-  renderAllocAdvice();
-
   // Allocation Pie（動態從持倉計算）
   window._allocChart = new Chart(document.getElementById('chartAlloc'), {
     type: 'doughnut',
@@ -2634,9 +2700,7 @@ try {
   if (_d) document.getElementById('navDate').textContent = _d;
 } catch(e) {}
 initOverviewCharts();
-initCatTrendChart();
 renderOverviewKPIs();
-renderActionOverview();
 runMorningScan();
 window._overviewInit = true;
 renderTwStocks();
@@ -5213,16 +5277,25 @@ function renderMorningScan(result) {
     '減碼':'rgba(227,103,26,.12)', '停損':'rgba(248,81,73,.12)',
   };
 
-  const row = item => `
-    <div style="display:grid;grid-template-columns:90px 56px 1fr auto;gap:6px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+  const pctMap = {};
+  TW_HOLD.forEach(h => { pctMap[h.code] = h.pct ?? 0; });
+  [...US_MAIN, ...US_ROY].forEach(h => { pctMap[h.sym] = h.pct ?? 0; });
+  CRYPTO.forEach(c => { pctMap[c.sym] = c.pct ?? 0; });
+
+  const row = item => {
+    const pct = pctMap[item.ticker] ?? 0;
+    return `
+    <div style="display:grid;grid-template-columns:90px 52px 52px 1fr auto;gap:6px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
       <div>
         <span style="font-family:monospace;font-weight:700;font-size:12px">${item.ticker}</span>
         <span style="color:var(--text3);font-size:10px;margin-left:3px">${(item.name||'').slice(0,5)}</span>
       </div>
+      <span style="font-size:12px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'}">${pct>=0?'+':''}${pct.toFixed(1)}%</span>
       <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;text-align:center;white-space:nowrap;color:${actionColor[item.action]||'var(--text2)'};background:${actionBg[item.action]||'var(--surface2)'}">${item.action}</span>
       <span style="font-size:12px;color:var(--text2)">${item.reason||''}</span>
       <span style="font-size:11px;color:var(--yellow);white-space:nowrap">${item.alert ? '⚠️ '+item.alert : ''}</span>
     </div>`;
+  };
 
   body.innerHTML = `
     ${result.summary ? `<div style="font-size:13px;color:var(--text1);padding:8px 12px;background:var(--surface2);border-radius:7px;margin-bottom:12px;border-left:3px solid var(--accent)">💬 ${result.summary}</div>` : ''}
