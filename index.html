@@ -2120,40 +2120,31 @@ async function runAllPortfolioAnalysis() {
   const body    = document.getElementById('reportPanelBody');
   const btn     = document.getElementById('portfolioAnalysisBtn');
 
-  // 建立持倉清單
   const holdings = [
     ...TW_HOLD.filter(h => (h.mv || 0) > 0).map(h => ({
       key: h.code, name: h.name, pct: h.pct ?? 0, mv: h.mv || 0,
-      shares: h.shares, avg: h.avg, price: h.price,
-      type: 'TW',
+      shares: h.shares, avg: h.avg, price: h.price, type: 'TW',
     })),
     ...[...US_MAIN, ...US_ROY].filter(h => (h.mv || 0) > 0).map(h => ({
       key: h.sym, name: h.sym, pct: h.pct ?? 0, mv: (h.mv || 0) * USD_TWD,
-      shares: h.shares, avg: h.avg, price: h.price,
-      type: 'US',
+      shares: h.shares, avg: h.avg, price: h.price, type: 'US',
     })),
     ...CRYPTO.filter(c => (c.mv || 0) > 0 || ['BTC','ETH'].includes(c.sym)).map(c => ({
       key: c.sym, name: c.name, pct: c.pct ?? 0, mv: c.mv || 0,
-      price: c.price, avg: c.avg,
-      type: 'CRYPTO',
+      price: c.price, avg: c.avg, type: 'CRYPTO',
     })),
   ];
 
-  if (!holdings.length) {
-    alert('無持倉資料，請先同步試算表');
-    return;
-  }
+  if (!holdings.length) { alert('無持倉資料，請先同步試算表'); return; }
 
-  // 開啟面板
   panel.style.display   = 'flex';
   overlay.style.display = 'block';
   if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
 
   const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
 
-  // 建立每支股票的 accordion
   body.innerHTML = holdings.map((h, i) => `
-    <div id="rpt_${i}" style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
+    <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
       <div style="padding:10px 14px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
         <div>
           <span style="font-weight:700;font-family:monospace">${h.key}</span>
@@ -2163,64 +2154,20 @@ async function runAllPortfolioAnalysis() {
         <span style="font-size:12px;font-weight:600;color:${h.pct>=0?'var(--green)':'var(--red)'}">${h.pct>=0?'+':''}${h.pct.toFixed(1)}%</span>
       </div>
       <div id="rpt_body_${i}" style="padding:12px 14px;font-size:13px;color:var(--text2)">
-        <span style="opacity:.6">排隊中…</span>
+        <span style="opacity:.6">分析中…</span>
       </div>
     </div>`).join('');
 
-  // 儲存供單支重試使用
-  window._portfolioHoldings = holdings;
-  window._portfolioAnalysisDate = today;
+  // 一次 batch call 分析所有持股
+  const list = holdings.map((h, i) => {
+    const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
+    if (h.type === 'TW')     return `[${i}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)} 現價$${h.price?.toFixed(0)} ${p}`;
+    if (h.type === 'US')     return `[${i}] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`;
+    return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
+  }).join('\n');
 
-  // 分批執行（每批 3 個避免 rate limit）
-  const BATCH = 3;
-  for (let i = 0; i < holdings.length; i += BATCH) {
-    const batch = holdings.slice(i, i + BATCH);
-    await Promise.allSettled(batch.map((h, bi) => analyzeOneHolding(i + bi)));
-    if (i + BATCH < holdings.length) await new Promise(r => setTimeout(r, 1500));
-  }
-
-  if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
-}
-
-async function analyzeOneHolding(idx) {
-  const apiKey = localStorage.getItem('inv_gemini_key');
-  if (!apiKey) return;
-  const h   = window._portfolioHoldings?.[idx];
-  const el  = document.getElementById(`rpt_body_${idx}`);
-  if (!h || !el) return;
-
-  el.innerHTML = '<span style="opacity:.6">分析中…</span>';
-
-  const today    = window._portfolioAnalysisDate || new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
-  const isUS     = h.type === 'US';
-  const isCrypto = h.type === 'CRYPTO';
-
-  const holdInfo = isCrypto
-    ? `現價 $${h.price?.toFixed(2) ?? '—'}，持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-    : isUS
-      ? `持股 ${h.shares} 股 ／ 均價 $${h.avg?.toFixed(2)} ／ 現價 $${h.price?.toFixed(2)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-      : `持股 ${h.shares} 股 ／ 均價 NT$${h.avg?.toFixed(0)} ／ 現價 NT$${h.price?.toFixed(0)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`;
-
-  const assetDesc = isCrypto ? `加密貨幣 ${h.key}（${h.name}）` : isUS ? `美股 ${h.key}` : `台股 ${h.key}（${h.name}）`;
-
-  const system = `你是資深證券分析師，根據投資人提供的真實持倉數據，結合你的基本面知識給出判斷。若不確定具體數字請直說，不要編造財報數據或目標價。分析日期：${today}。請以繁體中文回覆，精準直接。`;
-  const prompt = `持倉標的：${assetDesc}
-實際持倉數據：${holdInfo}
-
-請根據以上真實數據，回答以下四個問題（每題2-4句精簡）：
-
-**1.【損益解讀】**
-目前 ${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}% 的損益，從這家公司的基本面來看合理嗎？是暫時波動還是反映結構性問題？
-
-**2.【主要催化劑】**
-接下來 1-2 季，最可能讓這支股票出現 ±15% 以上波動的事件或數據是什麼？（法說會、政策、競爭對手動態等）
-
-**3.【持有論點檢驗】**
-這支股票的核心投資價值現在還成立嗎？哪個跡象出現代表持有邏輯已動搖、應該考慮出場？
-
-**4.【操作建議】**
-明確給出：繼續持有 / 分批減碼 / 加碼 / 出場。
-並給出以均價為基礎的停利區間（+X%）和停損參考（-Y%）。`;
+  const system = `資深投資組合分析師。根據投資人真實持倉數據結合基本面知識分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
+  const prompt = `持倉清單：\n${list}\n\n對每支標的分析，回傳：\n{"results":[{"idx":0,"assessment":"2句評估","catalyst":"1句催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -2228,20 +2175,47 @@ async function analyzeOneHolding(idx) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 800,
-        temperature: 0.5,
+        max_tokens: 3000,
+        temperature: 0.4,
+        response_format: { type: 'json_object' },
         messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
       })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
-    el.innerHTML = data.choices[0].message.content
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    const results = JSON.parse(data.choices[0].message.content).results || [];
+    const actionColor = { '加碼':'var(--green)', '持有':'var(--text2)', '減碼':'#e3671a', '出場':'var(--red)' };
+
+    results.forEach(r => {
+      const el = document.getElementById(`rpt_body_${r.idx}`);
+      if (!el) return;
+      el.innerHTML = `
+        <div style="margin-bottom:8px;line-height:1.7">${r.assessment}</div>
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px">📌 ${r.catalyst}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface2);color:${actionColor[r.action]||'var(--text2)'}">${r.action}</span>
+          <span style="font-size:12px;color:var(--text3)">停損 <span style="color:var(--red)">${r.stopLoss}%</span> ／ 停利 <span style="color:var(--green)">+${r.stopGain}%</span></span>
+        </div>`;
+    });
+
+    holdings.forEach((h, i) => {
+      const el = document.getElementById(`rpt_body_${i}`);
+      if (el && el.innerHTML.includes('分析中')) el.innerHTML = '<span style="color:var(--text3);font-size:12px">未取得分析</span>';
+    });
+
   } catch(e) {
-    el.innerHTML = `<span style="color:var(--red);font-size:12px">失敗：${e.message}</span>
-      <button onclick="analyzeOneHolding(${idx})" style="margin-left:10px;font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+    holdings.forEach((h, i) => {
+      const el = document.getElementById(`rpt_body_${i}`);
+      if (el) el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,100)}</span>`;
+    });
+    const d = document.createElement('div');
+    d.style.cssText = 'text-align:center;padding:12px';
+    d.innerHTML = `<button onclick="runAllPortfolioAnalysis()" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">↻ 重試全部</button>`;
+    body.appendChild(d);
   }
+
+  if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
 }
 
 function renderUsPageKPIs() {
