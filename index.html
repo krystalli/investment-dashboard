@@ -256,10 +256,10 @@
 <nav>
   <div class="nav-brand">📊 投資儀表板</div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showPage('overview')">總覽</button>
+    <button class="nav-tab active" onclick="showPage('overview')">今日</button>
     <button class="nav-tab" onclick="showPage('holdings')">持倉</button>
-    <button class="nav-tab" onclick="showPage('perf')">績效</button>
-    <button class="nav-tab" onclick="showPage('risk')">風險/策略</button>
+    <button class="nav-tab" onclick="showPage('perf')">歷史</button>
+    <button class="nav-tab" onclick="showPage('risk')">策略</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -331,6 +331,17 @@
     </div>
   </div>
 
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🥧 資產配置</div>
+      <div class="chart-wrap"><canvas id="chartAlloc"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 資產成長走勢 <span class="badge" id="growthBadge"></span></div>
+      <div class="chart-wrap"><canvas id="chartGrowth"></canvas></div>
+    </div>
+  </div>
+
   <div class="card" style="margin-bottom:14px" id="morningScanCard">
     <div class="card-title">🌅 晨間操作掃描
       <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
@@ -342,17 +353,6 @@
       <div style="color:var(--text2);font-size:13px;padding:8px 0">載入中…</div>
     </div>
     <button onclick="showActionPlan()" style="width:100%;margin-top:12px;padding:9px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">⚡ 今日組合行動建議 →</button>
-  </div>
-
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">🥧 資產配置</div>
-      <div class="chart-wrap"><canvas id="chartAlloc"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">📈 資產成長走勢 <span class="badge" id="growthBadge"></span></div>
-      <div class="chart-wrap"><canvas id="chartGrowth"></canvas></div>
-    </div>
   </div>
 
   <div class="card" style="display:none">
@@ -382,6 +382,29 @@
   <div class="alert alert-info">
     <div class="alert-icon">🤖</div>
     <div><strong>AI 台股分析師：</strong>以下建議基於持倉成本、未實現損益、產業趨勢及技術面綜合評估。市場每日變動，請搭配即時行情做最終判斷。</div>
+  </div>
+
+  <div class="kpi-grid" style="margin-bottom:14px">
+    <div class="kpi-card">
+      <div class="kpi-label">台股總市值 (TWD)</div>
+      <div class="kpi-value neutral" id="twKpiTotal">—</div>
+      <div class="kpi-sub neutral" id="twKpiTotalSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">未實現損益</div>
+      <div class="kpi-value neutral" id="twKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="twKpiPnlPct">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大虧損</div>
+      <div class="kpi-value neutral" id="twKpiWorst">—</div>
+      <div class="kpi-sub neutral" id="twKpiWorstSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大獲利</div>
+      <div class="kpi-value neutral" id="twKpiBest">—</div>
+      <div class="kpi-sub neutral" id="twKpiBestSub">—</div>
+    </div>
   </div>
 
   <div class="card">
@@ -1915,6 +1938,26 @@ function renderTwStocks() {
       <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
     </tr>`;
   });
+
+  // TW KPI summary
+  const totalMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const totalCost = TW_HOLD.reduce((s, h) => s + ((h.shares || 0) * (h.avg || 0)), 0);
+  const totalPnl  = totalMV - totalCost;
+  const pnlPct    = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
+  const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
+  kset('twKpiTotal',    `$${Math.round(totalMV).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('twKpiTotalSub', `${TW_HOLD.length} 支持股`);
+  kset('twKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${Math.round(totalPnl).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('twKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+  const withPct = TW_HOLD.filter(h => h.mv && h.pct != null);
+  if (withPct.length) {
+    const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
+    const best  = withPct.reduce((a, b) => b.pct > a.pct ? b : a);
+    kset('twKpiWorst',    `${worst.code} ${worst.pct.toFixed(1)}%`, 'kpi-value down');
+    kset('twKpiWorstSub', worst.name);
+    kset('twKpiBest',     `${best.code} +${best.pct.toFixed(1)}%`, 'kpi-value up');
+    kset('twKpiBestSub',  best.name);
+  }
 
   // Top winners
   const winners = [...TW_HOLD].sort((a,b) => b.pct - a.pct).slice(0,5);
@@ -5320,12 +5363,12 @@ function renderMorningScan(result) {
     ${result.summary ? `<div style="font-size:12px;color:var(--text1);padding:8px 10px;background:var(--surface2);border-radius:7px;margin-bottom:10px;border-left:3px solid var(--accent)">💬 ${result.summary}</div>` : ''}
     ${holdings.length ? `
       <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.8px">持倉（${holdings.length}）</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:auto auto;gap:6px;margin-bottom:12px;justify-content:start">
         ${holdings.map(card).join('')}
       </div>` : ''}
     ${watchlist.length ? `
       <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.8px">觀察清單（${watchlist.length}）</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:auto auto;gap:6px;justify-content:start">
         ${watchlist.map(card).join('')}
       </div>` : ''}`;
 }
