@@ -344,10 +344,16 @@
     <div id="actionOverviewBody"></div>
   </div>
 
-  <div class="card" style="margin-bottom:14px">
-    <div class="card-title">🤖 AI 洞察摘要</div>
-    <div id="aiInsightPanel" style="margin-bottom:12px"></div>
-    <button onclick="showActionPlan()" style="width:100%;margin-top:8px;padding:10px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:.5px">⚡ 今日 AI 深度行動建議 →</button>
+  <div class="card" style="margin-bottom:14px" id="morningScanCard">
+    <div class="card-title">🌅 晨間操作掃描
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span id="morningScanTime" style="font-size:11px;font-weight:400;color:var(--text2)"></span>
+        <button onclick="runMorningScan(true)" id="morningScanBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新掃描</button>
+      </span>
+    </div>
+    <div id="morningScanBody">
+      <div style="color:var(--text2);font-size:13px;padding:8px 0">載入中…</div>
+    </div>
   </div>
 
   <div class="grid-2">
@@ -2631,6 +2637,7 @@ initOverviewCharts();
 initCatTrendChart();
 renderOverviewKPIs();
 renderActionOverview();
+runMorningScan();
 window._overviewInit = true;
 renderTwStocks();
 renderUsStocks();
@@ -5085,6 +5092,145 @@ function renderAiInsights() {
     <div style="display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-radius:8px;margin-bottom:6px;background:${bgMap[ins.type]}">
       <span style="color:${clrMap[ins.type]};font-size:14px;line-height:1.5">${ins.text}</span>
     </div>`).join('');
+}
+
+// ── 晨間操作掃描 ──────────────────────────────────────────
+async function runMorningScan(force) {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  const body   = document.getElementById('morningScanBody');
+  const btn    = document.getElementById('morningScanBtn');
+  const timeEl = document.getElementById('morningScanTime');
+  if (!body) return;
+
+  if (!apiKey) {
+    body.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:8px 0">設定 Groq API Key 後自動啟用晨間掃描</div>';
+    return;
+  }
+
+  // 今天已掃描過 → 直接用快取
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (!force) {
+    try {
+      const cache = JSON.parse(localStorage.getItem('inv_morning_scan') || '{}');
+      if (cache.date === todayKey && cache.result) {
+        renderMorningScan(cache.result);
+        if (timeEl) timeEl.textContent = cache.time + ' 更新';
+        return;
+      }
+    } catch(e) {}
+  }
+
+  if (btn) btn.disabled = true;
+  body.innerHTML = '<div style="color:var(--text2);font-size:13px;padding:12px 0;text-align:center">🌅 掃描中…</div>';
+
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  const fmtHold = h => {
+    const pctStr = (h.pct >= 0 ? '+' : '') + (h.pct?.toFixed(1) ?? '0') + '%';
+    if (h.code) return `${h.name}(${h.code}) 現${h.price?.toFixed(0)} 均${h.avg?.toFixed(0)} ${pctStr}`;
+    return `${h.sym} 現$${h.price?.toFixed(2)} 均$${h.avg?.toFixed(2)} ${pctStr}`;
+  };
+  const holdingLines = [
+    ...TW_HOLD.map(fmtHold),
+    ...[...US_MAIN, ...US_ROY].map(fmtHold),
+    ...CRYPTO.filter(c => (c.mv||0)>0 || ['BTC','ETH'].includes(c.sym))
+             .map(c => `${c.sym} 現$${c.price?.toFixed(2)} 損益${c.pct>=0?'+':''}${c.pct?.toFixed(1)}%`),
+  ].filter(Boolean);
+
+  const watchLines = TW_WATCH.map(w => `${w.name}(${w.code}) 現${w.price?.toFixed(0)}`);
+
+  const system = `你是一位資深投資顧問，每天早上幫客戶做「晨間操作掃描」。今天是${today}。
+你收到客戶今天的真實持倉數據，以及觀察清單（尚未持有）。
+任務：針對每個標的，根據你對它的了解 + 客戶提供的損益數據，給一個今日操作方向。
+若近期有財報、法說會、重大政策或產業事件影響這個標的，請在alert欄位標注（否則留空字串）。
+理由限制在15字以內。回覆語氣精準直接，像交易室主管給出指示。
+請嚴格以JSON格式回覆，不輸出其他文字。`;
+
+  const prompt = `【持倉（今日即時數據）】
+${holdingLines.join('\n')}
+
+【觀察清單（未持有，評估是否進場）】
+${watchLines.join('\n')}
+
+請以此JSON結構回覆：
+{
+  "summary": "一句話整體今日建議",
+  "holdings": [
+    {"ticker":"代號","name":"名稱","action":"持有|加碼|減碼|買入|觀望|停損","reason":"≤15字","alert":"重要事件或空字串"}
+  ],
+  "watchlist": [
+    {"ticker":"代號","name":"名稱","action":"買入|觀望|等待","reason":"≤15字","alert":""}
+  ]
+}`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1500,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user',   content: prompt }
+        ]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+
+    const result = JSON.parse(data.choices[0].message.content);
+    renderMorningScan(result);
+
+    const timeStr = new Date().toLocaleTimeString('zh-TW', { hour:'2-digit', minute:'2-digit' });
+    if (timeEl) timeEl.textContent = timeStr + ' 更新';
+    try {
+      localStorage.setItem('inv_morning_scan', JSON.stringify({ date: todayKey, time: timeStr, result }));
+    } catch(e) {}
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--red);font-size:13px;padding:8px 0">掃描失敗：${e.message}
+      <button onclick="runMorningScan(true)" style="margin-left:10px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer">重試</button></div>`;
+  }
+  if (btn) btn.disabled = false;
+}
+
+function renderMorningScan(result) {
+  const body = document.getElementById('morningScanBody');
+  if (!body || !result) return;
+
+  const actionColor = {
+    '買入':'var(--green)', '加碼':'var(--green)',
+    '持有':'var(--text3)',
+    '觀望':'var(--yellow)', '等待':'var(--yellow)',
+    '減碼':'#e3671a', '停損':'var(--red)',
+  };
+  const actionBg = {
+    '買入':'rgba(63,185,80,.12)', '加碼':'rgba(63,185,80,.12)',
+    '持有':'var(--surface2)',
+    '觀望':'rgba(227,179,65,.12)', '等待':'rgba(227,179,65,.12)',
+    '減碼':'rgba(227,103,26,.12)', '停損':'rgba(248,81,73,.12)',
+  };
+
+  const row = item => `
+    <div style="display:grid;grid-template-columns:90px 56px 1fr auto;gap:6px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div>
+        <span style="font-family:monospace;font-weight:700;font-size:12px">${item.ticker}</span>
+        <span style="color:var(--text3);font-size:10px;margin-left:3px">${(item.name||'').slice(0,5)}</span>
+      </div>
+      <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;text-align:center;white-space:nowrap;color:${actionColor[item.action]||'var(--text2)'};background:${actionBg[item.action]||'var(--surface2)'}">${item.action}</span>
+      <span style="font-size:12px;color:var(--text2)">${item.reason||''}</span>
+      <span style="font-size:11px;color:var(--yellow);white-space:nowrap">${item.alert ? '⚠️ '+item.alert : ''}</span>
+    </div>`;
+
+  body.innerHTML = `
+    ${result.summary ? `<div style="font-size:13px;color:var(--text1);padding:8px 12px;background:var(--surface2);border-radius:7px;margin-bottom:12px;border-left:3px solid var(--accent)">💬 ${result.summary}</div>` : ''}
+    <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:4px;letter-spacing:.8px">持倉</div>
+    ${(result.holdings||[]).map(row).join('')}
+    ${result.watchlist?.length ? `
+      <div style="font-size:10px;font-weight:700;color:var(--text3);margin:14px 0 4px;letter-spacing:.8px">觀察清單</div>
+      ${result.watchlist.map(row).join('')}` : ''}`;
 }
 
 function renderActionOverview() {
