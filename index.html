@@ -2124,27 +2124,44 @@ async function runAllPortfolioAnalysis() {
       </div>
     </div>`).join('');
 
+  // 儲存供單支重試使用
+  window._portfolioHoldings = holdings;
+  window._portfolioAnalysisDate = today;
+
   // 分批執行（每批 3 個避免 rate limit）
   const BATCH = 3;
   for (let i = 0; i < holdings.length; i += BATCH) {
     const batch = holdings.slice(i, i + BATCH);
-    await Promise.allSettled(batch.map(async (h, bi) => {
-      const idx = i + bi;
-      const el  = document.getElementById(`rpt_body_${idx}`);
-      if (el) el.innerHTML = '<span style="opacity:.6">分析中…</span>';
+    await Promise.allSettled(batch.map((h, bi) => analyzeOneHolding(i + bi)));
+    if (i + BATCH < holdings.length) await new Promise(r => setTimeout(r, 1500));
+  }
 
-      const isUS     = h.type === 'US';
-      const isCrypto = h.type === 'CRYPTO';
-      const holdInfo = isCrypto
-        ? `現價 $${h.price?.toFixed(2) ?? '—'}，持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-        : isUS
-          ? `持股 ${h.shares} 股 ／ 均價 $${h.avg?.toFixed(2)} ／ 現價 $${h.price?.toFixed(2)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-          : `持股 ${h.shares} 股 ／ 均價 NT$${h.avg?.toFixed(0)} ／ 現價 NT$${h.price?.toFixed(0)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`;
+  if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
+}
 
-      const assetDesc = isCrypto ? `加密貨幣 ${h.key}（${h.name}）` : isUS ? `美股 ${h.key}` : `台股 ${h.key}（${h.name}）`;
+async function analyzeOneHolding(idx) {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  if (!apiKey) return;
+  const h   = window._portfolioHoldings?.[idx];
+  const el  = document.getElementById(`rpt_body_${idx}`);
+  if (!h || !el) return;
 
-      const system = `你是資深證券分析師，根據投資人提供的真實持倉數據，結合你的基本面知識給出判斷。若不確定具體數字請直說，不要編造財報數據或目標價。分析日期：${today}。請以繁體中文回覆，精準直接。`;
-      const prompt = `持倉標的：${assetDesc}
+  el.innerHTML = '<span style="opacity:.6">分析中…</span>';
+
+  const today    = window._portfolioAnalysisDate || new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const isUS     = h.type === 'US';
+  const isCrypto = h.type === 'CRYPTO';
+
+  const holdInfo = isCrypto
+    ? `現價 $${h.price?.toFixed(2) ?? '—'}，持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
+    : isUS
+      ? `持股 ${h.shares} 股 ／ 均價 $${h.avg?.toFixed(2)} ／ 現價 $${h.price?.toFixed(2)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
+      : `持股 ${h.shares} 股 ／ 均價 NT$${h.avg?.toFixed(0)} ／ 現價 NT$${h.price?.toFixed(0)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`;
+
+  const assetDesc = isCrypto ? `加密貨幣 ${h.key}（${h.name}）` : isUS ? `美股 ${h.key}` : `台股 ${h.key}（${h.name}）`;
+
+  const system = `你是資深證券分析師，根據投資人提供的真實持倉數據，結合你的基本面知識給出判斷。若不確定具體數字請直說，不要編造財報數據或目標價。分析日期：${today}。請以繁體中文回覆，精準直接。`;
+  const prompt = `持倉標的：${assetDesc}
 實際持倉數據：${holdInfo}
 
 請根據以上真實數據，回答以下四個問題（每題2-4句精簡）：
@@ -2162,31 +2179,26 @@ async function runAllPortfolioAnalysis() {
 明確給出：繼續持有 / 分批減碼 / 加碼 / 出場。
 並給出以均價為基礎的停利區間（+X%）和停損參考（-Y%）。`;
 
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-          body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
-            max_tokens: 800,
-            temperature: 0.5,
-            messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
-        if (el) el.innerHTML = data.choices[0].message.content
-          .replace(/\n/g, '<br>')
-          .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-      } catch(e) {
-        if (el) el.innerHTML = `<span style="color:var(--red)">失敗：${e.message}</span>`;
-      }
-    }));
-    // 批次之間稍作延遲避免 rate limit
-    if (i + BATCH < holdings.length) await new Promise(r => setTimeout(r, 1500));
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 800,
+        temperature: 0.5,
+        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    el.innerHTML = data.choices[0].message.content
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red);font-size:12px">失敗：${e.message}</span>
+      <button onclick="analyzeOneHolding(${idx})" style="margin-left:10px;font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
   }
-
-  if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
 }
 
 function renderUsPageKPIs() {
