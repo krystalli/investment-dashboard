@@ -262,7 +262,6 @@
     <button class="nav-tab" onclick="showPage('qqq')">QQQ策略</button>
     <button class="nav-tab" onclick="showPage('backtest')">回測試算</button>
     <button class="nav-tab" onclick="showPage('history')">歷年績效</button>
-    <button class="nav-tab" onclick="showPage('team')">AI投資團隊</button>
     <button class="nav-tab" onclick="showPage('risk')">風險分析</button>
   </div>
   <div class="nav-actions">
@@ -2071,21 +2070,24 @@ async function runAllPortfolioAnalysis() {
 
       const assetDesc = isCrypto ? `加密貨幣 ${h.key}（${h.name}）` : isUS ? `美股 ${h.key}` : `台股 ${h.key}（${h.name}）`;
 
-      const system = `你是一位擁有20年法人操作經驗的資深證券分析師與財經專家。分析日期：${today}。請以繁體中文回覆，簡潔精準不廢話。`;
-      const prompt = `我目前持有：${assetDesc}
-持倉狀況：${holdInfo}
+      const system = `你是資深證券分析師，根據投資人提供的真實持倉數據，結合你的基本面知識給出判斷。若不確定具體數字請直說，不要編造財報數據或目標價。分析日期：${today}。請以繁體中文回覆，精準直接。`;
+      const prompt = `持倉標的：${assetDesc}
+實際持倉數據：${holdInfo}
 
-請針對此持倉進行健康檢查與策略分析，回答以下五大問題（每題2-3句精簡回答）：
+請根據以上真實數據，回答以下四個問題（每題2-4句精簡）：
 
-**1.【核心競爭優勢】** 目前最強護城河？未來1-2年是否面臨顛覆風險？
+**1.【損益解讀】**
+目前 ${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}% 的損益，從這家公司的基本面來看合理嗎？是暫時波動還是反映結構性問題？
 
-**2.【財務健診】** 最新財報的營收/毛利/EPS/現金流狀況？有無惡化警訊？
+**2.【主要催化劑】**
+接下來 1-2 季，最可能讓這支股票出現 ±15% 以上波動的事件或數據是什麼？（法說會、政策、競爭對手動態等）
 
-**3.【成長動能與三大風險】** 核心成長引擎？目前三大主要風險（地緣/競爭/政策等）？
+**3.【持有論點檢驗】**
+這支股票的核心投資價值現在還成立嗎？哪個跡象出現代表持有邏輯已動搖、應該考慮出場？
 
-**4.【估值與技術面】** P/E或估值與同業/歷史相比高/合理/低估？法人目標價區間與技術走勢？
-
-**5.【操作決策】** 明確建議：加碼/續抱/減碼/清倉，並列出未來1-2季三個關鍵追蹤指標。`;
+**4.【操作建議】**
+明確給出：繼續持有 / 分批減碼 / 加碼 / 出場。
+並給出以均價為基礎的停利區間（+X%）和停損參考（-Y%）。`;
 
       try {
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -5217,69 +5219,88 @@ async function showActionPlan() {
   document.getElementById('actionOverlay').classList.add('open');
 
   const apiKey = localStorage.getItem('inv_gemini_key');
-  if (apiKey) {
-    // ── AI 模式 ──
-    document.getElementById('actionDrawerContent').innerHTML =
-      `<div style="text-align:center;padding:40px 0;color:var(--text2)">
-        <div style="font-size:28px;margin-bottom:12px">🤖</div>
-        <div style="font-size:13px">AI 分析中，請稍候…</div>
-       </div>`;
-    try {
-      const allUS  = [...US_MAIN, ...US_ROY];
-      const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
-      const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
-      const total  = twMV + usMV;
-      const twPct  = total > 0 ? (twMV/total*100).toFixed(1) : 0;
-      const usPct  = total > 0 ? (usMV/total*100).toFixed(1) : 0;
-      const stats  = riskCalcStats();
+  if (!apiKey) { showActionPlanFallback(); return; }
 
-      const fmtTW = h => `${h.name}(${h.code}) 持${h.shares}股 均${h.avg} 現${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
-      const fmtUS = h => `${h.sym} 持${h.shares}股 均$${h.avg} 現$${h.price} 損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
+  document.getElementById('actionDrawerContent').innerHTML =
+    `<div style="text-align:center;padding:40px 0;color:var(--text2)">
+      <div style="font-size:28px;margin-bottom:12px">🤖</div>
+      <div style="font-size:13px">分析所有持倉中，請稍候…</div>
+     </div>`;
 
-      const prompt = `你是一位專業投資顧問，請根據以下持倉數據，給出「今日行動建議」。
+  try {
+    const allUS  = [...US_MAIN, ...US_ROY];
+    const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
+    const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
+    const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
+    const total  = twMV + usMV + cryptoMV;
+    const today  = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
 
-【投資組合概況】
-總市值：${(total/10000).toFixed(0)}萬 TWD
-台股佔比：${twPct}%，美股佔比：${usPct}%
-${stats ? `年化報酬：${stats.cagr?.toFixed(1)}%，波動：${stats.annualVol?.toFixed(1)}%，夏普：${stats.sharpe?.toFixed(2)}，最大回撤：-${stats.maxDD?.toFixed(1)}%` : ''}
+    const fmtTW = h =>
+      `  ${h.name}(${h.code}) 持${h.shares}股｜均${h.avg?.toFixed(0)}→現${h.price?.toFixed(0)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%｜市值${Math.round((h.mv||0)/10000)}萬`;
+    const fmtUS = h =>
+      `  ${h.sym} 持${h.shares}股｜均$${h.avg?.toFixed(2)}→現$${h.price?.toFixed(2)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
+    const fmtCrypto = c =>
+      `  ${c.sym}(${c.name})｜現價$${c.price?.toFixed(2)}｜損益${c.pct>=0?'+':''}${c.pct?.toFixed(1)}%`;
+
+    const cryptoLines = CRYPTO.filter(c => (c.mv||0) > 0 || ['BTC','ETH'].includes(c.sym));
+
+    const system = `你是資深投資組合經理，有20年機構操作經驗。根據投資人提供的真實即時持倉數據，給出今日具體可執行的行動建議。不要假設你知道今天的即時股價或財報數字，一切以投資人提供的數據為準。用繁體中文回覆，直接精準，不廢話。`;
+
+    const prompt = `今天是 ${today}，以下是我的完整持倉（數據為即時同步）：
 
 【台股持倉】
-${TW_HOLD.map(fmtTW).join('\n')}
+${TW_HOLD.length ? TW_HOLD.map(fmtTW).join('\n') : '  （無台股持倉）'}
 
 【美股持倉】
-${allUS.map(fmtUS).join('\n')}
+${allUS.length ? allUS.map(fmtUS).join('\n') : '  （無美股持倉）'}
 
-請用繁體中文，直接給出今天最重要的 3-5 個具體操作建議，格式如下：
-1. 每條建議要有明確的標的、方向（加碼/減碼/觀望/停損）和理由
-2. 結尾給一句整體策略方向
-語氣簡潔、像顧問對話，不要贅述，可以用 emoji 增加可讀性。`;
+【加密貨幣】
+${cryptoLines.length ? cryptoLines.map(fmtCrypto).join('\n') : '  （無加密幣持倉）'}
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          max_tokens: 1024,
-          messages: [{ role: 'user', content: prompt }]
-        })
-      });
-      if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-      const data = await res.json();
-      const reply = data.choices[0].message.content
-        .replace(/\n/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+【整體概況】
+總市值 ${(total/10000).toFixed(0)}萬 TWD｜台股 ${total>0?(twMV/total*100).toFixed(1):0}%｜美股 ${total>0?(usMV/total*100).toFixed(1):0}%｜加密幣 ${total>0?(cryptoMV/total*100).toFixed(1):0}%
 
-      document.getElementById('actionDrawerContent').innerHTML =
-        `<div style="font-size:12px;color:var(--text2);margin-bottom:12px">🤖 由 Groq AI 根據你的即時持倉生成 · ${new Date().toLocaleTimeString('zh-TW')}</div>
-         <div style="font-size:13px;line-height:1.8">${reply}</div>`;
-    } catch(e) {
-      document.getElementById('actionDrawerContent').innerHTML =
-        `<div style="color:var(--red);font-size:13px;padding:12px">AI 分析失敗：${escHtml(e.message)}<br><br>請確認 API Key 是否正確，或改用規則建議。</div>
-         <button onclick="showActionPlanFallback()" style="margin-top:8px;padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);cursor:pointer;font-size:12px">改用規則建議</button>`;
-    }
-  } else {
-    // ── 無 API Key：規則引擎 ──
-    showActionPlanFallback();
+請根據以上真實數據回答：
+
+**一、立刻需要處理（今日優先）**
+從損益、持倉比重、持有邏輯角度，哪 1-3 筆最需要行動？說明原因與建議方向（減碼/停損/觀察條件）。
+
+**二、值得加碼的機會**
+哪 1-2 筆目前損益或比重顯示可能有相對好的買點？說明理由。若無明顯機會請直說。
+
+**三、組合最大風險暴露**
+目前整體組合最脆弱的地方（集中度、產業相關性、匯率、單一事件風險等）。
+
+**四、今天只做一件事**
+一句話，現在最重要的優先行動。`;
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1200,
+        temperature: 0.4,
+        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
+      })
+    });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const data = await res.json();
+    const reply = data.choices[0].message.content
+      .replace(/\n/g, '<br>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    document.getElementById('actionDrawerContent').innerHTML =
+      `<div style="font-size:11px;color:var(--text2);margin-bottom:14px">🤖 Groq AI · 根據即時持倉生成 · ${new Date().toLocaleTimeString('zh-TW')}
+       <button onclick="showActionPlan()" style="margin-left:10px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text1)">↻ 重新分析</button></div>
+       <div style="font-size:13px;line-height:1.9">${reply}</div>
+       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+         <button onclick="runAllPortfolioAnalysis();closeActionPlan();" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text1)">🔬 查看每支個股深度分析 →</button>
+       </div>`;
+  } catch(e) {
+    document.getElementById('actionDrawerContent').innerHTML =
+      `<div style="color:var(--red);font-size:13px;padding:12px">分析失敗：${escHtml(e.message)}</div>
+       <button onclick="showActionPlanFallback()" style="margin-top:8px;padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text1);cursor:pointer;font-size:12px">改用規則建議</button>`;
   }
 }
 
