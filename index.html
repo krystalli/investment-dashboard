@@ -5560,7 +5560,21 @@ async function showActionPlan() {
 
     const cryptoLines = CRYPTO.filter(c => (c.mv||0) > 0 || ['BTC','ETH'].includes(c.sym));
 
-    const system = `你是資深投資組合經理，有20年機構操作經驗。根據投資人提供的真實即時持倉數據，給出今日具體可執行的行動建議。不要假設你知道今天的即時股價或財報數字，一切以投資人提供的數據為準。用繁體中文回覆，直接精準，不廢話。`;
+    // 讀今日晨間掃描快取
+    const scanCache = (() => { try { return JSON.parse(localStorage.getItem('inv_morning_scan') || 'null'); } catch { return null; } })();
+    const todayStr  = new Date().toLocaleDateString('zh-TW');
+    const scanData  = scanCache?.date === todayStr ? scanCache.result : null;
+
+    const scanContext = scanData ? `
+【今日晨間掃描結論（已對每支個股完成分析）】
+${[...(scanData.holdings||[]), ...(scanData.watchlist||[])].map(s =>
+  `  ${s.ticker}${s.name?`(${s.name})`:''} → ${s.action}：${s.reason}${s.alert?' ⚠️'+s.alert:''}`
+).join('\n')}
+
+以上是今日已確認的個股建議，請勿與之矛盾。你的任務是在這些個股建議的基礎上，給出組合層面的策略彙整。
+` : '';
+
+    const system = `你是資深投資組合經理，有20年機構操作經驗。根據投資人提供的真實即時持倉數據與晨間個股分析結論，給出今日組合層面的行動建議。用繁體中文回覆，直接精準，不廢話。`;
 
     const prompt = `今天是 ${today}，以下是我的完整持倉（數據為即時同步）：
 
@@ -5575,14 +5589,14 @@ ${cryptoLines.length ? cryptoLines.map(fmtCrypto).join('\n') : '  （無加密�
 
 【整體概況】
 總市值 ${(total/10000).toFixed(0)}萬 TWD｜台股 ${total>0?(twMV/total*100).toFixed(1):0}%｜美股 ${total>0?(usMV/total*100).toFixed(1):0}%｜加密幣 ${total>0?(cryptoMV/total*100).toFixed(1):0}%
-
-請根據以上真實數據回答：
+${scanContext}
+請回答：
 
 **一、立刻需要處理（今日優先）**
-從損益、持倉比重、持有邏輯角度，哪 1-3 筆最需要行動？說明原因與建議方向（減碼/停損/觀察條件）。
+從損益、持倉比重角度，哪 1-3 筆最需要行動？說明原因與建議方向。
 
 **二、值得加碼的機會**
-哪 1-2 筆目前損益或比重顯示可能有相對好的買點？說明理由。若無明顯機會請直說。
+哪 1-2 筆有相對好的買點？說明理由。若無明顯機會請直說。
 
 **三、組合最大風險暴露**
 目前整體組合最脆弱的地方（集中度、產業相關性、匯率、單一事件風險等）。
