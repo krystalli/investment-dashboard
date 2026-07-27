@@ -2327,7 +2327,7 @@ function renderUsPageKPIs() {
   const s = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
   s('usKpiTotal',    `$${totalMV.toLocaleString(undefined,{maximumFractionDigits:0})}`,
                      'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
-  s('usKpiTotalSub', `USD · 約 TWD $${twdApprox.toLocaleString()}K`);
+  s('usKpiTotalSub', `≈ TWD $${Math.round(totalMV * USD_TWD).toLocaleString()}`);
   s('usKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString(undefined,{maximumFractionDigits:0})}`,
                      'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
   s('usKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`,
@@ -2387,7 +2387,7 @@ function renderCrypto() {
 
   const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
   kset('cryptoKpiTotal',    `$${mv_usd.toLocaleString()}`, 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
-  kset('cryptoKpiTotalSub', `USD · TWD $${mv_twd.toLocaleString()}${hasSh ? ' (試算表)' : ''}`);
+  kset('cryptoKpiTotalSub', `≈ TWD $${mv_twd.toLocaleString()}${hasSh ? ' (試算表)' : ''}`);
   kset('cryptoKpiPnl',      cost_twd > 0 ? `${pnl_twd>=0?'+':''}$${Math.round(pnl_twd/USD_TWD).toLocaleString()} USD` : '—', 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
   kset('cryptoKpiPnlPct',   cost_twd > 0 ? `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%` : '—', 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
 
