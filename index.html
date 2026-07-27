@@ -2187,17 +2187,7 @@ async function runAllPortfolioAnalysis() {
 
   // 讀快取
   const CACHE_KEY = 'inv_portfolio_analysis';
-  const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
-  if (cached?.date === todayKey && !window._forcePortfolioRefresh) {
-    window._portfolioHoldings = holdings;
-    renderPortfolioResults(holdings, cached.results, body);
-    if (btn) btn.textContent = '🔬 全組合分析';
-    return;
-  }
-  window._forcePortfolioRefresh = false;
-
-  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
-
+  // 先建 skeleton（cache 路徑與 API 路徑都需要 rpt_body_X 存在）
   body.innerHTML = holdings.map((h, i) => `
     <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
       <div style="padding:10px 14px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
@@ -2214,6 +2204,16 @@ async function runAllPortfolioAnalysis() {
     </div>`).join('');
 
   window._portfolioHoldings = holdings;
+
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
+  if (cached?.date === todayKey && !window._forcePortfolioRefresh) {
+    renderPortfolioResults(holdings, cached.results, body);
+    if (btn) btn.textContent = '🔬 全組合分析';
+    return;
+  }
+  window._forcePortfolioRefresh = false;
+
+  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
 
   const list = holdings.map((h, i) => {
     const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
