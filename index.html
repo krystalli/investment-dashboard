@@ -2215,46 +2215,45 @@ async function runAllPortfolioAnalysis() {
 
   if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
 
-  const list = holdings.map((h, i) => {
+  const toLine = (h, i) => {
     const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
     if (h.type === 'TW') return `[${i}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)} 現價$${h.price?.toFixed(0)} ${p}`;
     if (h.type === 'US') return `[${i}] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`;
     return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
-  }).join('\n');
+  };
 
-  const system = `資深投資組合分析師。根據持倉數據分析。${today}。嚴禁編造數字。繁體中文。必須回傳JSON。每欄位極簡：assessment≤20字，catalyst≤15字。`;
-  const prompt = `持倉清單：\n${list}\n\n每支標的回傳一筆，assessment/catalyst各一句且字數限制：\n{"results":[{"idx":0,"assessment":"極簡評估","catalyst":"催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
-
-  try {
+  const system = `資深投資組合分析師。根據持倉數據分析。${today}。嚴禁編造數字。繁體中文。必須回傳JSON。assessment≤20字，catalyst≤15字。`;
+  const callGroq = async (lines) => {
+    const prompt = `持倉：\n${lines}\n\n{"results":[{"idx":0,"assessment":"評估","catalyst":"催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 5000,
-        temperature: 0.4,
-        response_format: { type: 'json_object' },
-        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
-      })
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1500, temperature:0.4,
+        response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return JSON.parse(data.choices[0].message.content).results || [];
+  };
 
-    const results = JSON.parse(data.choices[0].message.content).results || [];
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results }));
-    renderPortfolioResults(holdings, results, body);
-
-  } catch(e) {
-    holdings.forEach((h, i) => {
-      const el = document.getElementById(`rpt_body_${i}`);
-      if (el) el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,120)}</span>`;
-    });
-    const d = document.createElement('div');
-    d.style.cssText = 'text-align:center;padding:12px';
-    d.innerHTML = `<button onclick="runAllPortfolioAnalysis()" style="padding:8px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">↻ 重試全部</button>`;
-    body.appendChild(d);
+  const BATCH = 5;
+  const allResults = [];
+  for (let start = 0; start < holdings.length; start += BATCH) {
+    const slice = holdings.slice(start, start + BATCH);
+    const lines = slice.map((h, j) => toLine(h, start + j)).join('\n');
+    try {
+      const results = await callGroq(lines);
+      allResults.push(...results);
+      renderPortfolioResults(holdings, results, body);
+    } catch(e) {
+      slice.forEach((h, j) => {
+        const el = document.getElementById(`rpt_body_${start + j}`);
+        if (el) el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,100)}</span> <button onclick="retryOneHolding(${start+j})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+      });
+    }
   }
 
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
   if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
 }
 
