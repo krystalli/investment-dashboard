@@ -2370,23 +2370,28 @@ function renderUsPageKPIs() {
 
 // ─────── CRYPTO ───────
 function renderCrypto() {
-  // KPI 摘要
-  const totalMV_usd = CRYPTO.reduce((s,c) => s+(c.mv||0), 0);
-  const totalCost_usd = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
-  const totalPnl = totalMV_usd - totalCost_usd;
-  const totalPct = totalCost_usd ? (totalPnl/totalCost_usd*100).toFixed(1) : '—';
-  // 若有試算表同步資料，優先使用
-  const sheetMV_twd = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
-  const sheetMV_usd = sheetMV_twd ? (sheetMV_twd/USD_TWD).toFixed(0) : null;
+  // 優先用試算表同步資料（最新月份欄位）
+  const sheetMV_twd  = SHEET_ALLOC.ready ? (SHEET_ALLOC.binance   || 0) : 0;
+  const sheetCost_twd= SHEET_ALLOC.ready ? (SHEET_ALLOC.binance_c || 0) : 0;
+  // 備援：CRYPTO 陣列
+  const arrMV_usd    = CRYPTO.reduce((s,c) => s+(c.mv  ||0), 0);
+  const arrCost_usd  = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
 
-  const pnlPct = totalCost_usd ? totalPnl / totalCost_usd * 100 : 0;
-  const displayMV_usd = sheetMV_usd ? Number(sheetMV_usd) : totalMV_usd;
-  const displayMV_twd = sheetMV_twd || Math.round(totalMV_usd * USD_TWD);
+  // 決定顯示值（sheet 優先，以 TWD 為主）
+  const hasSh = sheetMV_twd > 0;
+  const mv_twd  = hasSh ? sheetMV_twd   : Math.round(arrMV_usd  * USD_TWD);
+  const cost_twd= hasSh ? sheetCost_twd : Math.round(arrCost_usd* USD_TWD);
+  const mv_usd  = Math.round(mv_twd   / USD_TWD);
+  const pnl_twd = mv_twd - cost_twd;
+  const pnlPct  = cost_twd > 0 ? pnl_twd / cost_twd * 100 : 0;
+
   const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
-  kset('cryptoKpiTotal',    `$${displayMV_usd.toLocaleString(undefined,{maximumFractionDigits:0})}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
-  kset('cryptoKpiTotalSub', `USD · 約 TWD $${Math.round(displayMV_twd/1000).toLocaleString()}K`);
-  kset('cryptoKpiPnl',      totalCost_usd ? `${totalPnl>=0?'+':''}$${Math.round(totalPnl).toLocaleString()}` : '—', 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
-  kset('cryptoKpiPnlPct',   totalCost_usd ? `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%` : '—', 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiTotal',    `$${mv_usd.toLocaleString()}`, 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiTotalSub', `USD · TWD $${mv_twd.toLocaleString()}${hasSh ? ' (試算表)' : ''}`);
+  kset('cryptoKpiPnl',      cost_twd > 0 ? `${pnl_twd>=0?'+':''}$${Math.round(pnl_twd/USD_TWD).toLocaleString()} USD` : '—', 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiPnlPct',   cost_twd > 0 ? `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%` : '—', 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+
+  // 最大虧損/獲利：若有個別幣種資料才顯示
   const withPct = CRYPTO.filter(c => c.mv && c.pct != null && c.cost > 0);
   if (withPct.length) {
     const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
@@ -2395,6 +2400,11 @@ function renderCrypto() {
     kset('cryptoKpiWorstSub', worst.name);
     kset('cryptoKpiBest',     `${best.sym} +${best.pct.toFixed(1)}%`, 'kpi-value up');
     kset('cryptoKpiBestSub',  best.name);
+  } else if (hasSh) {
+    kset('cryptoKpiWorst',    '—', 'kpi-value neutral');
+    kset('cryptoKpiWorstSub', '個別幣種未設定');
+    kset('cryptoKpiBest',     '—', 'kpi-value neutral');
+    kset('cryptoKpiBestSub',  '個別幣種未設定');
   }
 
   // 持倉表格
@@ -2404,25 +2414,41 @@ function renderCrypto() {
   const badge = document.getElementById('cryptoSyncBadge');
   if (badge) badge.textContent = sheetMV_twd ? `試算表總值 $${sheetMV_twd.toLocaleString()} TWD` : '同步後更新';
 
-  CRYPTO.forEach(c => {
-    const pnlCls = c.pct >= 0 ? 'up' : 'down';
-    tbody.innerHTML += `<tr>
-      <td><span class="ticker">${c.sym}</span></td>
-      <td>${c.name}</td>
-      <td style="font-family:monospace">${c.shares||'—'}</td>
-      <td style="font-family:monospace">${c.avg?'$'+c.avg.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.price?'$'+c.price.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.cost?'$'+c.cost.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.mv?'$'+c.mv.toLocaleString():'—'}</td>
-      <td class="${pnlCls}" style="font-family:monospace">${c.cost&&c.mv?(c.mv-c.cost>=0?'+':'')+' $'+Math.round(c.mv-c.cost).toLocaleString():'—'}</td>
-      <td class="${pnlCls}">${c.pct?(c.pct>=0?'+':'')+c.pct.toFixed(2)+'%':'—'}</td>
-      <td>${(c.rec==='HOLD'?'<span class="rec-hold">◆ 持有</span>':c.rec==='BUY'?'<span class="rec-buy">▲ 買進</span>':'<span class="rec-sell">▼ 賣出</span>')}</td>
+  const cryptoHasData = CRYPTO.some(c => c.mv > 0);
+  if (cryptoHasData) {
+    CRYPTO.forEach(c => {
+      const pnlCls = c.pct >= 0 ? 'up' : 'down';
+      tbody.innerHTML += `<tr>
+        <td><span class="ticker">${c.sym}</span></td>
+        <td>${c.name}</td>
+        <td style="font-family:monospace">${c.shares||'—'}</td>
+        <td style="font-family:monospace">${c.avg?'$'+c.avg.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.price?'$'+c.price.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.cost?'$'+c.cost.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.mv?'$'+c.mv.toLocaleString():'—'}</td>
+        <td class="${pnlCls}" style="font-family:monospace">${c.cost&&c.mv?(c.mv-c.cost>=0?'+':'')+' $'+Math.round(c.mv-c.cost).toLocaleString():'—'}</td>
+        <td class="${pnlCls}">${c.pct?(c.pct>=0?'+':'')+c.pct.toFixed(2)+'%':'—'}</td>
+        <td>${(c.rec==='HOLD'?'<span class="rec-hold">◆ 持有</span>':c.rec==='BUY'?'<span class="rec-buy">▲ 買進</span>':'<span class="rec-sell">▼ 賣出</span>')}</td>
+      </tr>`;
+    });
+  } else if (hasSh) {
+    // 從試算表顯示幣安摘要列
+    const pnlCls = pnl_twd >= 0 ? 'up' : 'down';
+    tbody.innerHTML = `<tr>
+      <td><span class="ticker">BINANCE</span></td>
+      <td>幣安總覽</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">$${Math.round(cost_twd).toLocaleString()} TWD</td>
+      <td style="font-family:monospace">$${Math.round(mv_twd).toLocaleString()} TWD</td>
+      <td class="${pnlCls}" style="font-family:monospace">${pnl_twd>=0?'+':''}$${Math.round(pnl_twd).toLocaleString()} TWD</td>
+      <td class="${pnlCls}">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%</td>
+      <td>—</td>
     </tr>`;
-  });
-
-  if (!CRYPTO.some(c => c.mv > 0)) {
-    tbody.innerHTML += `<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px">
-      請更新 CRYPTO 陣列中的持倉資料，或同步試算表查看總值
+  } else {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px">
+      請同步試算表以查看幣安資料
     </td></tr>`;
   }
 }
