@@ -2222,8 +2222,8 @@ async function runAllPortfolioAnalysis() {
     return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
   }).join('\n');
 
-  const system = `資深投資組合分析師。根據投資人真實持倉數據結合基本面知識分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
-  const prompt = `持倉清單：\n${list}\n\n對每支標的分析，回傳：\n{"results":[{"idx":0,"assessment":"2句評估","catalyst":"1句催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+  const system = `資深投資組合分析師。根據持倉數據分析。${today}。嚴禁編造數字。繁體中文。必須回傳JSON。每欄位極簡：assessment≤20字，catalyst≤15字。`;
+  const prompt = `持倉清單：\n${list}\n\n每支標的回傳一筆，assessment/catalyst各一句且字數限制：\n{"results":[{"idx":0,"assessment":"極簡評估","catalyst":"催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
 
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -2231,7 +2231,7 @@ async function runAllPortfolioAnalysis() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.1-8b-instant',
-        max_tokens: 3000,
+        max_tokens: 5000,
         temperature: 0.4,
         response_format: { type: 'json_object' },
         messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
