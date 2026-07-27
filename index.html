@@ -2201,7 +2201,7 @@ async function runAllPortfolioAnalysis() {
 
     holdings.forEach((h, i) => {
       const el = document.getElementById(`rpt_body_${i}`);
-      if (el && el.innerHTML.includes('分析中')) el.innerHTML = '<span style="color:var(--text3);font-size:12px">未取得分析</span>';
+      if (el && el.innerHTML.includes('分析中')) el.innerHTML = `<span style="color:var(--text3);font-size:12px">未取得分析</span> <button onclick="retryOneHolding(${i})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
     });
 
   } catch(e) {
@@ -2216,6 +2216,45 @@ async function runAllPortfolioAnalysis() {
   }
 
   if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
+}
+
+async function retryOneHolding(idx) {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  if (!apiKey) return;
+  const h  = window._portfolioHoldings?.[idx];
+  const el = document.getElementById(`rpt_body_${idx}`);
+  if (!h || !el) return;
+  el.innerHTML = '<span style="opacity:.6">分析中…</span>';
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
+  const line = h.type === 'TW'
+    ? `[0] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)} 現價$${h.price?.toFixed(0)} ${p}`
+    : h.type === 'US'
+    ? `[0] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`
+    : `[0] ${h.key}(${h.name}) 加密幣 ${p}`;
+  const system = `資深投資組合分析師。根據投資人真實持倉數據結合基本面知識分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
+  const prompt = `持倉清單：\n${line}\n\n對每支標的分析，回傳：\n{"results":[{"idx":0,"assessment":"2句評估","catalyst":"1句催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model:'llama-3.3-70b-versatile', max_tokens:600, temperature:0.4, response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    const r = (JSON.parse(data.choices[0].message.content).results || [])[0];
+    if (!r) throw new Error('未取得結果');
+    const actionColor = { '加碼':'var(--green)', '持有':'var(--text2)', '減碼':'#e3671a', '出場':'var(--red)' };
+    el.innerHTML = `
+      <div style="margin-bottom:8px;line-height:1.7">${r.assessment}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">📌 ${r.catalyst}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface2);color:${actionColor[r.action]||'var(--text2)'}">${r.action}</span>
+        <span style="font-size:12px;color:var(--text3)">停損 <span style="color:var(--red)">${r.stopLoss}%</span> ／ 停利 <span style="color:var(--green)">+${r.stopGain}%</span></span>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,100)}</span> <button onclick="retryOneHolding(${idx})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+  }
 }
 
 function renderUsPageKPIs() {
