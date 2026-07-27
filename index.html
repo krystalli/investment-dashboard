@@ -379,11 +379,15 @@
 
 <!-- ═══ PAGE: HOLDINGS (TW + US + CRYPTO) ═══ -->
 <div id="page-holdings" class="page">
-  <div class="alert alert-info">
-    <div class="alert-icon">🤖</div>
-    <div><strong>AI 台股分析師：</strong>以下建議基於持倉成本、未實現損益、產業趨勢及技術面綜合評估。市場每日變動，請搭配即時行情做最終判斷。</div>
+  <!-- 持倉子 tab -->
+  <div class="nav-tabs" style="margin-bottom:16px" id="holdingsSubTabs">
+    <button class="nav-tab active" onclick="showHoldingsTab('tw')">🇹🇼 台股</button>
+    <button class="nav-tab" onclick="showHoldingsTab('us')">🇺🇸 美股</button>
+    <button class="nav-tab" onclick="showHoldingsTab('crypto')">₿ 加密幣</button>
   </div>
 
+  <!-- ── 台股區段 ── -->
+  <div id="holdings-tw">
   <div class="kpi-grid" style="margin-bottom:14px">
     <div class="kpi-card">
       <div class="kpi-label">台股總市值 (TWD)</div>
@@ -444,8 +448,11 @@
     </div>
   </div>
 
-  <!-- ── 美股持倉 ── -->
-  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">🇺🇸 美股持倉</div>
+  </div><!-- /holdings-tw -->
+
+  <!-- ── 美股區段 ── -->
+  <div id="holdings-us" style="display:none">
+  <div style="margin:0 0 12px;font-size:16px;font-weight:700;color:var(--text1)">🇺🇸 美股持倉</div>
 
   <div class="kpi-grid" id="usKpiGrid">
     <div class="kpi-card">
@@ -497,8 +504,11 @@
     </div>
   </div>
 
-  <!-- ── 加密幣 ── -->
-  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">₿ 加密幣持倉</div>
+  </div><!-- /holdings-us -->
+
+  <!-- ── 加密幣區段 ── -->
+  <div id="holdings-crypto" style="display:none">
+  <div style="margin:0 0 12px;font-size:16px;font-weight:700;color:var(--text1)">₿ 加密幣持倉</div>
 
   <div class="kpi-grid" style="margin-bottom:14px">
     <div class="kpi-card">
@@ -530,6 +540,7 @@
       <tbody id="cryptoTable"></tbody>
     </table>
   </div>
+  </div><!-- /holdings-crypto -->
 </div>
 
 <!-- ═══ PAGE: US STOCKS (hidden, legacy) ═══ -->
@@ -1376,6 +1387,16 @@ function _applyPosWt(result, posWt, pct) {
     result.reason = `【佔比 ${posWt.toFixed(0)}%】${result.reason}`;
   }
   return result;
+}
+
+function showHoldingsTab(tab) {
+  ['tw','us','crypto'].forEach(t => {
+    const el = document.getElementById('holdings-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#holdingsSubTabs .nav-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', ['tw','us','crypto'][i] === tab);
+  });
 }
 
 function showPage(id) {
