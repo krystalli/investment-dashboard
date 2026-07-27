@@ -500,7 +500,28 @@
   <!-- ── 加密幣 ── -->
   <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">₿ 加密幣持倉</div>
 
-  <div class="kpi-grid" id="cryptoKpi"></div>
+  <div class="kpi-grid" style="margin-bottom:14px">
+    <div class="kpi-card">
+      <div class="kpi-label">加密幣總市值 (USD)</div>
+      <div class="kpi-value neutral" id="cryptoKpiTotal">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiTotalSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">未實現損益</div>
+      <div class="kpi-value neutral" id="cryptoKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiPnlPct">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大虧損</div>
+      <div class="kpi-value neutral" id="cryptoKpiWorst">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiWorstSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大獲利</div>
+      <div class="kpi-value neutral" id="cryptoKpiBest">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiBestSub">—</div>
+    </div>
+  </div>
 
   <div class="card">
     <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
@@ -2337,20 +2358,23 @@ function renderCrypto() {
   const sheetMV_twd = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
   const sheetMV_usd = sheetMV_twd ? (sheetMV_twd/USD_TWD).toFixed(0) : null;
 
-  const kpi = document.getElementById('cryptoKpi');
-  if (kpi) kpi.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">幣安總市值(TWD)</div>
-      <div class="kpi-value">${sheetMV_twd ? '$'+sheetMV_twd.toLocaleString() : '—'}</div>
-      <div class="kpi-sub neutral">${sheetMV_twd ? '來自試算表同步' : '請先同步試算表'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">幣安總市值(USD)</div>
-      <div class="kpi-value">${sheetMV_usd ? '$'+Number(sheetMV_usd).toLocaleString() : (totalMV_usd?'$'+totalMV_usd.toLocaleString():'—')}</div>
-      <div class="kpi-sub neutral">匯率 ${USD_TWD}</div></div>
-    <div class="kpi-card"><div class="kpi-label">持倉損益</div>
-      <div class="kpi-value ${totalPnl>=0?'up':'down'}">${totalCost_usd?((totalPnl>=0?'+':'')+totalPct+'%'):'—'}</div>
-      <div class="kpi-sub ${totalPnl>=0?'up':'down'}">${totalCost_usd?(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl).toLocaleString()+' USD':'—'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">佔總資產</div>
-      <div class="kpi-value neutral">${sheetMV_twd&&MONTHLY.length?(sheetMV_twd/MONTHLY[MONTHLY.length-1].v*100).toFixed(1)+'%':'—'}</div>
-      <div class="kpi-sub neutral">幣安 / 總資產</div></div>`;
+  const pnlPct = totalCost_usd ? totalPnl / totalCost_usd * 100 : 0;
+  const displayMV_usd = sheetMV_usd ? Number(sheetMV_usd) : totalMV_usd;
+  const displayMV_twd = sheetMV_twd || Math.round(totalMV_usd * USD_TWD);
+  const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
+  kset('cryptoKpiTotal',    `$${displayMV_usd.toLocaleString(undefined,{maximumFractionDigits:0})}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiTotalSub', `USD · 約 TWD $${Math.round(displayMV_twd/1000).toLocaleString()}K`);
+  kset('cryptoKpiPnl',      totalCost_usd ? `${totalPnl>=0?'+':''}$${Math.round(totalPnl).toLocaleString()}` : '—', 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiPnlPct',   totalCost_usd ? `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%` : '—', 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+  const withPct = CRYPTO.filter(c => c.mv && c.pct != null && c.cost > 0);
+  if (withPct.length) {
+    const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
+    const best  = withPct.reduce((a, b) => b.pct > a.pct ? b : a);
+    kset('cryptoKpiWorst',    `${worst.sym} ${worst.pct.toFixed(1)}%`, 'kpi-value down');
+    kset('cryptoKpiWorstSub', worst.name);
+    kset('cryptoKpiBest',     `${best.sym} +${best.pct.toFixed(1)}%`, 'kpi-value up');
+    kset('cryptoKpiBestSub',  best.name);
+  }
 
   // 持倉表格
   const tbody = document.getElementById('cryptoTable');
