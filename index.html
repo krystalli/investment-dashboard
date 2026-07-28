@@ -2222,9 +2222,9 @@ async function runAllPortfolioAnalysis() {
     return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
   };
 
-  const system = `資深投資組合分析師。根據持倉數據分析。${today}。嚴禁編造數字。繁體中文。必須回傳JSON。assessment≤20字，catalyst≤15字。`;
+  const system = `資深投資組合分析師。根據持倉數據結合基本面分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
   const callGroq = async (lines) => {
-    const prompt = `持倉：\n${lines}\n\n{"results":[{"idx":0,"assessment":"評估","catalyst":"催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+    const prompt = `持倉清單：\n${lines}\n\n對每支標的給出具體分析，回傳：\n{"results":[{"idx":0,"assessment":"2句具體評估（說明現況與風險）","catalyst":"1句近期催化劑或關鍵事件","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
