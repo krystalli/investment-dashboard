@@ -2196,7 +2196,10 @@ async function runAllPortfolioAnalysis() {
           <span style="color:var(--text2);font-size:12px;margin-left:6px">${h.name}</span>
           <span style="font-size:11px;padding:1px 6px;border-radius:8px;margin-left:6px;color:#fff;background:${h.type==='CRYPTO'?'#f7931a':h.type==='US'?'#0ea5e9':'var(--accent)'}">${h.type}</span>
         </div>
-        <span style="font-size:12px;font-weight:600;color:${h.pct>=0?'var(--green)':'var(--red)'}">${h.pct>=0?'+':''}${h.pct.toFixed(1)}%</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-weight:600;color:${h.pct>=0?'var(--green)':'var(--red)'}">${h.pct>=0?'+':''}${h.pct.toFixed(1)}%</span>
+          <button onclick="retryOneHolding(${i})" title="重新分析" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 4px;border-radius:4px;line-height:1" onmouseover="this.style.color='var(--text1)'" onmouseout="this.style.color='var(--text3)'">↻</button>
+        </div>
       </div>
       <div id="rpt_body_${i}" style="padding:12px 14px;font-size:13px;color:var(--text2)">
         <span style="opacity:.6">分析中…</span>
