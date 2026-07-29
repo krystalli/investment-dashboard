@@ -2225,9 +2225,9 @@ async function runAllPortfolioAnalysis() {
     return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
   };
 
-  const system = `資深投資組合分析師。根據持倉數據結合基本面分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
+  const system = `你是一位擁有20年經驗的專業股市分析師，專長台股、美股與加密幣。今日為${today}。根據用戶投資儀表板的真實持倉數據（代號、均價、現價、損益%），給予具體、有根據的操作建議。分析時考量：現價相對均價的位置、持倉損益程度、標的所在產業與市場環境。嚴禁捏造財報數字或編造具體事件。必須回傳JSON。繁體中文。`;
   const callGroq = async (lines) => {
-    const prompt = `持倉清單：\n${lines}\n\n對每支標的給出具體分析，回傳：\n{"results":[{"idx":0,"assessment":"2句具體評估（說明現況與風險）","catalyst":"1句近期催化劑或關鍵事件","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+    const prompt = `以下為投資人目前持倉資料：\n${lines}\n\n請針對每支標的，根據其損益狀況與產業背景給出操作建議。回傳格式：\n{"results":[{"idx":0,"assessment":"說明此標的目前狀況與主要風險（2句）","catalyst":"影響後市的關鍵因素（1句）","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
@@ -2293,8 +2293,8 @@ async function retryOneHolding(idx) {
     : h.type === 'US'
     ? `[0] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`
     : `[0] ${h.key}(${h.name}) 加密幣 ${p}`;
-  const system = `資深投資組合分析師。根據投資人真實持倉數據結合基本面知識分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
-  const prompt = `持倉清單：\n${line}\n\n對每支標的分析，回傳：\n{"results":[{"idx":0,"assessment":"2句評估","catalyst":"1句催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+  const system = `你是一位擁有20年經驗的專業股市分析師，專長台股、美股與加密幣。今日為${today}。根據用戶投資儀表板的真實持倉數據（代號、均價、現價、損益%），給予具體、有根據的操作建議。分析時考量：現價相對均價的位置、持倉損益程度、標的所在產業與市場環境。嚴禁捏造財報數字或編造具體事件。必須回傳JSON。繁體中文。`;
+  const prompt = `以下為投資人目前持倉資料：\n${line}\n\n請針對此標的，根據其損益狀況與產業背景給出操作建議。回傳格式：\n{"results":[{"idx":0,"assessment":"說明此標的目前狀況與主要風險（2句）","catalyst":"影響後市的關鍵因素（1句）","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
