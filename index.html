@@ -2216,7 +2216,7 @@ async function runHoldingsAnalysis() {
 - 出場訊號：跌破週MA52、現價遠低於均價且無止跌跡象、RSI<30
 
 最終 action 由你綜合判斷，禁止因缺乏籌碼資料就一律給「持有」。`;
-  const callBatch = async (lines) => {
+  const callBatch = async (lines, attempt = 0) => {
     const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
@@ -2224,13 +2224,19 @@ async function runHoldingsAnalysis() {
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
+    if (res.status === 429 && attempt < 3) {
+      const wait = [8000, 15000, 25000][attempt];
+      console.log(`Groq rate limit, retry in ${wait/1000}s (attempt ${attempt+1})`);
+      await new Promise(r => setTimeout(r, wait));
+      return callBatch(lines, attempt + 1);
+    }
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
     return JSON.parse(data.choices[0].message.content).results || [];
   };
 
   const allResults = [];
   for (let start = 0; start < allHoldings.length; start += 5) {
-    if (start > 0) await new Promise(r => setTimeout(r, 1200));
+    if (start > 0) await new Promise(r => setTimeout(r, 2000));
     const slice = allHoldings.slice(start, start+5);
     try {
       const results = await callBatch(slice.map((h, j) => toLine(h, start+j)).join('\n'));
