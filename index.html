@@ -2220,7 +2220,7 @@ action 判斷準則（任一條件符合即可，不必全部滿足）：
       const offsetted = results.map(r => ({...r, idx: start + r.idx, levels: techData[start + r.idx]?.levels || null}));
       allResults.push(...offsetted);
       renderHoldingsAnalysis(allHoldings, allResults);
-    } catch(e) { /* 批次失敗靜默跳過 */ }
+    } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
   }
   localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
   renderHoldingsAnalysis(allHoldings, allResults);
@@ -2239,8 +2239,19 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     .filter(r => r.action && r.action !== '持有')
     .sort((a, b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
 
+  // 統計各市場已分析數
+  const analyzedIdxs = new Set(allResults.map(r => r.idx));
+  const mktCount = { TW: 0, US: 0, CRYPTO: 0 };
+  analyzedIdxs.forEach(i => { const t = allHoldings[i]?.type; if (t) mktCount[t] = (mktCount[t]||0) + 1; });
+  const mktSummary = [
+    mktCount.TW     ? `台股 ${mktCount.TW} 支`     : '',
+    mktCount.US     ? `美股 ${mktCount.US} 支`     : '',
+    mktCount.CRYPTO ? `加密 ${mktCount.CRYPTO} 支` : '',
+  ].filter(Boolean).join(' / ');
+  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} 支 · ${mktSummary}</div>`;
+
   if (!actionItems.length) {
-    c.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0">✅ 所有持倉目前建議持有，無需操作</div>`;
+    c.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0">✅ 所有持倉目前建議持有，無需操作</div>` + footer;
     return;
   }
 
@@ -2251,7 +2262,6 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     actionItems.map(r => {
       const h   = allHoldings[r.idx] || {};
       const lv  = r.levels || {};
-      const isTW = h.type === 'TW';
       const borderColor = ACTION_COLOR[r.action] || 'var(--border)';
       const pct = h.pct || 0;
       const lvRow = [
@@ -2271,7 +2281,7 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
         </div>
         ${lvRow ? `<div style="font-size:10px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
       </div>`;
-    }).join('') + `</div>`;
+    }).join('') + `</div>` + footer;
 }
 
 function closePortfolioReport() {
