@@ -2231,55 +2231,91 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
   const c = document.getElementById('home-action-signals');
   if (!c) return;
 
-  const ACTION_COLOR = { '加碼':'var(--green)', '減碼':'#e3671a', '出場':'var(--red)' };
-  const ACTION_BG    = { '加碼':'rgba(0,200,100,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(220,50,50,.12)' };
-  const ACTION_ORDER = { '出場':0, '減碼':1, '加碼':2 };
-  const MKT_TAG      = { 'TW':'台股', 'US':'美股', 'CRYPTO':'加密' };
+  const ACTION_COLOR = { '加碼':'var(--green)', '減碼':'#e3671a', '出場':'var(--red)', '停損':'var(--red)', '買入':'var(--green)' };
+  const ACTION_BG    = { '加碼':'rgba(63,185,80,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(248,81,73,.12)', '停損':'rgba(248,81,73,.12)', '買入':'rgba(63,185,80,.12)' };
+  const ACTION_PRIORITY = { '出場':0, '停損':0, '減碼':1, '加碼':2, '買入':2 };
+  const SCAN_NOOP = new Set(['持有', '觀望', '等待']);
 
-  const actionItems = allResults
-    .filter(r => r.action && r.action !== '持有')
-    .sort((a, b) => (ACTION_ORDER[a.action]??9) - (ACTION_ORDER[b.action]??9));
+  // 晨間掃描 cache → ticker map
+  const scanMap = {};
+  try {
+    const sc = JSON.parse(localStorage.getItem('inv_morning_scan') || 'null');
+    if (sc?.result?.holdings) sc.result.holdings.forEach(h => { scanMap[h.ticker] = h; });
+  } catch(e) {}
 
-  // 統計各市場已分析數
+  // AI 結果 map：idx → result
+  const resultByIdx = {};
+  allResults.forEach(r => { resultByIdx[r.idx] = r; });
+
+  // 合併：AI 非持有 or 晨掃有訊號
+  const actionItems = allHoldings
+    .map((h, i) => {
+      const r = resultByIdx[i];
+      const s = scanMap[h.key];
+      const aiAction   = r?.action;
+      const scanAction = s?.action;
+      const hasAi   = aiAction   && aiAction   !== '持有';
+      const hasScan = scanAction && !SCAN_NOOP.has(scanAction);
+      if (!hasAi && !hasScan) return null;
+      return { idx: i, action: aiAction || null, status: r?.status || null, levels: r?.levels || null, scan: hasScan ? s : null };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const pa = ACTION_PRIORITY[a.action] ?? (ACTION_PRIORITY[a.scan?.action] ?? 9);
+      const pb = ACTION_PRIORITY[b.action] ?? (ACTION_PRIORITY[b.scan?.action] ?? 9);
+      return pa - pb;
+    });
+
+  // 統計已分析數
   const analyzedIdxs = new Set(allResults.map(r => r.idx));
   const mktCount = { TW: 0, US: 0, CRYPTO: 0 };
   analyzedIdxs.forEach(i => { const t = allHoldings[i]?.type; if (t) mktCount[t] = (mktCount[t]||0) + 1; });
   const mktSummary = [
-    mktCount.TW     ? `台股 ${mktCount.TW} 支`     : '',
-    mktCount.US     ? `美股 ${mktCount.US} 支`     : '',
-    mktCount.CRYPTO ? `加密 ${mktCount.CRYPTO} 支` : '',
+    mktCount.TW     ? `台股 ${mktCount.TW}` : '',
+    mktCount.US     ? `美股 ${mktCount.US}` : '',
+    mktCount.CRYPTO ? `加密 ${mktCount.CRYPTO}` : '',
   ].filter(Boolean).join(' / ');
-  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} 支 · ${mktSummary}</div>`;
+  const hasScanData = Object.keys(scanMap).length > 0;
+  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">週線已分析 ${analyzedIdxs.size} 支（${mktSummary}）${hasScanData ? ' · 含晨間掃描訊號' : ''}</div>`;
 
   if (!actionItems.length) {
     c.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0">✅ 所有持倉目前建議持有，無需操作</div>` + footer;
     return;
   }
 
-  const actionBg = {
-    '加碼':'rgba(63,185,80,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(248,81,73,.12)',
-  };
   c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">` +
-    actionItems.map(r => {
-      const h   = allHoldings[r.idx] || {};
-      const lv  = r.levels || {};
-      const borderColor = ACTION_COLOR[r.action] || 'var(--border)';
+    actionItems.map(item => {
+      const h  = allHoldings[item.idx] || {};
+      const lv = item.levels || {};
       const pct = h.pct || 0;
+      // 邊框顏色：AI 優先，否則用晨掃
+      const mainAction = item.action || item.scan?.action;
+      const borderColor = ACTION_COLOR[mainAction] || 'var(--border)';
       const lvRow = [
         lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
         lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
         lv.rrRatio  ? `1:${lv.rrRatio}`                          : '',
       ].filter(Boolean).join('  ');
+      // AI 週線行
+      const aiRow = item.action ? `
+        <div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:${(item.scan||lvRow)?'3px':'0'}">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap;color:${ACTION_COLOR[item.action]||'var(--text2)'};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">${item.action}</span>
+          <span style="font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.status||''}</span>
+        </div>` : '';
+      // 晨掃訊號行
+      const sc = item.scan;
+      const scanRow = sc ? `
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:${lvRow?'3px':'0'}">
+          <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:6px;white-space:nowrap;color:${ACTION_COLOR[sc.action]||'var(--text3)'};background:${ACTION_BG[sc.action]||'var(--surface3)'};flex-shrink:0">⚡ ${sc.action}</span>
+          <span style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sc.reason||''}${sc.alert?` ⚠️${sc.alert}`:''}</span>
+        </div>` : '';
       return `<div style="padding:8px 10px;background:var(--surface2);border-radius:7px;border-left:2px solid ${borderColor}">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
           <span style="font-family:monospace;font-weight:700;font-size:12px">${h.key||''}</span>
           <span style="color:var(--text3);font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name||''}</span>
           <span style="font-size:11px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'};white-space:nowrap">${pct>=0?'+':''}${pct.toFixed(1)}%</span>
         </div>
-        <div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:${lvRow?'4px':'0'}">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${actionBg[r.action]||'var(--surface3)'};flex-shrink:0">${r.action}</span>
-          <span style="font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.status||''}</span>
-        </div>
+        ${aiRow}${scanRow}
         ${lvRow ? `<div style="font-size:10px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
       </div>`;
     }).join('') + `</div>` + footer;
