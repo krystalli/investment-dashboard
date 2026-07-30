@@ -3744,6 +3744,9 @@ async function syncSheets() {
     // 用試算表同步的 QQQ 現價更新策略頁（GOOGLEFINANCE 即時）
     const syncedQQQ = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
     if (syncedQQQ?.price) updateNasdaqDisplay(syncedQQQ.price);
+    // 持倉異動 → 作廢舊分析快取，重跑
+    localStorage.removeItem('inv_holdings_v2');
+    runHoldingsAnalysis();
     showStatus(`✅ 同步完成：${results.join('、')}`, 'success');
   } catch(e) {
     showStatus('❌ 同步失敗：' + e.message, 'error');
