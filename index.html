@@ -219,10 +219,6 @@
   .bt-return { font-size: 12px; margin-top: 2px; }
 
   /* ACTION DRAWER */
-  .action-drawer { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:var(--surface); border-left:1px solid var(--border); z-index:2000; transition:right .25s; overflow-y:auto; padding:20px; box-sizing:border-box; }
-  .action-drawer.open { right:0; }
-  .action-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1999; display:none; }
-  .action-overlay.open { display:block; }
 
   /* TICKER BADGE */
   .ticker { font-family: monospace; font-size: 11px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--blue); }
@@ -256,10 +252,10 @@
 <nav>
   <div class="nav-brand">📊 投資儀表板</div>
   <div class="nav-tabs">
-    <button class="nav-tab active" onclick="showPage('overview')">總覽</button>
+    <button class="nav-tab active" onclick="showPage('overview')">今日</button>
     <button class="nav-tab" onclick="showPage('holdings')">持倉</button>
-    <button class="nav-tab" onclick="showPage('perf')">績效</button>
-    <button class="nav-tab" onclick="showPage('risk')">風險/策略</button>
+    <button class="nav-tab" onclick="showPage('perf')">歷史</button>
+    <button class="nav-tab" onclick="showPage('risk')">策略</button>
   </div>
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
@@ -331,19 +327,6 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:14px" id="morningScanCard">
-    <div class="card-title">🌅 晨間操作掃描
-      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-        <span id="morningScanTime" style="font-size:11px;font-weight:400;color:var(--text2)"></span>
-        <button onclick="runMorningScan(true)" id="morningScanBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新掃描</button>
-      </span>
-    </div>
-    <div id="morningScanBody">
-      <div style="color:var(--text2);font-size:13px;padding:8px 0">載入中…</div>
-    </div>
-    <button onclick="showActionPlan()" style="width:100%;margin-top:12px;padding:9px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">⚡ 今日組合行動建議 →</button>
-  </div>
-
   <div class="grid-2">
     <div class="card">
       <div class="card-title">🥧 資產配置</div>
@@ -353,6 +336,26 @@
       <div class="card-title">📈 資產成長走勢 <span class="badge" id="growthBadge"></span></div>
       <div class="chart-wrap"><canvas id="chartGrowth"></canvas></div>
     </div>
+  </div>
+
+
+  <div class="card" style="margin-bottom:14px" id="marketReportCard">
+    <div class="card-title">📊 大盤報告
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span id="marketReportTime" style="font-size:11px;font-weight:400;color:var(--text2)"></span>
+        <button onclick="localStorage.removeItem('inv_market_report');runMarketReport()" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 更新</button>
+      </span>
+    </div>
+    <div id="marketReportBody"><div style="color:var(--text3);font-size:13px;padding:8px 0">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">📋 操作建議
+      <span style="margin-left:auto">
+        <button onclick="localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis()" id="actionSignalsRefreshBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
+      </span>
+    </div>
+    <div id="home-action-signals"><div style="color:var(--text3);font-size:13px;padding:8px 0">載入中…</div></div>
   </div>
 
   <div class="card" style="display:none">
@@ -379,9 +382,36 @@
 
 <!-- ═══ PAGE: HOLDINGS (TW + US + CRYPTO) ═══ -->
 <div id="page-holdings" class="page">
-  <div class="alert alert-info">
-    <div class="alert-icon">🤖</div>
-    <div><strong>AI 台股分析師：</strong>以下建議基於持倉成本、未實現損益、產業趨勢及技術面綜合評估。市場每日變動，請搭配即時行情做最終判斷。</div>
+  <!-- 持倉子 tab -->
+  <div class="nav-tabs" style="margin-bottom:16px" id="holdingsSubTabs">
+    <button class="nav-tab active" onclick="showHoldingsTab('tw')">🇹🇼 台股</button>
+    <button class="nav-tab" onclick="showHoldingsTab('us')">🇺🇸 美股</button>
+    <button class="nav-tab" onclick="showHoldingsTab('crypto')">₿ 加密幣</button>
+  </div>
+
+  <!-- ── 台股區段 ── -->
+  <div id="holdings-tw">
+  <div class="kpi-grid" style="margin-bottom:14px">
+    <div class="kpi-card">
+      <div class="kpi-label">台股總市值 (TWD)</div>
+      <div class="kpi-value neutral" id="twKpiTotal">—</div>
+      <div class="kpi-sub neutral" id="twKpiTotalSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">未實現損益</div>
+      <div class="kpi-value neutral" id="twKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="twKpiPnlPct">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大虧損</div>
+      <div class="kpi-value neutral" id="twKpiWorst">—</div>
+      <div class="kpi-sub neutral" id="twKpiWorstSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大獲利</div>
+      <div class="kpi-value neutral" id="twKpiBest">—</div>
+      <div class="kpi-sub neutral" id="twKpiBestSub">—</div>
+    </div>
   </div>
 
   <div class="card">
@@ -390,7 +420,7 @@
     <table>
       <thead>
         <tr>
-          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th><th>建議</th><th>操作理由</th><th></th>
+          <th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th>
         </tr>
       </thead>
       <tbody id="twHoldTable"></tbody>
@@ -421,8 +451,11 @@
     </div>
   </div>
 
-  <!-- ── 美股持倉 ── -->
-  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">🇺🇸 美股持倉</div>
+  </div><!-- /holdings-tw -->
+
+  <!-- ── 美股區段 ── -->
+  <div id="holdings-us" style="display:none">
+  <div style="margin:0 0 12px;font-size:16px;font-weight:700;color:var(--text1)">🇺🇸 美股持倉</div>
 
   <div class="kpi-grid" id="usKpiGrid">
     <div class="kpi-card">
@@ -451,7 +484,7 @@
     <div class="card-title">🇺🇸 美股持倉 — 主帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
       <tbody id="usMainTable"></tbody>
     </table>
     </div>
@@ -461,7 +494,7 @@
     <div class="card-title">🏦 美股持倉 — 複委託帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
@@ -474,10 +507,34 @@
     </div>
   </div>
 
-  <!-- ── 加密幣 ── -->
-  <div style="margin:24px 0 12px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:20px">₿ 加密幣持倉</div>
+  </div><!-- /holdings-us -->
 
-  <div class="kpi-grid" id="cryptoKpi"></div>
+  <!-- ── 加密幣區段 ── -->
+  <div id="holdings-crypto" style="display:none">
+  <div style="margin:0 0 12px;font-size:16px;font-weight:700;color:var(--text1)">₿ 加密幣持倉</div>
+
+  <div class="kpi-grid" style="margin-bottom:14px">
+    <div class="kpi-card">
+      <div class="kpi-label">加密幣總市值 (USD)</div>
+      <div class="kpi-value neutral" id="cryptoKpiTotal">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiTotalSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">未實現損益</div>
+      <div class="kpi-value neutral" id="cryptoKpiPnl">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiPnlPct">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大虧損</div>
+      <div class="kpi-value neutral" id="cryptoKpiWorst">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiWorstSub">—</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">最大獲利</div>
+      <div class="kpi-value neutral" id="cryptoKpiBest">—</div>
+      <div class="kpi-sub neutral" id="cryptoKpiBestSub">—</div>
+    </div>
+  </div>
 
   <div class="card">
     <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
@@ -486,6 +543,7 @@
       <tbody id="cryptoTable"></tbody>
     </table>
   </div>
+  </div><!-- /holdings-crypto -->
 </div>
 
 <!-- ═══ PAGE: US STOCKS (hidden, legacy) ═══ -->
@@ -1334,12 +1392,22 @@ function _applyPosWt(result, posWt, pct) {
   return result;
 }
 
+function showHoldingsTab(tab) {
+  ['tw','us','crypto'].forEach(t => {
+    const el = document.getElementById('holdings-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#holdingsSubTabs .nav-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', ['tw','us','crypto'][i] === tab);
+  });
+}
+
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   event.currentTarget.classList.add('active');
-  if (id === 'overview' && !window._overviewInit) { initOverviewCharts(); window._overviewInit = true; }
+  if (id === 'overview') { if (!window._overviewInit) { initOverviewCharts(); window._overviewInit = true; } runMarketReport(); runHoldingsAnalysis(); }
   if (id === 'holdings') { renderTwStocks(); renderUsStocks(); renderCrypto(); }
   if (id === 'perf' && !window._perfInit) {
     initHistoryCharts();
@@ -1890,17 +1958,21 @@ function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
   tbody.innerHTML = '';
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
+    // 總成本固定用股數×均價（Sheet 的支出欄含累計進出，不適合當成本）
+    const cost = Math.round((s.shares||0) * (s.avg||0));
+    // 損益金額：優先用 Sheet 的值（含配息），否則用市值 - 成本
+    const pnl  = s.pnl != null ? s.pnl : (s.mv - cost);
+    // 損益率：由損益金額 / 成本算出，確保與金額一致
+    const pct  = cost > 0 ? pnl / cost * 100 : 0;
     tbody.innerHTML += `<tr>
-      <td><span class="ticker">${s.code}</span></td>
-      <td>${s.name}</td>
-      <td>${s.shares.toLocaleString()}</td>
+      <td><span class="ticker">${s.code}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
+      <td style="font-family:monospace">${s.shares.toLocaleString()}</td>
       <td style="font-family:monospace">$${s.avg.toFixed(0)}</td>
       <td style="font-family:monospace">$${s.price.toFixed(0)}</td>
-      <td class="${pctCls(s.pct)}">${s.pct>0?'+':''}${s.pct.toFixed(2)}%</td>
-      <td>$${s.mv.toLocaleString()}</td>
-      <td>${recTag[s.rec]}</td>
-      <td style="color:var(--text2);max-width:200px;font-size:11px">${s.reason}</td>
-      <td><button onclick="analyzeThesis('${s.code}','${s.name.replace(/'/g,"\\'")}',${s.pct},${s.mv},false)" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">🤖</button></td>
+      <td style="font-family:monospace">$${cost.toLocaleString()}</td>
+      <td style="font-family:monospace">$${Math.round(s.mv).toLocaleString()}</td>
+      <td class="${pctCls(pnl)}" style="font-family:monospace">${pnl>=0?'+':''} $${Math.round(pnl).toLocaleString()}</td>
+      <td class="${pctCls(pct)}">${pct>=0?'+':''}${pct.toFixed(2)}%</td>
     </tr>`;
   });
 
@@ -1915,6 +1987,26 @@ function renderTwStocks() {
       <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
     </tr>`;
   });
+
+  // TW KPI summary
+  const totalMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const totalCost = TW_HOLD.reduce((s, h) => s + ((h.shares || 0) * (h.avg || 0)), 0);
+  const totalPnl  = totalMV - totalCost;
+  const pnlPct    = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
+  const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
+  kset('twKpiTotal',    `$${Math.round(totalMV).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('twKpiTotalSub', `${TW_HOLD.length} 支持股`);
+  kset('twKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${Math.round(totalPnl).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
+  kset('twKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`, 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+  const withPct = TW_HOLD.filter(h => h.mv && h.pct != null);
+  if (withPct.length) {
+    const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
+    const best  = withPct.reduce((a, b) => b.pct > a.pct ? b : a);
+    kset('twKpiWorst',    `${worst.code} ${worst.pct.toFixed(1)}%`, 'kpi-value down');
+    kset('twKpiWorstSub', worst.name);
+    kset('twKpiBest',     `${best.code} +${best.pct.toFixed(1)}%`, 'kpi-value up');
+    kset('twKpiBestSub',  best.name);
+  }
 
   // Top winners
   const winners = [...TW_HOLD].sort((a,b) => b.pct - a.pct).slice(0,5);
@@ -1949,9 +2041,6 @@ function renderUsStocks() {
         <td style="font-family:monospace">$${s.mv.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
         <td class="${pctCls(s.pnl)}" style="font-family:monospace">${s.pnl>=0?'+':''} $${s.pnl.toFixed(0)}</td>
         <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
-        <td>${recTag[s.rec] || s.rec}</td>
-        <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
-        <td><button onclick="analyzeThesis('${s.sym}','${s.sym}',${s.pct},${(s.mv||0)*USD_TWD},true)" style="font-size:11px;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">🤖</button></td>
       </tr>`;
     });
   };
@@ -2063,6 +2152,174 @@ async function analyzeThesis(key, name, pct, mv, isUS) {
   }
 }
 
+// ─────── 持倉 inline AI 操作建議（全部一次跑，只顯示需操作的）───────
+async function runHoldingsAnalysis() {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  if (!apiKey) return;
+
+  const todayKey = new Date().toLocaleDateString('zh-TW');
+  const today    = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const CACHE_KEY = 'inv_holdings_v2';
+
+  // 收集全部持倉，帶 type 標記
+  const calcPct = (h, isUS) => {
+    const cost = (h.shares||0) * (h.avg||0) * (isUS ? 1 : 1); // 單位一致
+    const pnl  = h.pnl ?? null;
+    return (pnl != null && cost > 0) ? pnl / cost * 100 : (h.pct ?? 0);
+  };
+  const allHoldings = [
+    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:calcPct(h,false), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW' })),
+    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:calcPct(h,true), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US' })),
+    ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, pnl:c.pnl??null, avg:c.avg, price:c.price, type:'CRYPTO' })),
+  ];
+  if (SHEET_ALLOC.ready && SHEET_ALLOC.binance && !allHoldings.some(h => h.type==='CRYPTO')) {
+    const mv = SHEET_ALLOC.binance, cost = SHEET_ALLOC.binance_c||0;
+    allHoldings.push({ key:'BINANCE', name:'幣安總覽', pct: cost>0?(mv-cost)/cost*100:0, type:'CRYPTO' });
+  }
+  if (!allHoldings.length) return;
+
+  // 顯示 loading
+  const sigEl = () => document.getElementById('home-action-signals');
+  const setMsg = msg => { const el = sigEl(); if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0;opacity:.7">${msg}</div>`; };
+  setMsg('🤖 AI 分析載入中…');
+
+  // 讀快取
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
+  if (cached?.date === todayKey) { renderHoldingsAnalysis(allHoldings, cached.results); return; }
+
+  setMsg('📡 抓取週線資料…');
+  const techData = await buildTechLines(allHoldings);
+  setMsg('🤖 AI 分析中…');
+
+  const toLine = (h, globalIdx) => {
+    const p = `${h.pct>=0?'+':''}${h.pct.toFixed(1)}%`;
+    let base = '';
+    if (h.type==='TW') base = `${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
+    else if (h.type==='US') base = `${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
+    else base = `${h.key}(${h.name||''}) 加密幣 ${p}`;
+    return techData[globalIdx]?.techLine ? base + '\n' + techData[globalIdx].techLine : base;
+  };
+
+  const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師，每日早晨做持倉操作掃描。今日${today}。繁體中文。必須回傳JSON。
+
+任務：以投資分析師角色，綜合「週線技術指標」與「你對各標的的基本面/產業/總經認知」，給出今日操作方向。技術面是重要參考，但不是唯一依據——若基本面惡化、產業逆風或重大利空，即使技術面尚未破底也可建議減碼或出場；反之若基本面強勁、逢低佈局機會，技術面整理中也可考慮加碼。
+
+欄位說明：
+- status：一句現況（≤20字，定性描述，技術面＋基本面綜合，勿重複數字）
+- action：持有｜加碼｜減碼｜出場
+- alert：近期重大催化劑或風險事件（財報/法說/政策/產業），無則空字串，≤15字
+
+技術面參考指引（輔助判斷，非硬性規則）：
+- 加碼訊號：站上週MA20、MACD看多、RSI 40~60且量增、法人買超
+- 持有訊號：技術面中性整理、等待確認
+- 減碼訊號：RSI>72超買、跌破週MA20且MACD看空、法人持續賣超
+- 出場訊號：跌破週MA52、現價遠低於均價且無止跌跡象、RSI<30
+
+最終 action 由你綜合判斷，禁止因缺乏籌碼資料就一律給「持有」。`;
+  const callBatch = async (lines) => {
+    const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1200, temperature:0.35,
+        response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return JSON.parse(data.choices[0].message.content).results || [];
+  };
+
+  const allResults = [];
+  for (let start = 0; start < allHoldings.length; start += 5) {
+    if (start > 0) await new Promise(r => setTimeout(r, 1200));
+    const slice = allHoldings.slice(start, start+5);
+    try {
+      const results = await callBatch(slice.map((h, j) => toLine(h, start+j)).join('\n'));
+      const offsetted = results.map(r => {
+        const localPos = slice.findIndex(h => h.key === r.ticker);
+        if (localPos < 0) return null;
+        const absIdx = start + localPos;
+        return { ...r, idx: absIdx, levels: techData[absIdx]?.levels || null };
+      }).filter(Boolean);
+      allResults.push(...offsetted);
+      renderHoldingsAnalysis(allHoldings, allResults);
+    } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
+  }
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
+  renderHoldingsAnalysis(allHoldings, allResults);
+}
+
+function renderHoldingsAnalysis(allHoldings, allResults) {
+  const c = document.getElementById('home-action-signals');
+  if (!c) return;
+
+  const ACTION_COLOR    = { '加碼':'var(--green)', '減碼':'#e3671a', '出場':'var(--red)' };
+  const ACTION_BG       = { '加碼':'rgba(63,185,80,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(248,81,73,.12)' };
+  const ACTION_PRIORITY = { '出場':0, '減碼':1, '加碼':2 };
+
+  // AI 結果 map：idx → result
+  const resultByIdx = {};
+  allResults.forEach(r => { resultByIdx[r.idx] = r; });
+
+  const actionItems = allHoldings
+    .map((h, i) => {
+      const r = resultByIdx[i];
+      if (!r?.action || r.action === '持有') return null;
+      return { idx: i, action: r.action, status: r.status || null, alert: r.alert || null, levels: r.levels || null };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (ACTION_PRIORITY[a.action] ?? 9) - (ACTION_PRIORITY[b.action] ?? 9));
+
+  // 統計已分析數
+  const analyzedIdxs = new Set(allResults.map(r => r.idx));
+  const mktCount = { TW: 0, US: 0, CRYPTO: 0 };
+  analyzedIdxs.forEach(i => { const t = allHoldings[i]?.type; if (t) mktCount[t] = (mktCount[t]||0) + 1; });
+  const mktSummary = [
+    mktCount.TW     ? `台股 ${mktCount.TW}` : '',
+    mktCount.US     ? `美股 ${mktCount.US}` : '',
+    mktCount.CRYPTO ? `加密 ${mktCount.CRYPTO}` : '',
+  ].filter(Boolean).join(' / ');
+  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} 支（${mktSummary}）</div>`;
+
+  if (!actionItems.length) {
+    c.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0">✅ 所有持倉目前建議持有，無需操作</div>` + footer;
+    return;
+  }
+
+  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">` +
+    actionItems.map(item => {
+      const h  = allHoldings[item.idx] || {};
+      const lv = item.levels || {};
+      const pct = h.pct || 0;
+      const borderColor = ACTION_COLOR[item.action] || 'var(--border)';
+      const priceStr = h.price != null
+        ? (h.type === 'TW' ? `$${(+h.price).toLocaleString()}` : `$${(+h.price).toFixed(2)}`)
+        : '';
+      const lvRow = [
+        lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
+        lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
+        lv.rrRatio  ? `1:${lv.rrRatio}`                          : '',
+      ].filter(Boolean).join('  ');
+      const alertBadge = item.alert
+        ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:${lvRow?'4px':'0'}">⚠️ ${item.alert}</div>` : '';
+      return `<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid ${borderColor}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-family:monospace;font-weight:700;font-size:13px">${h.key||''}</span>
+          <span style="color:var(--text3);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name||''}</span>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:12px;font-family:monospace;color:var(--text2)">${priceStr}</div>
+            <div style="font-size:12px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:${(alertBadge||lvRow)?'5px':'0'}">
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">${item.action}</span>
+          <span style="font-size:12px;color:var(--text2);line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.status||''}</span>
+        </div>
+        ${alertBadge}
+        ${lvRow ? `<div style="font-size:11px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
+      </div>`;
+    }).join('') + `</div>` + footer;
+}
+
 function closePortfolioReport() {
   document.getElementById('portfolioReportPanel').style.display = 'none';
   document.getElementById('portfolioReportOverlay').style.display = 'none';
@@ -2077,127 +2334,159 @@ async function runAllPortfolioAnalysis() {
   const body    = document.getElementById('reportPanelBody');
   const btn     = document.getElementById('portfolioAnalysisBtn');
 
-  // 建立持倉清單
   const holdings = [
     ...TW_HOLD.filter(h => (h.mv || 0) > 0).map(h => ({
       key: h.code, name: h.name, pct: h.pct ?? 0, mv: h.mv || 0,
-      shares: h.shares, avg: h.avg, price: h.price,
-      type: 'TW',
+      shares: h.shares, avg: h.avg, price: h.price, type: 'TW',
     })),
     ...[...US_MAIN, ...US_ROY].filter(h => (h.mv || 0) > 0).map(h => ({
       key: h.sym, name: h.sym, pct: h.pct ?? 0, mv: (h.mv || 0) * USD_TWD,
-      shares: h.shares, avg: h.avg, price: h.price,
-      type: 'US',
+      shares: h.shares, avg: h.avg, price: h.price, type: 'US',
     })),
     ...CRYPTO.filter(c => (c.mv || 0) > 0 || ['BTC','ETH'].includes(c.sym)).map(c => ({
       key: c.sym, name: c.name, pct: c.pct ?? 0, mv: c.mv || 0,
-      price: c.price, avg: c.avg,
-      type: 'CRYPTO',
+      price: c.price, avg: c.avg, type: 'CRYPTO',
     })),
   ];
 
-  if (!holdings.length) {
-    alert('無持倉資料，請先同步試算表');
-    return;
-  }
+  if (!holdings.length) { alert('無持倉資料，請先同步試算表'); return; }
 
-  // 開啟面板
   panel.style.display   = 'flex';
   overlay.style.display = 'block';
-  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
 
-  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const todayKey = new Date().toLocaleDateString('zh-TW');
+  const today    = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
 
-  // 建立每支股票的 accordion
+  // 讀快取
+  const CACHE_KEY = 'inv_portfolio_analysis';
+  // 先建 skeleton（cache 路徑與 API 路徑都需要 rpt_body_X 存在）
   body.innerHTML = holdings.map((h, i) => `
-    <div id="rpt_${i}" style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
+    <div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
       <div style="padding:10px 14px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
         <div>
           <span style="font-weight:700;font-family:monospace">${h.key}</span>
           <span style="color:var(--text2);font-size:12px;margin-left:6px">${h.name}</span>
           <span style="font-size:11px;padding:1px 6px;border-radius:8px;margin-left:6px;color:#fff;background:${h.type==='CRYPTO'?'#f7931a':h.type==='US'?'#0ea5e9':'var(--accent)'}">${h.type}</span>
         </div>
-        <span style="font-size:12px;font-weight:600;color:${h.pct>=0?'var(--green)':'var(--red)'}">${h.pct>=0?'+':''}${h.pct.toFixed(1)}%</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;font-weight:600;color:${h.pct>=0?'var(--green)':'var(--red)'}">${h.pct>=0?'+':''}${h.pct.toFixed(1)}%</span>
+          <button onclick="retryOneHolding(${i})" title="重新分析" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:13px;padding:2px 4px;border-radius:4px;line-height:1" onmouseover="this.style.color='var(--text1)'" onmouseout="this.style.color='var(--text3)'">↻</button>
+        </div>
       </div>
       <div id="rpt_body_${i}" style="padding:12px 14px;font-size:13px;color:var(--text2)">
-        <span style="opacity:.6">排隊中…</span>
+        <span style="opacity:.6">分析中…</span>
       </div>
     </div>`).join('');
 
-  // 儲存供單支重試使用
   window._portfolioHoldings = holdings;
-  window._portfolioAnalysisDate = today;
 
-  // 分批執行（每批 3 個避免 rate limit）
-  const BATCH = 3;
-  for (let i = 0; i < holdings.length; i += BATCH) {
-    const batch = holdings.slice(i, i + BATCH);
-    await Promise.allSettled(batch.map((h, bi) => analyzeOneHolding(i + bi)));
-    if (i + BATCH < holdings.length) await new Promise(r => setTimeout(r, 1500));
+  const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { return null; } })();
+  if (cached?.date === todayKey && !window._forcePortfolioRefresh) {
+    renderPortfolioResults(holdings, cached.results, body);
+    if (btn) btn.textContent = '🔬 全組合分析';
+    return;
+  }
+  window._forcePortfolioRefresh = false;
+
+  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
+
+  const toLine = (h, i) => {
+    const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
+    if (h.type === 'TW') return `[${i}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)} 現價$${h.price?.toFixed(0)} ${p}`;
+    if (h.type === 'US') return `[${i}] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`;
+    return `[${i}] ${h.key}(${h.name}) 加密幣 ${p}`;
+  };
+
+  const system = `資深投資組合分析師。根據持倉數據結合基本面分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
+  const callGroq = async (lines) => {
+    const prompt = `持倉清單：\n${lines}\n\n對每支標的給出具體分析，回傳：\n{"results":[{"idx":0,"assessment":"2句具體評估（說明現況與風險）","catalyst":"1句近期催化劑或關鍵事件","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1500, temperature:0.4,
+        response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    return JSON.parse(data.choices[0].message.content).results || [];
+  };
+
+  const BATCH = 5;
+  const allResults = [];
+  for (let start = 0; start < holdings.length; start += BATCH) {
+    const slice = holdings.slice(start, start + BATCH);
+    const lines = slice.map((h, j) => toLine(h, start + j)).join('\n');
+    try {
+      const results = await callGroq(lines);
+      allResults.push(...results);
+      renderPortfolioResults(holdings, results, body);
+    } catch(e) {
+      slice.forEach((h, j) => {
+        const el = document.getElementById(`rpt_body_${start + j}`);
+        if (el) el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,100)}</span> <button onclick="retryOneHolding(${start+j})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+      });
+    }
   }
 
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
   if (btn) { btn.disabled = false; btn.textContent = '🔬 全組合分析'; }
 }
 
-async function analyzeOneHolding(idx) {
+function renderPortfolioResults(holdings, results, body) {
+  const actionColor = { '加碼':'var(--green)', '持有':'var(--text2)', '減碼':'#e3671a', '出場':'var(--red)' };
+  results.forEach(r => {
+    const el = document.getElementById(`rpt_body_${r.idx}`);
+    if (!el) return;
+    el.innerHTML = `
+      <div style="margin-bottom:8px;line-height:1.7">${r.assessment}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">📌 ${r.catalyst}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface2);color:${actionColor[r.action]||'var(--text2)'}">${r.action}</span>
+        <span style="font-size:12px;color:var(--text3)">停損 <span style="color:var(--red)">${r.stopLoss}%</span> ／ 停利 <span style="color:var(--green)">+${r.stopGain}%</span></span>
+      </div>`;
+  });
+  holdings.forEach((h, i) => {
+    const el = document.getElementById(`rpt_body_${i}`);
+    if (el && el.innerHTML.includes('分析中')) el.innerHTML = `<span style="color:var(--text3);font-size:12px">未取得分析</span> <button onclick="retryOneHolding(${i})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+  });
+}
+
+async function retryOneHolding(idx) {
   const apiKey = localStorage.getItem('inv_gemini_key');
   if (!apiKey) return;
-  const h   = window._portfolioHoldings?.[idx];
-  const el  = document.getElementById(`rpt_body_${idx}`);
+  const h  = window._portfolioHoldings?.[idx];
+  const el = document.getElementById(`rpt_body_${idx}`);
   if (!h || !el) return;
-
   el.innerHTML = '<span style="opacity:.6">分析中…</span>';
-
-  const today    = window._portfolioAnalysisDate || new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
-  const isUS     = h.type === 'US';
-  const isCrypto = h.type === 'CRYPTO';
-
-  const holdInfo = isCrypto
-    ? `現價 $${h.price?.toFixed(2) ?? '—'}，持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-    : isUS
-      ? `持股 ${h.shares} 股 ／ 均價 $${h.avg?.toFixed(2)} ／ 現價 $${h.price?.toFixed(2)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`
-      : `持股 ${h.shares} 股 ／ 均價 NT$${h.avg?.toFixed(0)} ／ 現價 NT$${h.price?.toFixed(0)} ／ 未實現損益 ${h.pct>=0?'+':''}${h.pct.toFixed(2)}% ／ 持倉市值 NT$${Math.round(h.mv).toLocaleString()}`;
-
-  const assetDesc = isCrypto ? `加密貨幣 ${h.key}（${h.name}）` : isUS ? `美股 ${h.key}` : `台股 ${h.key}（${h.name}）`;
-
-  const system = `你是資深證券分析師，根據投資人提供的真實持倉數據，結合你的基本面知識給出判斷。若不確定具體數字請直說，不要編造財報數據或目標價。分析日期：${today}。請以繁體中文回覆，精準直接。`;
-  const prompt = `持倉標的：${assetDesc}
-實際持倉數據：${holdInfo}
-
-請根據以上真實數據，回答以下四個問題（每題2-4句精簡）：
-
-**1.【損益解讀】**
-目前 ${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}% 的損益，從這家公司的基本面來看合理嗎？是暫時波動還是反映結構性問題？
-
-**2.【主要催化劑】**
-接下來 1-2 季，最可能讓這支股票出現 ±15% 以上波動的事件或數據是什麼？（法說會、政策、競爭對手動態等）
-
-**3.【持有論點檢驗】**
-這支股票的核心投資價值現在還成立嗎？哪個跡象出現代表持有邏輯已動搖、應該考慮出場？
-
-**4.【操作建議】**
-明確給出：繼續持有 / 分批減碼 / 加碼 / 出場。
-並給出以均價為基礎的停利區間（+X%）和停損參考（-Y%）。`;
-
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
+  const p = `${h.pct >= 0 ? '+' : ''}${h.pct.toFixed(1)}%`;
+  const line = h.type === 'TW'
+    ? `[0] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)} 現價$${h.price?.toFixed(0)} ${p}`
+    : h.type === 'US'
+    ? `[0] ${h.key} 美股 均價$${h.avg?.toFixed(2)} 現價$${h.price?.toFixed(2)} ${p}`
+    : `[0] ${h.key}(${h.name}) 加密幣 ${p}`;
+  const system = `資深投資組合分析師。根據投資人真實持倉數據結合基本面知識分析。${today}。嚴禁編造財報數字。繁體中文。必須回傳JSON。`;
+  const prompt = `持倉清單：\n${line}\n\n對每支標的分析，回傳：\n{"results":[{"idx":0,"assessment":"2句評估","catalyst":"1句催化劑","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
   try {
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 800,
-        temperature: 0.5,
-        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
-      })
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:600, temperature:0.4, response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
-    el.innerHTML = data.choices[0].message.content
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    const r = (JSON.parse(data.choices[0].message.content).results || [])[0];
+    if (!r) throw new Error('未取得結果');
+    const actionColor = { '加碼':'var(--green)', '持有':'var(--text2)', '減碼':'#e3671a', '出場':'var(--red)' };
+    el.innerHTML = `
+      <div style="margin-bottom:8px;line-height:1.7">${r.assessment}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">📌 ${r.catalyst}</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface2);color:${actionColor[r.action]||'var(--text2)'}">${r.action}</span>
+        <span style="font-size:12px;color:var(--text3)">停損 <span style="color:var(--red)">${r.stopLoss}%</span> ／ 停利 <span style="color:var(--green)">+${r.stopGain}%</span></span>
+      </div>`;
   } catch(e) {
-    el.innerHTML = `<span style="color:var(--red);font-size:12px">失敗：${e.message}</span>
-      <button onclick="analyzeOneHolding(${idx})" style="margin-left:10px;font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
+    el.innerHTML = `<span style="color:var(--red);font-size:12px">${e.message.slice(0,100)}</span> <button onclick="retryOneHolding(${idx})" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重試</button>`;
   }
 }
 
@@ -2212,7 +2501,7 @@ function renderUsPageKPIs() {
   const s = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
   s('usKpiTotal',    `$${totalMV.toLocaleString(undefined,{maximumFractionDigits:0})}`,
                      'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
-  s('usKpiTotalSub', `USD · 約 TWD $${twdApprox.toLocaleString()}K`);
+  s('usKpiTotalSub', `≈ TWD $${Math.round(totalMV * USD_TWD).toLocaleString()}`);
   s('usKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString(undefined,{maximumFractionDigits:0})}`,
                      'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
   s('usKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`,
@@ -2255,29 +2544,42 @@ function renderUsPageKPIs() {
 
 // ─────── CRYPTO ───────
 function renderCrypto() {
-  // KPI 摘要
-  const totalMV_usd = CRYPTO.reduce((s,c) => s+(c.mv||0), 0);
-  const totalCost_usd = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
-  const totalPnl = totalMV_usd - totalCost_usd;
-  const totalPct = totalCost_usd ? (totalPnl/totalCost_usd*100).toFixed(1) : '—';
-  // 若有試算表同步資料，優先使用
-  const sheetMV_twd = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
-  const sheetMV_usd = sheetMV_twd ? (sheetMV_twd/USD_TWD).toFixed(0) : null;
+  // 優先用試算表同步資料（最新月份欄位）
+  const sheetMV_twd  = SHEET_ALLOC.ready ? (SHEET_ALLOC.binance   || 0) : 0;
+  const sheetCost_twd= SHEET_ALLOC.ready ? (SHEET_ALLOC.binance_c || 0) : 0;
+  // 備援：CRYPTO 陣列
+  const arrMV_usd    = CRYPTO.reduce((s,c) => s+(c.mv  ||0), 0);
+  const arrCost_usd  = CRYPTO.reduce((s,c) => s+(c.cost||0), 0);
 
-  const kpi = document.getElementById('cryptoKpi');
-  if (kpi) kpi.innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">幣安總市值(TWD)</div>
-      <div class="kpi-value">${sheetMV_twd ? '$'+sheetMV_twd.toLocaleString() : '—'}</div>
-      <div class="kpi-sub neutral">${sheetMV_twd ? '來自試算表同步' : '請先同步試算表'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">幣安總市值(USD)</div>
-      <div class="kpi-value">${sheetMV_usd ? '$'+Number(sheetMV_usd).toLocaleString() : (totalMV_usd?'$'+totalMV_usd.toLocaleString():'—')}</div>
-      <div class="kpi-sub neutral">匯率 ${USD_TWD}</div></div>
-    <div class="kpi-card"><div class="kpi-label">持倉損益</div>
-      <div class="kpi-value ${totalPnl>=0?'up':'down'}">${totalCost_usd?((totalPnl>=0?'+':'')+totalPct+'%'):'—'}</div>
-      <div class="kpi-sub ${totalPnl>=0?'up':'down'}">${totalCost_usd?(totalPnl>=0?'+':'')+'$'+Math.round(totalPnl).toLocaleString()+' USD':'—'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">佔總資產</div>
-      <div class="kpi-value neutral">${sheetMV_twd&&MONTHLY.length?(sheetMV_twd/MONTHLY[MONTHLY.length-1].v*100).toFixed(1)+'%':'—'}</div>
-      <div class="kpi-sub neutral">幣安 / 總資產</div></div>`;
+  // 決定顯示值（sheet 優先，以 TWD 為主）
+  const hasSh = sheetMV_twd > 0;
+  const mv_twd  = hasSh ? sheetMV_twd   : Math.round(arrMV_usd  * USD_TWD);
+  const cost_twd= hasSh ? sheetCost_twd : Math.round(arrCost_usd* USD_TWD);
+  const mv_usd  = Math.round(mv_twd   / USD_TWD);
+  const pnl_twd = mv_twd - cost_twd;
+  const pnlPct  = cost_twd > 0 ? pnl_twd / cost_twd * 100 : 0;
+
+  const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
+  kset('cryptoKpiTotal',    `$${mv_usd.toLocaleString()}`, 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiTotalSub', `≈ TWD $${mv_twd.toLocaleString()}${hasSh ? ' (試算表)' : ''}`);
+  kset('cryptoKpiPnl',      cost_twd > 0 ? `${pnl_twd>=0?'+':''}$${Math.round(pnl_twd/USD_TWD).toLocaleString()} USD` : '—', 'kpi-value ' + (pnl_twd >= 0 ? 'up' : 'down'));
+  kset('cryptoKpiPnlPct',   cost_twd > 0 ? `${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%` : '—', 'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
+
+  // 最大虧損/獲利：若有個別幣種資料才顯示
+  const withPct = CRYPTO.filter(c => c.mv && c.pct != null && c.cost > 0);
+  if (withPct.length) {
+    const worst = withPct.reduce((a, b) => b.pct < a.pct ? b : a);
+    const best  = withPct.reduce((a, b) => b.pct > a.pct ? b : a);
+    kset('cryptoKpiWorst',    `${worst.sym} ${worst.pct.toFixed(1)}%`, 'kpi-value down');
+    kset('cryptoKpiWorstSub', worst.name);
+    kset('cryptoKpiBest',     `${best.sym} +${best.pct.toFixed(1)}%`, 'kpi-value up');
+    kset('cryptoKpiBestSub',  best.name);
+  } else if (hasSh) {
+    kset('cryptoKpiWorst',    '—', 'kpi-value neutral');
+    kset('cryptoKpiWorstSub', '個別幣種未設定');
+    kset('cryptoKpiBest',     '—', 'kpi-value neutral');
+    kset('cryptoKpiBestSub',  '個別幣種未設定');
+  }
 
   // 持倉表格
   const tbody = document.getElementById('cryptoTable');
@@ -2286,25 +2588,41 @@ function renderCrypto() {
   const badge = document.getElementById('cryptoSyncBadge');
   if (badge) badge.textContent = sheetMV_twd ? `試算表總值 $${sheetMV_twd.toLocaleString()} TWD` : '同步後更新';
 
-  CRYPTO.forEach(c => {
-    const pnlCls = c.pct >= 0 ? 'up' : 'down';
-    tbody.innerHTML += `<tr>
-      <td><span class="ticker">${c.sym}</span></td>
-      <td>${c.name}</td>
-      <td style="font-family:monospace">${c.shares||'—'}</td>
-      <td style="font-family:monospace">${c.avg?'$'+c.avg.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.price?'$'+c.price.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.cost?'$'+c.cost.toLocaleString():'—'}</td>
-      <td style="font-family:monospace">${c.mv?'$'+c.mv.toLocaleString():'—'}</td>
-      <td class="${pnlCls}" style="font-family:monospace">${c.cost&&c.mv?(c.mv-c.cost>=0?'+':'')+' $'+Math.round(c.mv-c.cost).toLocaleString():'—'}</td>
-      <td class="${pnlCls}">${c.pct?(c.pct>=0?'+':'')+c.pct.toFixed(2)+'%':'—'}</td>
-      <td>${(c.rec==='HOLD'?'<span class="rec-hold">◆ 持有</span>':c.rec==='BUY'?'<span class="rec-buy">▲ 買進</span>':'<span class="rec-sell">▼ 賣出</span>')}</td>
+  const cryptoHasData = CRYPTO.some(c => c.mv > 0);
+  if (cryptoHasData) {
+    CRYPTO.forEach(c => {
+      const pnlCls = c.pct >= 0 ? 'up' : 'down';
+      tbody.innerHTML += `<tr>
+        <td><span class="ticker">${c.sym}</span></td>
+        <td>${c.name}</td>
+        <td style="font-family:monospace">${c.shares||'—'}</td>
+        <td style="font-family:monospace">${c.avg?'$'+c.avg.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.price?'$'+c.price.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.cost?'$'+c.cost.toLocaleString():'—'}</td>
+        <td style="font-family:monospace">${c.mv?'$'+c.mv.toLocaleString():'—'}</td>
+        <td class="${pnlCls}" style="font-family:monospace">${c.cost&&c.mv?(c.mv-c.cost>=0?'+':'')+' $'+Math.round(c.mv-c.cost).toLocaleString():'—'}</td>
+        <td class="${pnlCls}">${c.pct?(c.pct>=0?'+':'')+c.pct.toFixed(2)+'%':'—'}</td>
+        <td>${(c.rec==='HOLD'?'<span class="rec-hold">◆ 持有</span>':c.rec==='BUY'?'<span class="rec-buy">▲ 買進</span>':'<span class="rec-sell">▼ 賣出</span>')}</td>
+      </tr>`;
+    });
+  } else if (hasSh) {
+    // 從試算表顯示幣安摘要列
+    const pnlCls = pnl_twd >= 0 ? 'up' : 'down';
+    tbody.innerHTML = `<tr>
+      <td><span class="ticker">BINANCE</span></td>
+      <td>幣安總覽</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">—</td>
+      <td style="font-family:monospace">$${Math.round(cost_twd).toLocaleString()} TWD</td>
+      <td style="font-family:monospace">$${Math.round(mv_twd).toLocaleString()} TWD</td>
+      <td class="${pnlCls}" style="font-family:monospace">${pnl_twd>=0?'+':''}$${Math.round(pnl_twd).toLocaleString()} TWD</td>
+      <td class="${pnlCls}">${pnlPct>=0?'+':''}${pnlPct.toFixed(2)}%</td>
+      <td>—</td>
     </tr>`;
-  });
-
-  if (!CRYPTO.some(c => c.mv > 0)) {
-    tbody.innerHTML += `<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px">
-      請更新 CRYPTO 陣列中的持倉資料，或同步試算表查看總值
+  } else {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px">
+      請同步試算表以查看幣安資料
     </td></tr>`;
   }
 }
@@ -2714,7 +3032,8 @@ try {
 } catch(e) {}
 initOverviewCharts();
 renderOverviewKPIs();
-runMorningScan();
+runMarketReport();
+runHoldingsAnalysis();
 window._overviewInit = true;
 renderTwStocks();
 renderUsStocks();
@@ -2754,6 +3073,401 @@ const SHEET_GIDS = {
   us:      '1730614274',  // 美股持股
   history: '361233489',   // 歷年損益/資產
 };
+// ─────── 技術分析 & 籌碼 ───────
+async function fetchYahooHistory(sym) {
+  const cacheKey = 'inv_wtech_' + sym + '_' + new Date().toLocaleDateString('zh-TW');
+  try { const c = JSON.parse(localStorage.getItem(cacheKey)||'null'); if (c) return c; } catch(e) {}
+  const isGH = location.hostname.includes('github.io');
+  const proxies = [u => 'https://corsproxy.io/?'+encodeURIComponent(u), u => 'https://api.allorigins.win/raw?url='+encodeURIComponent(u)];
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1wk&includePrePost=false`;
+  const parse = async r => {
+    if (!r.ok) return null;
+    const d = await r.json();
+    const res = d.chart?.result?.[0];
+    if (!res) return null;
+    const q = res.indicators?.quote?.[0] || {};
+    const closes  = (q.close ||[]).map(v => v ?? null);
+    const highs   = (q.high  ||[]).map(v => v ?? null);
+    const volumes = (q.volume||[]).map(v => v ?? null);
+    if (closes.filter(Boolean).length < 10) return null;
+    return { closes, highs, volumes };
+  };
+  let data = null;
+  if (!isGH) { try { data = await fetch(url,{headers:{Accept:'application/json'}}).then(parse); } catch(e) {} }
+  if (!data) { for (const p of proxies) { try { data = await fetch(p(url)).then(parse); if (data) break; } catch(e) {} } }
+  if (data) { try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch(e) {} }
+  return data;
+}
+
+function _emaArr(arr, n) {
+  const k = 2/(n+1); const r = [arr[0]];
+  for (let i=1;i<arr.length;i++) r.push(arr[i]*k+r[i-1]*(1-k));
+  return r;
+}
+// hist 為週線資料；avg 為持倉均價（計算停損用）
+function calcIndicators(hist, avg) {
+  const closes  = (hist.closes ||[]).filter(v=>v!=null);
+  const highs   = (hist.highs  ||[]).filter(v=>v!=null);
+  const volumes = (hist.volumes||[]).filter(v=>v!=null);
+  if (closes.length < 10) return null;
+  const price = closes[closes.length-1];
+  const ma = (n) => closes.length>=n ? closes.slice(-n).reduce((a,b)=>a+b,0)/n : null;
+  // 週MA20 ≈ 5個月線；週MA52 ≈ 年線
+  const ma20 = ma(20), ma52 = ma(Math.min(52, closes.length));
+  const high52w = highs.length ? Math.max(...highs) : null;
+  // RSI(14)
+  let rsi = null;
+  if (closes.length >= 15) {
+    const P=14; let ag=0,al=0;
+    for (let i=1;i<=P;i++){const d=closes[i]-closes[i-1]; d>0?ag+=d:al-=d;}
+    ag/=P; al/=P;
+    for (let i=P+1;i<closes.length;i++){const d=closes[i]-closes[i-1]; ag=(ag*(P-1)+Math.max(0,d))/P; al=(al*(P-1)+Math.max(0,-d))/P;}
+    rsi = al===0?100:Math.round(100-100/(1+ag/al));
+  }
+  // MACD(12,26,9) — 需足夠週數
+  let macdDir = null;
+  if (closes.length >= 35) {
+    const e12=_emaArr(closes,12), e26=_emaArr(closes,26);
+    const ml=e12.map((v,i)=>v-e26[i]).slice(25);
+    const sl=_emaArr(ml,9);
+    macdDir = ml[ml.length-1] > sl[sl.length-1] ? '看多' : '看空';
+  }
+  let volRatio = null;
+  if (volumes.length >= 10) {
+    const avgVol = volumes.slice(-10).reduce((a,b)=>a+b,0)/10;
+    volRatio = avgVol>0 ? +(volumes[volumes.length-1]/avgVol).toFixed(1) : null;
+  }
+  // ── 計算具體價位 ──
+  const addPoint   = ma20  ? Math.round(ma20)  : null;   // 加碼點 = 週MA20
+  const stopLoss   = (() => {
+    const byMA  = ma52  ? Math.round(ma52)         : null;
+    const byAvg = avg   ? Math.round(avg * 0.88)   : null;
+    if (byMA && byAvg) return Math.max(byMA, byAvg);
+    return byMA || byAvg;
+  })();
+  const target  = high52w ? Math.round(high52w) : null;  // 目標 = 52週高點
+  const rrRatio = (target && stopLoss && price > stopLoss && target > price)
+    ? +((target - price) / (price - stopLoss)).toFixed(1) : null;
+  return { price, ma20: ma20?Math.round(ma20):null, ma52: ma52?Math.round(ma52):null,
+    rsi, macdDir, volRatio, high52w: high52w?Math.round(high52w):null,
+    addPoint, stopLoss, target, rrRatio };
+}
+
+async function fetchTWSEChips() {
+  const todayKey = new Date().toLocaleDateString('zh-TW');
+  const cacheKey = 'inv_chips_tw_'+todayKey;
+  try { const c = JSON.parse(localStorage.getItem(cacheKey)||'null'); if (c) return c; } catch(e) {}
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
+  const isGH = location.hostname.includes('github.io');
+  const proxies = [u => 'https://corsproxy.io/?'+encodeURIComponent(u)];
+  const tryGet = async u => { const r=await fetch(u); return r.ok?r.json():null; };
+  let raw = null;
+  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
+  if (!raw) { for (const p of proxies) { try { raw = await tryGet(p(url)); if (raw) break; } catch(e) {} } }
+  if (!raw?.data) return {};
+  const parse = v => { const n=parseInt((v||'').replace(/,/g,''),10); return isNaN(n)?0:n; };
+  const map = {};
+  raw.data.forEach(row => {
+    const code = (row[0]||'').trim();
+    if (!code) return;
+    map[code] = { foreign: parse(row[4]), trust: parse(row[10]), dealer: parse(row[13]) };
+  });
+  try { localStorage.setItem(cacheKey, JSON.stringify(map)); } catch(e) {}
+  return map;
+}
+
+const KNOWN_TWO_SET = new Set(['1580','00858']);
+function twYahooSym(code) {
+  const isTWO = /[A-Za-z]$/.test(code) || /^[456]/.test(code) || KNOWN_TWO_SET.has(code);
+  return code + (isTWO ? '.TWO' : '.TW');
+}
+
+// ── 大盤報告 ──────────────────────────────────────────────────────────────
+async function fetchTWSEMarketChipsAgg() {
+  const todayStr = new Date().toLocaleDateString('zh-TW');
+  const cacheKey = 'inv_mkt_chips_' + todayStr;
+  try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c; } catch(e) {}
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
+  const isGH = location.hostname.includes('github.io');
+  const proxy = u => 'https://corsproxy.io/?' + encodeURIComponent(u);
+  const tryGet = async u => { const r = await fetch(u); return r.ok ? r.json() : null; };
+  let raw = null;
+  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
+  if (!raw) { try { raw = await tryGet(proxy(url)); } catch(e) {} }
+  if (!raw?.data?.length) return null;
+  const parse = v => { const n = parseInt((v||'').replace(/,/g,''), 10); return isNaN(n) ? 0 : n; };
+  let foreign = 0, trust = 0, dealer = 0;
+  raw.data.forEach(row => { foreign += parse(row[4]); trust += parse(row[10]); dealer += parse(row[13]); });
+  const result = { foreign, trust, dealer };
+  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+  return result;
+}
+
+async function runMarketReport() {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  const body   = document.getElementById('marketReportBody');
+  const timeEl = document.getElementById('marketReportTime');
+  if (!body) return;
+  if (!apiKey) {
+    body.innerHTML = '<div style="color:var(--text2);font-size:13px">設定 Groq API Key 後啟用大盤報告</div>';
+    return;
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  try {
+    const cache = JSON.parse(localStorage.getItem('inv_market_report') || '{}');
+    if (cache.date === todayKey && cache.result) {
+      renderMarketReport(cache.result);
+      if (timeEl && cache.time) timeEl.textContent = cache.time + ' 更新';
+      return;
+    }
+  } catch(e) {}
+
+  body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">📡 抓取大盤資料…</div>';
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  const [twRes, spxRes, qqqRes, chipsRes] = await Promise.allSettled([
+    fetchYahooHistory('^TWII'),
+    fetchYahooHistory('^GSPC'),
+    fetchYahooHistory('QQQ'),
+    fetchTWSEMarketChipsAgg(),
+  ]);
+  const twHist   = twRes.status   === 'fulfilled' ? twRes.value   : null;
+  const spxHist  = spxRes.status  === 'fulfilled' ? spxRes.value  : null;
+  const qqqHist  = qqqRes.status  === 'fulfilled' ? qqqRes.value  : null;
+  const twChips  = chipsRes.status === 'fulfilled' ? chipsRes.value : null;
+
+  const twInd  = twHist  ? calcIndicators(twHist,  null) : null;
+  const spxInd = spxHist ? calcIndicators(spxHist, null) : null;
+  const qqqInd = qqqHist ? calcIndicators(qqqHist, null) : null;
+
+  const fmtInd = (ind, name) => {
+    if (!ind) return `${name}：資料不足`;
+    const p = (+ind.price)?.toLocaleString() || '?';
+    return [
+      `${name} 現價 ${p}`,
+      ind.rsi    != null ? `週RSI=${ind.rsi}` : '',
+      ind.ma20   != null ? `${ind.price > ind.ma20 ? '站上' : '跌破'}週MA20(${(+ind.ma20)?.toLocaleString()})` : '',
+      ind.ma52   != null ? `${ind.price > ind.ma52 ? '站上' : '跌破'}週MA52(${(+ind.ma52)?.toLocaleString()})` : '',
+      ind.macdDir ? `MACD ${ind.macdDir}` : '',
+      ind.volRatio != null ? `量比 ${ind.volRatio}x` : '',
+    ].filter(Boolean).join('  ');
+  };
+
+  const fmtChips = c => {
+    if (!c) return '三大法人：今日無資料';
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    return `三大法人合計：外資 ${fmt(c.foreign)} / 投信 ${fmt(c.trust)} / 自營 ${fmt(c.dealer)} / 合計 ${fmt(c.foreign+c.trust+c.dealer)}`;
+  };
+
+  const techContext = [
+    fmtInd(twInd,  '台股加權指數(^TWII)'),
+    fmtChips(twChips),
+    '',
+    fmtInd(spxInd, 'S&P500(^GSPC)'),
+    fmtInd(qqqInd, 'NASDAQ-ETF(QQQ)'),
+  ].join('\n');
+
+  body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">🤖 AI 分析中…</div>';
+
+  const system = `你是一位台美股資深市場分析師，每日早晨提供專業大盤報告。今日${today}。繁體中文。必須回傳JSON。
+
+分析要求：
+1. 結合提供的週線技術指標 + 你對當前市場環境的深度認知（總經、聯準會、地緣政治、產業趨勢）
+2. 支撐/壓力位要給出具體數值，不要給區間
+3. 多空力道評分（1-10，5=中性）要有依據
+4. 操作建議要具體，像市場分析師報告水準
+5. 有明確觀點，不說「市場可能」、「需關注」等廢話`;
+
+  const prompt = `今日大盤週線技術指標：
+${techContext}
+
+請回傳以下JSON：
+{
+  "tw": {
+    "score": 6,
+    "trend": "趨勢方向（如：多頭整理 / 空頭反彈 / 突破整理）",
+    "support": 20000,
+    "resistance": 22000,
+    "analysis": "台股技術面＋籌碼面綜合分析（100字以內）",
+    "catalyst": "近期關鍵催化劑或風險（30字以內，無則空字串）",
+    "plan": "本週操作策略（具體可執行，50字以內）"
+  },
+  "us": {
+    "score": 7,
+    "trend": "趨勢方向",
+    "spx_support": 5000,
+    "spx_resistance": 5500,
+    "qqq_key_level": 450,
+    "analysis": "美股技術面＋總經面綜合分析（100字以內）",
+    "catalyst": "近期關鍵催化劑或風險（30字以內，無則空字串）",
+    "plan": "本週操作策略（具體可執行，50字以內）"
+  },
+  "macro": "跨市場整體觀點，對持倉的影響（50字以內）"
+}`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1200,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    const result = JSON.parse(data.choices[0].message.content);
+    result._tw_ind = twInd; result._spx_ind = spxInd; result._qqq_ind = qqqInd; result._chips = twChips;
+    renderMarketReport(result);
+    const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    if (timeEl) timeEl.textContent = timeStr + ' 更新';
+    try { localStorage.setItem('inv_market_report', JSON.stringify({ date: todayKey, time: timeStr, result })); } catch(e) {}
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--red);font-size:13px;padding:8px 0">分析失敗：${e.message}
+      <button onclick="localStorage.removeItem('inv_market_report');runMarketReport()" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text1)">重試</button></div>`;
+  }
+}
+
+function renderMarketReport(result) {
+  const body = document.getElementById('marketReportBody');
+  if (!body || !result) return;
+
+  const tw  = result.tw  || {};
+  const us  = result.us  || {};
+  const twInd  = result._tw_ind;
+  const spxInd = result._spx_ind;
+  const qqqInd = result._qqq_ind;
+  const chips  = result._chips;
+
+  const scoreBar = score => {
+    const pct   = (score / 10) * 100;
+    const color = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';
+    const label = score >= 7 ? '偏多' : score >= 4 ? '中性' : '偏空';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width .4s"></div>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:${color};white-space:nowrap;min-width:60px;text-align:right">${score}/10 ${label}</span>
+    </div>`;
+  };
+
+  const indPills = ind => {
+    if (!ind) return '';
+    const rsiColor = ind.rsi > 70 ? 'var(--red)' : ind.rsi < 30 ? 'var(--green)' : 'var(--text3)';
+    const pills = [
+      ind.rsi != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${rsiColor}">RSI ${ind.rsi}</span>` : '',
+      ind.macdDir ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.macdDir==='看多'?'var(--green)':'var(--red)'}">${ind.macdDir}</span>` : '',
+      ind.price != null && ind.ma20 != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.price>ind.ma20?'var(--green)':'var(--red)'}">${ind.price>ind.ma20?'▲':'▼'}MA20</span>` : '',
+      ind.price != null && ind.ma52 != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.price>ind.ma52?'var(--green)':'var(--red)'}">${ind.price>ind.ma52?'▲':'▼'}MA52</span>` : '',
+    ].filter(Boolean).join('');
+    return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">${pills}</div>`;
+  };
+
+  const chipsRow = chips ? (() => {
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    const total = chips.foreign + chips.trust + chips.dealer;
+    const tc = total >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.8">
+      外資 <span style="color:${chips.foreign>=0?'var(--green)':'var(--red)'}">${fmt(chips.foreign)}</span>
+      投信 <span style="color:${chips.trust>=0?'var(--green)':'var(--red)'}">${fmt(chips.trust)}</span>
+      自營 <span style="color:${chips.dealer>=0?'var(--green)':'var(--red)'}">${fmt(chips.dealer)}</span>
+      合計 <span style="font-weight:700;color:${tc}">${fmt(total)}</span>
+    </div>`;
+  })() : '';
+
+  const col = (flag, label, ind, scoreVal, trend, sup, res, analysis, catalyst, plan, extra='') => `
+    <div style="flex:1;min-width:220px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.8px;margin-bottom:8px">${flag} ${label}</div>
+      ${ind ? `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px;font-weight:700;font-family:monospace;color:var(--text1)">${(+ind.price)?.toLocaleString()}</span>
+        ${ind.change != null ? `<span style="font-size:12px;color:${ind.change>=0?'var(--green)':'var(--red)'}">${ind.change>=0?'+':''}${ind.change?.toFixed(2)}%</span>` : ''}
+      </div>` : ''}
+      ${indPills(ind)}
+      ${extra}
+      ${scoreBar(scoreVal)}
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">趨勢：<span style="color:var(--text1);font-weight:600">${trend||'—'}</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        支撐 <span style="color:var(--green);font-family:monospace;font-weight:600">${(+sup)?.toLocaleString()||'—'}</span>
+        <span style="color:var(--border);padding:0 6px">|</span>
+        壓力 <span style="color:var(--red);font-family:monospace;font-weight:600">${(+res)?.toLocaleString()||'—'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:6px">${analysis||''}</div>
+      ${catalyst ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:6px">⚡ ${catalyst}</div>` : ''}
+      <div style="padding:8px 10px;background:var(--surface3);border-radius:6px;font-size:12px;color:var(--text1);line-height:1.55">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;letter-spacing:.5px">本週策略</div>
+        ${plan||'—'}
+      </div>
+    </div>`;
+
+  const qqqExtra = qqqInd ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+    QQQ <span style="font-family:monospace;color:var(--text1);font-weight:600">${(+qqqInd.price)?.toFixed(2)}</span>
+    <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);margin-left:4px;color:${qqqInd.rsi>70?'var(--red)':qqqInd.rsi<30?'var(--green)':'var(--text3)'}">RSI ${qqqInd.rsi}</span>
+    ${us.qqq_key_level ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">關鍵位 <span style="color:var(--text2)">${us.qqq_key_level}</span></span>` : ''}
+  </div>` : '';
+
+  body.innerHTML = `
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      ${col('🇹🇼','台股', twInd, tw.score||5, tw.trend, tw.support, tw.resistance, tw.analysis, tw.catalyst, tw.plan, chipsRow)}
+      <div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch"></div>
+      ${col('🇺🇸','美股', spxInd, us.score||5, us.trend, us.spx_support, us.spx_resistance, us.analysis, us.catalyst, us.plan, qqqExtra)}
+    </div>
+    ${result.macro ? `<div style="margin-top:14px;padding:10px 12px;background:var(--surface2);border-radius:7px;border-left:3px solid var(--accent);font-size:12px;color:var(--text2);line-height:1.6">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px">跨市場觀點</div>
+      ${result.macro}
+    </div>` : ''}`;
+}
+// ── end 大盤報告 ──────────────────────────────────────────────────────────
+
+// 回傳 { techLine: string (給 AI), levels: object (給渲染) } 的陣列
+async function buildTechLines(allHoldings) {
+  const twHoldings = allHoldings.filter(h=>h.type==='TW');
+  const [techResults, chipsMap] = await Promise.all([
+    Promise.allSettled(allHoldings.map(h => {
+      if (h.type==='CRYPTO') return Promise.resolve(null);
+      const sym = h.type==='TW' ? twYahooSym(h.key) : h.key;
+      return fetchYahooHistory(sym).then(hist => hist ? calcIndicators(hist, h.avg) : null);
+    })),
+    twHoldings.length ? fetchTWSEChips() : Promise.resolve({}),
+  ]);
+  return allHoldings.map((h, i) => {
+    const ind = techResults[i].status==='fulfilled' ? techResults[i].value : null;
+    const parts = [];
+    if (ind) {
+      const p = h.price || ind.price;
+      if (ind.rsi  != null) parts.push(`週RSI=${ind.rsi}`);
+      if (ind.ma20)  parts.push(`${p>ind.ma20?'站上':'跌破'}週MA20($${ind.ma20})`);
+      if (ind.ma52)  parts.push(`${p>ind.ma52?'站上':'跌破'}週MA52($${ind.ma52})`);
+      if (ind.macdDir) parts.push(`MACD${ind.macdDir}`);
+      if (ind.volRatio!=null) parts.push(`量能${ind.volRatio}x`);
+    }
+    const chips = h.type==='TW' ? chipsMap[h.key] : null;
+    const chipsStr = chips ? (() => {
+      const fmt = n => (n>=0?'+':'')+Math.round(n/1000)+'千張';
+      return `籌碼：外資${fmt(chips.foreign)} 投信${fmt(chips.trust)}`;
+    })() : '';
+    const levelsStr = ind ? [
+      ind.addPoint  ? `加碼點$${ind.addPoint}(週MA20)`       : '',
+      ind.stopLoss  ? `停損$${ind.stopLoss}`                  : '',
+      ind.target    ? `目標$${ind.target}(52週高)`            : '',
+      ind.rrRatio   ? `風報比1:${ind.rrRatio}`                : '',
+    ].filter(Boolean).join(' ') : '';
+    const techLine = [
+      parts.length ? `    [${parts.join(' ')}]` : '',
+      levelsStr    ? `    ${levelsStr}`          : '',
+      chipsStr     ? `    ${chipsStr}`           : '',
+    ].filter(Boolean).join('\n');
+    return { techLine, levels: ind || null, chips: chips || null };
+  });
+}
+
 // ─────── 刷新股價（Yahoo Finance，含 Nasdaq 指數）───────
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
 async function fetchOnePrice(sym) {
@@ -3307,6 +4021,9 @@ async function syncSheets() {
     // 用試算表同步的 QQQ 現價更新策略頁（GOOGLEFINANCE 即時）
     const syncedQQQ = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ');
     if (syncedQQQ?.price) updateNasdaqDisplay(syncedQQQ.price);
+    // 持倉異動 → 作廢舊分析快取，重跑
+    localStorage.removeItem('inv_holdings_v2');
+    runHoldingsAnalysis();
     showStatus(`✅ 同步完成：${results.join('、')}`, 'success');
   } catch(e) {
     showStatus('❌ 同步失敗：' + e.message, 'error');
@@ -5320,12 +6037,12 @@ function renderMorningScan(result) {
     ${result.summary ? `<div style="font-size:12px;color:var(--text1);padding:8px 10px;background:var(--surface2);border-radius:7px;margin-bottom:10px;border-left:3px solid var(--accent)">💬 ${result.summary}</div>` : ''}
     ${holdings.length ? `
       <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.8px">持倉（${holdings.length}）</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px">
         ${holdings.map(card).join('')}
       </div>` : ''}
     ${watchlist.length ? `
       <div style="font-size:10px;font-weight:700;color:var(--text3);margin-bottom:6px;letter-spacing:.8px">觀察清單（${watchlist.length}）</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px">
         ${watchlist.map(card).join('')}
       </div>` : ''}`;
 }
@@ -5456,145 +6173,6 @@ function computeActionPlan() {
 
   return { verdict, topAdd, topReduce, rebalance };
 }
-
-async function showActionPlan() {
-  document.getElementById('actionDrawer').classList.add('open');
-  document.getElementById('actionOverlay').classList.add('open');
-
-  const apiKey = localStorage.getItem('inv_gemini_key');
-  if (!apiKey) { showActionPlanFallback(); return; }
-
-  document.getElementById('actionDrawerContent').innerHTML =
-    `<div style="text-align:center;padding:40px 0;color:var(--text2)">
-      <div style="font-size:28px;margin-bottom:12px">🤖</div>
-      <div style="font-size:13px">分析所有持倉中，請稍候…</div>
-     </div>`;
-
-  try {
-    const allUS  = [...US_MAIN, ...US_ROY];
-    const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
-    const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
-    const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
-    const total  = twMV + usMV + cryptoMV;
-    const today  = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
-
-    const fmtTW = h =>
-      `  ${h.name}(${h.code}) 持${h.shares}股｜均${h.avg?.toFixed(0)}→現${h.price?.toFixed(0)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%｜市值${Math.round((h.mv||0)/10000)}萬`;
-    const fmtUS = h =>
-      `  ${h.sym} 持${h.shares}股｜均$${h.avg?.toFixed(2)}→現$${h.price?.toFixed(2)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
-    const fmtCrypto = c =>
-      `  ${c.sym}(${c.name})｜現價$${c.price?.toFixed(2)}｜損益${c.pct>=0?'+':''}${c.pct?.toFixed(1)}%`;
-
-    const cryptoLines = CRYPTO.filter(c => (c.mv||0) > 0 || ['BTC','ETH'].includes(c.sym));
-
-    const system = `你是資深投資組合經理，有20年機構操作經驗。根據投資人提供的真實即時持倉數據，給出今日具體可執行的行動建議。不要假設你知道今天的即時股價或財報數字，一切以投資人提供的數據為準。用繁體中文回覆，直接精準，不廢話。`;
-
-    const prompt = `今天是 ${today}，以下是我的完整持倉（數據為即時同步）：
-
-【台股持倉】
-${TW_HOLD.length ? TW_HOLD.map(fmtTW).join('\n') : '  （無台股持倉）'}
-
-【美股持倉】
-${allUS.length ? allUS.map(fmtUS).join('\n') : '  （無美股持倉）'}
-
-【加密貨幣】
-${cryptoLines.length ? cryptoLines.map(fmtCrypto).join('\n') : '  （無加密幣持倉）'}
-
-【整體概況】
-總市值 ${(total/10000).toFixed(0)}萬 TWD｜台股 ${total>0?(twMV/total*100).toFixed(1):0}%｜美股 ${total>0?(usMV/total*100).toFixed(1):0}%｜加密幣 ${total>0?(cryptoMV/total*100).toFixed(1):0}%
-
-請根據以上真實數據回答：
-
-**一、立刻需要處理（今日優先）**
-從損益、持倉比重、持有邏輯角度，哪 1-3 筆最需要行動？說明原因與建議方向（減碼/停損/觀察條件）。
-
-**二、值得加碼的機會**
-哪 1-2 筆目前損益或比重顯示可能有相對好的買點？說明理由。若無明顯機會請直說。
-
-**三、組合最大風險暴露**
-目前整體組合最脆弱的地方（集中度、產業相關性、匯率、單一事件風險等）。
-
-**四、今天只做一件事**
-一句話，現在最重要的優先行動。`;
-
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 1200,
-        temperature: 0.4,
-        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
-      })
-    });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    const data = await res.json();
-    const reply = data.choices[0].message.content
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    document.getElementById('actionDrawerContent').innerHTML =
-      `<div style="font-size:11px;color:var(--text2);margin-bottom:14px">🤖 Groq AI · 根據即時持倉生成 · ${new Date().toLocaleTimeString('zh-TW')}
-       <button onclick="showActionPlan()" style="margin-left:10px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text1)">↻ 重新分析</button></div>
-       <div style="font-size:13px;line-height:1.9">${reply}</div>
-       <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
-         <button onclick="runAllPortfolioAnalysis();closeActionPlan();" style="width:100%;padding:9px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;color:var(--text1)">🔬 查看每支個股深度分析 →</button>
-       </div>`;
-  } catch(e) {
-    document.getElementById('actionDrawerContent').innerHTML =
-      `<div style="color:var(--red);font-size:13px;padding:12px">分析失敗：${escHtml(e.message)}</div>
-       <button onclick="showActionPlanFallback()" style="margin-top:8px;padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text1);cursor:pointer;font-size:12px">改用規則建議</button>`;
-  }
-}
-
-function showActionPlanFallback() {
-  const plan = computeActionPlan();
-  const recColor = { ADD:'var(--green)', TRIM:'var(--yellow)', STOP:'var(--red)', EVAL:'var(--purple)' };
-
-  const addRows = plan.topAdd.length
-    ? plan.topAdd.map(h => `
-        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
-            <span style="color:${h.pct>=0?'var(--green)':'var(--red)'};font-size:12px">${h.pct>0?'+':''}${h.pct.toFixed(1)}%</span>
-          </div>
-          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
-        </div>`).join('')
-    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無明顯加碼機會</div>';
-
-  const reduceRows = plan.topReduce.length
-    ? plan.topReduce.map(h => `
-        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
-            <span style="display:flex;align-items:center;gap:6px">
-              <span style="color:${recColor[h.rec]||'var(--text2)'};font-weight:700;font-size:11px">${h.rec}</span>
-              <span style="color:var(--red);font-size:12px">${h.pct.toFixed(1)}%</span>
-            </span>
-          </div>
-          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
-        </div>`).join('')
-    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無需緊急減碼</div>';
-
-  const rebalRows = plan.rebalance.map(t => `<div style="font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">${t}</div>`).join('');
-
-  document.getElementById('actionDrawerContent').innerHTML = `
-    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">📊 規則引擎模式 · 設定 API Key 可啟用 AI 分析</div>
-    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
-      ${plan.verdict}
-    </div>
-    <div style="font-weight:700;font-size:13px;color:var(--green);margin-bottom:8px">🟢 建議加碼</div>
-    ${addRows}
-    <div style="font-weight:700;font-size:13px;color:var(--red);margin:16px 0 8px">🔴 建議減碼/停損</div>
-    ${reduceRows}
-    <div style="font-weight:700;font-size:13px;color:var(--yellow);margin:16px 0 8px">⚖️ 再平衡提示</div>
-    ${rebalRows}`;
-}
-
-function closeActionPlan() {
-  document.getElementById('actionDrawer').classList.remove('open');
-  document.getElementById('actionOverlay').classList.remove('open');
-}
 </script>
 
 <!-- ── AI Chat Widget ── -->
@@ -5625,14 +6203,6 @@ function closeActionPlan() {
     <input type="text" id="chatInput" placeholder="輸入投資問題..." onkeypress="chatKeypress(event)">
     <button onclick="sendChat()">送出</button>
   </div>
-</div>
-<div class="action-overlay" id="actionOverlay" onclick="closeActionPlan()"></div>
-<div class="action-drawer" id="actionDrawer">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="font-weight:700;font-size:16px">⚡ 今日行動建議</div>
-    <button onclick="closeActionPlan()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer">✕</button>
-  </div>
-  <div id="actionDrawerContent">載入中…</div>
 </div>
 </body>
 </html>
