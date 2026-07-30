@@ -2197,13 +2197,13 @@ async function runHoldingsAnalysis() {
     if (c) c.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:6px 0"><span style="opacity:.6">🤖 AI 分析中…</span></div>`;
   });
 
-  const toLine = (h, i) => {
+  const toLine = (h, localIdx, globalIdx) => {
     const p = `${h.pct>=0?'+':''}${h.pct.toFixed(1)}%`;
     let base = '';
-    if (h.type==='TW') base = `[${i}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
-    else if (h.type==='US') base = `[${i}] ${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
-    else base = `[${i}] ${h.key}(${h.name||''}) 加密幣 ${p}`;
-    return techData[i]?.techLine ? base + '\n' + techData[i].techLine : base;
+    if (h.type==='TW') base = `[${localIdx}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
+    else if (h.type==='US') base = `[${localIdx}] ${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
+    else base = `[${localIdx}] ${h.key}(${h.name||''}) 加密幣 ${p}`;
+    return techData[globalIdx]?.techLine ? base + '\n' + techData[globalIdx].techLine : base;
   };
 
   const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師。今日${today}。繁體中文。必須回傳JSON。
@@ -2228,7 +2228,7 @@ async function runHoldingsAnalysis() {
   for (let start = 0; start < allHoldings.length; start += 5) {
     const slice = allHoldings.slice(start, start+5);
     try {
-      const results = await callBatch(slice.map((h,j) => toLine(h, j)).join('\n'));
+      const results = await callBatch(slice.map((h,j) => toLine(h, j, start+j)).join('\n'));
       const offsetted = results.map(r => ({...r, idx: start + r.idx, levels: techData[start + r.idx]?.levels || null}));
       allResults.push(...offsetted);
       renderHoldingsAnalysis(allHoldings, allResults);
