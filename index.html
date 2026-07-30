@@ -2181,12 +2181,12 @@ async function runHoldingsAnalysis() {
   const techData = await buildTechLines(allHoldings);
   setMsg('🤖 AI 分析中…');
 
-  const toLine = (h, localIdx, globalIdx) => {
+  const toLine = (h, globalIdx) => {
     const p = `${h.pct>=0?'+':''}${h.pct.toFixed(1)}%`;
     let base = '';
-    if (h.type==='TW') base = `[${localIdx}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
-    else if (h.type==='US') base = `[${localIdx}] ${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
-    else base = `[${localIdx}] ${h.key}(${h.name||''}) 加密幣 ${p}`;
+    if (h.type==='TW') base = `${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
+    else if (h.type==='US') base = `${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
+    else base = `${h.key}(${h.name||''}) 加密幣 ${p}`;
     return techData[globalIdx]?.techLine ? base + '\n' + techData[globalIdx].techLine : base;
   };
 
@@ -2205,7 +2205,7 @@ action 判斷準則（任一條件符合即可）：
 
 嚴禁因缺少籌碼資料而一律給「持有」，美股和加密幣依純技術面判斷。`;
   const callBatch = async (lines) => {
-    const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳：\n{"results":[{"idx":0,"status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
+    const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
       body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1200, temperature:0.35,
@@ -2221,8 +2221,13 @@ action 判斷準則（任一條件符合即可）：
     if (start > 0) await new Promise(r => setTimeout(r, 1200));
     const slice = allHoldings.slice(start, start+5);
     try {
-      const results = await callBatch(slice.map((h,j) => toLine(h, j, start+j)).join('\n'));
-      const offsetted = results.map(r => ({...r, idx: start + r.idx, levels: techData[start + r.idx]?.levels || null}));
+      const results = await callBatch(slice.map((h, j) => toLine(h, start+j)).join('\n'));
+      const offsetted = results.map(r => {
+        const localPos = slice.findIndex(h => h.key === r.ticker);
+        if (localPos < 0) return null;
+        const absIdx = start + localPos;
+        return { ...r, idx: absIdx, levels: techData[absIdx]?.levels || null };
+      }).filter(Boolean);
       allResults.push(...offsetted);
       renderHoldingsAnalysis(allHoldings, allResults);
     } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
