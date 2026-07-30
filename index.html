@@ -2161,7 +2161,7 @@ async function runHoldingsAnalysis() {
 
   const todayKey = new Date().toLocaleDateString('zh-TW');
   const today    = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric' });
-  const CACHE_KEY = 'inv_holdings_analysis';
+  const CACHE_KEY = 'inv_holdings_v2';
 
   // 收集全部持倉，帶 type 標記
   const allHoldings = [
@@ -2190,7 +2190,7 @@ async function runHoldingsAnalysis() {
     const c = document.getElementById(m+'-mkt-analysis');
     if (c) c.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:6px 0"><span style="opacity:.6">📡 抓取技術指標與籌碼資料…</span></div>`;
   });
-  const techSuffixes = await buildTechLines(allHoldings);
+  const techData = await buildTechLines(allHoldings);
 
   ['tw','us','crypto'].forEach(m => {
     const c = document.getElementById(m+'-mkt-analysis');
@@ -2203,23 +2203,20 @@ async function runHoldingsAnalysis() {
     if (h.type==='TW') base = `[${i}] ${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
     else if (h.type==='US') base = `[${i}] ${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
     else base = `[${i}] ${h.key}(${h.name||''}) 加密幣 ${p}`;
-    return techSuffixes[i] ? base + '\n' + techSuffixes[i] : base;
+    return techData[i]?.techLine ? base + '\n' + techData[i].techLine : base;
   };
 
-  const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師。今日${today}。根據持倉數據與技術指標給出操作建議。嚴禁捏造財報數字。繁體中文。必須回傳JSON。
+  const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師。今日${today}。繁體中文。必須回傳JSON。
 
-操作建議判斷準則（以下任一條件符合即可，不必全部滿足）：
-- 加碼：站上MA20且MACD看多；或RSI在40-65之間且量能放大；台股另可參考外資/投信買超
-- 持有：技術面中性、訊號不明確、等待方向確認
-- 減碼：跌破MA20或RSI>75或MACD轉空；台股可參考法人轉賣
-- 出場：跌破MA60、或均價以下且無反彈跡象、或RSI持續低於35
-
-美股和加密幣無籌碼資料，純依技術指標判斷，不要因缺少籌碼而一律給「持有」。`;
+任務：為每支標的寫一句「現況」（30字內，純定性分析，描述當前趨勢狀態），並給出操作建議。
+- 「現況」禁止重複輸入裡的數字（MA、RSI 等已有數據的欄位），聚焦技術格局與籌碼意義。
+- action 判斷：加碼（趨勢多頭、位置合理）、持有（整理或等待確認）、減碼（弱化跡象）、出場（趨勢破壞）。
+- 美股和加密幣無籌碼，純技術面判斷，不要因缺少籌碼而一律給「持有」。`;
   const callBatch = async (lines) => {
-    const prompt = `持倉清單（含技術指標與籌碼）：\n${lines}\n\n嚴格依照準則判斷每支標的的操作建議，回傳：\n{"results":[{"idx":0,"assessment":"結合技術指標說明現況與風險（2句）","catalyst":"技術面或籌碼面的關鍵訊號（1句）","action":"持有|加碼|減碼|出場","stopLoss":-15,"stopGain":30}]}`;
+    const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳：\n{"results":[{"idx":0,"status":"一句定性現況描述","action":"持有|加碼|減碼|出場"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1500, temperature:0.4,
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1200, temperature:0.35,
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
@@ -2231,9 +2228,8 @@ async function runHoldingsAnalysis() {
   for (let start = 0; start < allHoldings.length; start += 5) {
     const slice = allHoldings.slice(start, start+5);
     try {
-      // 批次內用 0-based local index，收到後加 offset 還原全局 index
       const results = await callBatch(slice.map((h,j) => toLine(h, j)).join('\n'));
-      const offsetted = results.map(r => ({...r, idx: start + r.idx}));
+      const offsetted = results.map(r => ({...r, idx: start + r.idx, levels: techData[start + r.idx]?.levels || null}));
       allResults.push(...offsetted);
       renderHoldingsAnalysis(allHoldings, allResults);
     } catch(e) { /* 批次失敗靜默跳過 */ }
@@ -2244,41 +2240,56 @@ async function runHoldingsAnalysis() {
 
 function renderHoldingsAnalysis(allHoldings, allResults) {
   const ACTION_COLOR = { '加碼':'var(--green)', '減碼':'#e3671a', '出場':'var(--red)' };
-  const refreshBtn = `<button onclick="localStorage.removeItem('inv_holdings_analysis');runHoldingsAnalysis()" style="font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>`;
+  const ACTION_BG   = { '加碼':'rgba(0,200,100,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(220,50,50,.12)' };
+  const refreshBtn  = `<button onclick="localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis()" style="font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>`;
 
   [['tw','TW'],['us','US'],['crypto','CRYPTO']].forEach(([mkt, type]) => {
     const c = document.getElementById(mkt+'-mkt-analysis');
     if (!c) return;
 
-    const mktIdxs = allHoldings.reduce((acc, h, i) => { if (h.type===type) acc.push(i); return acc; }, []);
+    const mktIdxs   = allHoldings.reduce((acc, h, i) => { if (h.type===type) acc.push(i); return acc; }, []);
     const actionItems = allResults.filter(r => mktIdxs.includes(r.idx) && r.action !== '持有');
 
     if (!actionItems.length) {
       c.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-size:13px;font-weight:700;color:var(--text2)">🤖 AI 操作建議</div>${refreshBtn}</div>
-        <div style="font-size:13px;color:var(--text3);padding:6px 0">✅ 目前建議持有，無需操作</div>`;
+        <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 週線技術分析</div>${refreshBtn}</div>
+        <div style="font-size:13px;color:var(--text3);padding:6px 0">✅ 目前建議持有，無明確操作訊號</div>`;
       return;
     }
 
     c.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:var(--text2)">🤖 AI 操作建議</div>${refreshBtn}</div>
+      <div style="font-size:13px;font-weight:700;color:var(--text2)">📊 週線技術分析</div>${refreshBtn}</div>
       ${actionItems.map(r => {
-        const h = allHoldings[r.idx] || {};
+        const h  = allHoldings[r.idx] || {};
+        const lv = r.levels || {};
+        const fmt = (n, isTW) => n == null ? '—' : (isTW ? '$'+n.toLocaleString() : '$'+n.toLocaleString());
+        const isTW = h.type === 'TW';
+        const priceFmt = h.price ? (isTW ? h.price.toFixed(0) : h.price.toFixed(2)) : '—';
+        // 週線狀態標籤
+        const rsiTag  = lv.rsi   != null ? `週RSI ${lv.rsi}`                                            : '';
+        const macdTag = lv.macdDir ? `MACD ${lv.macdDir}`                                               : '';
+        const trendTag = lv.ma20 && h.price ? (h.price > lv.ma20 ? '站上週MA20' : '跌破週MA20')        : '';
+        const tags = [rsiTag, macdTag, trendTag].filter(Boolean).join(' · ');
+        // 價位欄
+        const addCell  = lv.addPoint ? `<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--green)">${fmt(lv.addPoint, isTW)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">加碼點<br>(週MA20)</div></div>` : '';
+        const stopCell = lv.stopLoss ? `<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--red)">${fmt(lv.stopLoss, isTW)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">停損<br>(週MA52)</div></div>` : '';
+        const tgtCell  = lv.target   ? `<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--accent)">${fmt(lv.target, isTW)}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">目標<br>(52週高)</div></div>` : '';
+        const rrCell   = lv.rrRatio  ? `<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--text1)">1:${lv.rrRatio}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">風報比</div></div>` : '';
+        const hasLevels = addCell || stopCell || tgtCell || rrCell;
         return `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden">
-          <div style="padding:8px 12px;background:var(--surface2);display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <span style="font-weight:700;font-family:monospace;font-size:13px">${h.key||''}</span>
-              <span style="color:var(--text2);font-size:12px;margin-left:6px">${h.name||''}</span>
-            </div>
+          <div style="padding:8px 12px;background:${ACTION_BG[r.action]||'var(--surface2)'};display:flex;justify-content:space-between;align-items:center">
             <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:12px;font-weight:600;color:${(h.pct||0)>=0?'var(--green)':'var(--red)'}">${(h.pct||0)>=0?'+':''}${(h.pct||0).toFixed(1)}%</span>
-              <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface2);color:${ACTION_COLOR[r.action]||'var(--text2)'}">${r.action}</span>
+              <span style="font-weight:700;font-family:monospace;font-size:13px">${h.key||''}</span>
+              <span style="color:var(--text2);font-size:12px">${h.name||''}</span>
+              <span style="font-size:11px;color:var(--text3)">$${priceFmt}</span>
+              <span style="font-size:11px;font-weight:600;color:${(h.pct||0)>=0?'var(--green)':'var(--red)'}">${(h.pct||0)>=0?'+':''}${(h.pct||0).toFixed(1)}%</span>
             </div>
+            <span style="font-size:12px;font-weight:700;padding:2px 10px;border-radius:10px;background:var(--surface);color:${ACTION_COLOR[r.action]||'var(--text2)'}">${r.action}</span>
           </div>
-          <div style="padding:10px 12px;font-size:13px;color:var(--text2)">
-            <div style="margin-bottom:6px;line-height:1.7">${r.assessment}</div>
-            <div style="font-size:12px;color:var(--text3);margin-bottom:8px">📌 ${r.catalyst}</div>
-            <div style="font-size:12px;color:var(--text3)">停損 <span style="color:var(--red)">${r.stopLoss}%</span> ／ 停利 <span style="color:var(--green)">+${r.stopGain}%</span></div>
+          <div style="padding:10px 12px">
+            ${tags ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">${tags}</div>` : ''}
+            <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:${hasLevels?'10px':'0'}">${r.status||''}</div>
+            ${hasLevels ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid var(--border);padding-top:10px">${addCell}${stopCell}${tgtCell}${rrCell}</div>` : ''}
           </div>
         </div>`;
       }).join('')}`;
@@ -3039,21 +3050,22 @@ const SHEET_GIDS = {
 };
 // ─────── 技術分析 & 籌碼 ───────
 async function fetchYahooHistory(sym) {
-  const cacheKey = 'inv_tech_' + sym + '_' + new Date().toLocaleDateString('zh-TW');
+  const cacheKey = 'inv_wtech_' + sym + '_' + new Date().toLocaleDateString('zh-TW');
   try { const c = JSON.parse(localStorage.getItem(cacheKey)||'null'); if (c) return c; } catch(e) {}
   const isGH = location.hostname.includes('github.io');
   const proxies = [u => 'https://corsproxy.io/?'+encodeURIComponent(u), u => 'https://api.allorigins.win/raw?url='+encodeURIComponent(u)];
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=90d&interval=1d&includePrePost=false`;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1wk&includePrePost=false`;
   const parse = async r => {
     if (!r.ok) return null;
     const d = await r.json();
     const res = d.chart?.result?.[0];
     if (!res) return null;
     const q = res.indicators?.quote?.[0] || {};
-    const closes = (q.close||[]).map(v => v ?? null);
+    const closes  = (q.close ||[]).map(v => v ?? null);
+    const highs   = (q.high  ||[]).map(v => v ?? null);
     const volumes = (q.volume||[]).map(v => v ?? null);
     if (closes.filter(Boolean).length < 10) return null;
-    return { closes, volumes };
+    return { closes, highs, volumes };
   };
   let data = null;
   if (!isGH) { try { data = await fetch(url,{headers:{Accept:'application/json'}}).then(parse); } catch(e) {} }
@@ -3067,13 +3079,17 @@ function _emaArr(arr, n) {
   for (let i=1;i<arr.length;i++) r.push(arr[i]*k+r[i-1]*(1-k));
   return r;
 }
-function calcIndicators(hist) {
-  const closes = (hist.closes||[]).filter(v=>v!=null);
+// hist 為週線資料；avg 為持倉均價（計算停損用）
+function calcIndicators(hist, avg) {
+  const closes  = (hist.closes ||[]).filter(v=>v!=null);
+  const highs   = (hist.highs  ||[]).filter(v=>v!=null);
   const volumes = (hist.volumes||[]).filter(v=>v!=null);
   if (closes.length < 10) return null;
   const price = closes[closes.length-1];
   const ma = (n) => closes.length>=n ? closes.slice(-n).reduce((a,b)=>a+b,0)/n : null;
-  const ma20 = ma(20), ma60 = ma(60);
+  // 週MA20 ≈ 5個月線；週MA52 ≈ 年線
+  const ma20 = ma(20), ma52 = ma(Math.min(52, closes.length));
+  const high52w = highs.length ? Math.max(...highs) : null;
   // RSI(14)
   let rsi = null;
   if (closes.length >= 15) {
@@ -3083,7 +3099,7 @@ function calcIndicators(hist) {
     for (let i=P+1;i<closes.length;i++){const d=closes[i]-closes[i-1]; ag=(ag*(P-1)+Math.max(0,d))/P; al=(al*(P-1)+Math.max(0,-d))/P;}
     rsi = al===0?100:Math.round(100-100/(1+ag/al));
   }
-  // MACD(12,26,9)
+  // MACD(12,26,9) — 需足夠週數
   let macdDir = null;
   if (closes.length >= 35) {
     const e12=_emaArr(closes,12), e26=_emaArr(closes,26);
@@ -3091,13 +3107,25 @@ function calcIndicators(hist) {
     const sl=_emaArr(ml,9);
     macdDir = ml[ml.length-1] > sl[sl.length-1] ? '看多' : '看空';
   }
-  // Volume ratio (vs 20d avg)
   let volRatio = null;
-  if (volumes.length >= 20) {
-    const avg = volumes.slice(-20).reduce((a,b)=>a+b,0)/20;
-    volRatio = avg>0 ? +(volumes[volumes.length-1]/avg).toFixed(1) : null;
+  if (volumes.length >= 10) {
+    const avgVol = volumes.slice(-10).reduce((a,b)=>a+b,0)/10;
+    volRatio = avgVol>0 ? +(volumes[volumes.length-1]/avgVol).toFixed(1) : null;
   }
-  return { price, ma20, ma60, rsi, macdDir, volRatio };
+  // ── 計算具體價位 ──
+  const addPoint   = ma20  ? Math.round(ma20)  : null;   // 加碼點 = 週MA20
+  const stopLoss   = (() => {
+    const byMA  = ma52  ? Math.round(ma52)         : null;
+    const byAvg = avg   ? Math.round(avg * 0.88)   : null;
+    if (byMA && byAvg) return Math.max(byMA, byAvg);
+    return byMA || byAvg;
+  })();
+  const target  = high52w ? Math.round(high52w) : null;  // 目標 = 52週高點
+  const rrRatio = (target && stopLoss && price > stopLoss && target > price)
+    ? +((target - price) / (price - stopLoss)).toFixed(1) : null;
+  return { price, ma20: ma20?Math.round(ma20):null, ma52: ma52?Math.round(ma52):null,
+    rsi, macdDir, volRatio, high52w: high52w?Math.round(high52w):null,
+    addPoint, stopLoss, target, rrRatio };
 }
 
 async function fetchTWSEChips() {
@@ -3131,13 +3159,14 @@ function twYahooSym(code) {
   return code + (isTWO ? '.TWO' : '.TW');
 }
 
+// 回傳 { techLine: string (給 AI), levels: object (給渲染) } 的陣列
 async function buildTechLines(allHoldings) {
   const twHoldings = allHoldings.filter(h=>h.type==='TW');
   const [techResults, chipsMap] = await Promise.all([
     Promise.allSettled(allHoldings.map(h => {
       if (h.type==='CRYPTO') return Promise.resolve(null);
       const sym = h.type==='TW' ? twYahooSym(h.key) : h.key;
-      return fetchYahooHistory(sym).then(hist => hist ? calcIndicators(hist) : null);
+      return fetchYahooHistory(sym).then(hist => hist ? calcIndicators(hist, h.avg) : null);
     })),
     twHoldings.length ? fetchTWSEChips() : Promise.resolve({}),
   ]);
@@ -3146,18 +3175,29 @@ async function buildTechLines(allHoldings) {
     const parts = [];
     if (ind) {
       const p = h.price || ind.price;
-      if (ind.rsi != null) parts.push(`RSI=${ind.rsi}`);
-      if (ind.ma20) parts.push(`${p>ind.ma20?'站上':'跌破'}MA20(${ind.ma20.toFixed(0)})`);
-      if (ind.ma60) parts.push(`${p>ind.ma60?'站上':'跌破'}MA60(${ind.ma60.toFixed(0)})`);
+      if (ind.rsi  != null) parts.push(`週RSI=${ind.rsi}`);
+      if (ind.ma20)  parts.push(`${p>ind.ma20?'站上':'跌破'}週MA20($${ind.ma20})`);
+      if (ind.ma52)  parts.push(`${p>ind.ma52?'站上':'跌破'}週MA52($${ind.ma52})`);
       if (ind.macdDir) parts.push(`MACD${ind.macdDir}`);
       if (ind.volRatio!=null) parts.push(`量能${ind.volRatio}x`);
     }
     const chips = h.type==='TW' ? chipsMap[h.key] : null;
-    if (chips) {
+    const chipsStr = chips ? (() => {
       const fmt = n => (n>=0?'+':'')+Math.round(n/1000)+'千張';
-      parts.push(`外資${fmt(chips.foreign)} 投信${fmt(chips.trust)}`);
-    }
-    return parts.length ? `    [${parts.join(' ')}]` : '';
+      return `籌碼：外資${fmt(chips.foreign)} 投信${fmt(chips.trust)}`;
+    })() : '';
+    const levelsStr = ind ? [
+      ind.addPoint  ? `加碼點$${ind.addPoint}(週MA20)`       : '',
+      ind.stopLoss  ? `停損$${ind.stopLoss}`                  : '',
+      ind.target    ? `目標$${ind.target}(52週高)`            : '',
+      ind.rrRatio   ? `風報比1:${ind.rrRatio}`                : '',
+    ].filter(Boolean).join(' ') : '';
+    const techLine = [
+      parts.length ? `    [${parts.join(' ')}]` : '',
+      levelsStr    ? `    ${levelsStr}`          : '',
+      chipsStr     ? `    ${chipsStr}`           : '',
+    ].filter(Boolean).join('\n');
+    return { techLine, levels: ind || null, chips: chips || null };
   });
 }
 
