@@ -421,7 +421,7 @@
     <table>
       <thead>
         <tr>
-          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th><th>建議</th><th>操作理由</th><th></th>
+          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th>
         </tr>
       </thead>
       <tbody id="twHoldTable"></tbody>
@@ -485,7 +485,7 @@
     <div class="card-title">🇺🇸 美股持倉 — 主帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
       <tbody id="usMainTable"></tbody>
     </table>
     </div>
@@ -495,7 +495,7 @@
     <div class="card-title">🏦 美股持倉 — 複委託帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th><th></th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
@@ -1967,9 +1967,6 @@ function renderTwStocks() {
       <td style="font-family:monospace">$${s.price.toFixed(0)}</td>
       <td class="${pctCls(s.pct)}">${s.pct>0?'+':''}${s.pct.toFixed(2)}%</td>
       <td>$${s.mv.toLocaleString()}</td>
-      <td>${recTag[s.rec]}</td>
-      <td style="color:var(--text2);max-width:200px;font-size:11px">${s.reason}</td>
-      <td></td>
     </tr>`;
   });
 
@@ -2038,9 +2035,6 @@ function renderUsStocks() {
         <td style="font-family:monospace">$${s.mv.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
         <td class="${pctCls(s.pnl)}" style="font-family:monospace">${s.pnl>=0?'+':''} $${s.pnl.toFixed(0)}</td>
         <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
-        <td>${recTag[s.rec] || s.rec}</td>
-        <td style="color:var(--text2);font-size:11px;max-width:200px">${s.reason}</td>
-        <td></td>
       </tr>`;
     });
   };
