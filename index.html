@@ -2244,40 +2244,34 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     return;
   }
 
-  const BADGE_STYLE = {
-    '加碼': 'background:#166534;color:#bbf7d0',
-    '減碼': 'background:#7c2d12;color:#fed7aa',
-    '出場': 'background:#7f1d1d;color:#fecaca',
+  const actionBg = {
+    '加碼':'rgba(63,185,80,.12)', '減碼':'rgba(227,103,26,.12)', '出場':'rgba(248,81,73,.12)',
   };
-  c.innerHTML = actionItems.map(r => {
-    const h   = allHoldings[r.idx] || {};
-    const lv  = r.levels || {};
-    const isTW = h.type === 'TW';
-    const priceFmt = h.price ? (isTW ? (+h.price).toLocaleString() : h.price.toFixed(2)) : '—';
-    const borderColor = ACTION_COLOR[r.action] || 'var(--border)';
-    const tags = [
-      lv.rsi    != null ? `RSI ${lv.rsi}` : '',
-      lv.macdDir        ? `MACD ${lv.macdDir}` : '',
-      (lv.ma20 && h.price) ? (h.price > lv.ma20 ? '↑MA20' : '↓MA20') : '',
-    ].filter(Boolean).join('  ');
-    const lvRow = [
-      lv.addPoint ? `加碼 $${(+lv.addPoint).toLocaleString()}` : '',
-      lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
-      lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
-      lv.rrRatio  ? `風報 1:${lv.rrRatio}`                    : '',
-    ].filter(Boolean).join('   ');
-    return `<div style="border:1px solid var(--border);border-left:3px solid ${borderColor};border-radius:5px;margin-bottom:4px;padding:6px 10px">
-      <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-        <span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:3px;${BADGE_STYLE[r.action]||''}">${r.action}</span>
-        <span style="font-weight:700;font-family:monospace;font-size:13px">${h.key||''}</span>
-        <span style="color:var(--text2);font-size:12px">${h.name||''}</span>
-        <span style="font-size:11px;color:var(--text3);margin-left:auto">${MKT_TAG[h.type]||''} · $${priceFmt} · <span style="color:${(h.pct||0)>=0?'var(--green)':'var(--red)'}">${(h.pct||0)>=0?'+':''}${(h.pct||0).toFixed(1)}%</span></span>
-      </div>
-      ${tags ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">${tags}</div>` : ''}
-      <div style="font-size:12px;color:var(--text2);line-height:1.3;margin-top:2px">${r.status||''}</div>
-      ${lvRow ? `<div style="font-size:11px;color:var(--text3);margin-top:3px;font-family:monospace">${lvRow}</div>` : ''}
-    </div>`;
-  }).join('');
+  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">` +
+    actionItems.map(r => {
+      const h   = allHoldings[r.idx] || {};
+      const lv  = r.levels || {};
+      const isTW = h.type === 'TW';
+      const borderColor = ACTION_COLOR[r.action] || 'var(--border)';
+      const pct = h.pct || 0;
+      const lvRow = [
+        lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
+        lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
+        lv.rrRatio  ? `1:${lv.rrRatio}`                          : '',
+      ].filter(Boolean).join('  ');
+      return `<div style="padding:8px 10px;background:var(--surface2);border-radius:7px;border-left:2px solid ${borderColor}">
+        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
+          <span style="font-family:monospace;font-weight:700;font-size:12px">${h.key||''}</span>
+          <span style="color:var(--text3);font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name||''}</span>
+          <span style="font-size:11px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'};white-space:nowrap">${pct>=0?'+':''}${pct.toFixed(1)}%</span>
+        </div>
+        <div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:${lvRow?'4px':'0'}">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${actionBg[r.action]||'var(--surface3)'};flex-shrink:0">${r.action}</span>
+          <span style="font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${r.status||''}</span>
+        </div>
+        ${lvRow ? `<div style="font-size:10px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
+      </div>`;
+    }).join('') + `</div>`;
 }
 
 function closePortfolioReport() {
