@@ -2214,6 +2214,7 @@ action 判斷準則（任一條件符合即可，不必全部滿足）：
 
   const allResults = [];
   for (let start = 0; start < allHoldings.length; start += 5) {
+    if (start > 0) await new Promise(r => setTimeout(r, 1200));
     const slice = allHoldings.slice(start, start+5);
     try {
       const results = await callBatch(slice.map((h,j) => toLine(h, j, start+j)).join('\n'));
