@@ -219,10 +219,6 @@
   .bt-return { font-size: 12px; margin-top: 2px; }
 
   /* ACTION DRAWER */
-  .action-drawer { position:fixed; top:0; right:-420px; width:400px; height:100vh; background:var(--surface); border-left:1px solid var(--border); z-index:2000; transition:right .25s; overflow-y:auto; padding:20px; box-sizing:border-box; }
-  .action-drawer.open { right:0; }
-  .action-overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:1999; display:none; }
-  .action-overlay.open { display:block; }
 
   /* TICKER BADGE */
   .ticker { font-family: monospace; font-size: 11px; background: var(--surface2); padding: 2px 6px; border-radius: 4px; color: var(--blue); }
@@ -352,7 +348,6 @@
     <div id="morningScanBody">
       <div style="color:var(--text2);font-size:13px;padding:8px 0">載入中…</div>
     </div>
-    <button onclick="showActionPlan()" style="width:100%;margin-top:12px;padding:9px;border:none;border-radius:8px;background:var(--accent);color:#fff;font-size:13px;font-weight:600;cursor:pointer">⚡ 今日組合行動建議 →</button>
   </div>
 
   <div class="card" style="margin-bottom:14px">
@@ -5898,156 +5893,6 @@ function computeActionPlan() {
 
   return { verdict, topAdd, topReduce, rebalance };
 }
-
-async function showActionPlan() {
-  document.getElementById('actionDrawer').classList.add('open');
-  document.getElementById('actionOverlay').classList.add('open');
-
-  const apiKey = localStorage.getItem('inv_gemini_key');
-  if (!apiKey) { showActionPlanFallback(); return; }
-
-  document.getElementById('actionDrawerContent').innerHTML =
-    `<div style="text-align:center;padding:40px 0;color:var(--text2)">
-      <div style="font-size:28px;margin-bottom:12px">🤖</div>
-      <div style="font-size:13px">分析所有持倉中，請稍候…</div>
-     </div>`;
-
-  try {
-    const allUS  = [...US_MAIN, ...US_ROY];
-    const twMV   = TW_HOLD.reduce((s,h) => s+(h.mv||0), 0);
-    const usMV   = allUS.reduce((s,h) => s+(h.mv||0), 0) * USD_TWD;
-    const cryptoMV = SHEET_ALLOC.ready ? SHEET_ALLOC.binance : 0;
-    const total  = twMV + usMV + cryptoMV;
-    const today  = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
-
-    const fmtTW = h =>
-      `  ${h.name}(${h.code}) 持${h.shares}股｜均${h.avg?.toFixed(0)}→現${h.price?.toFixed(0)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%｜市值${Math.round((h.mv||0)/10000)}萬`;
-    const fmtUS = h =>
-      `  ${h.sym} 持${h.shares}股｜均$${h.avg?.toFixed(2)}→現$${h.price?.toFixed(2)}｜損益${h.pct>=0?'+':''}${h.pct?.toFixed(1)}%`;
-    const fmtCrypto = c =>
-      `  ${c.sym}(${c.name})｜現價$${c.price?.toFixed(2)}｜損益${c.pct>=0?'+':''}${c.pct?.toFixed(1)}%`;
-
-    const cryptoLines = CRYPTO.filter(c => (c.mv||0) > 0 || ['BTC','ETH'].includes(c.sym));
-
-    // 讀今日晨間掃描快取
-    const scanCache = (() => { try { return JSON.parse(localStorage.getItem('inv_morning_scan') || 'null'); } catch { return null; } })();
-    const todayStr  = new Date().toLocaleDateString('zh-TW');
-    const scanData  = scanCache?.date === todayStr ? scanCache.result : null;
-
-    const scanContext = scanData ? `
-【今日晨間掃描結論（已對每支個股完成分析）】
-${[...(scanData.holdings||[]), ...(scanData.watchlist||[])].map(s =>
-  `  ${s.ticker}${s.name?`(${s.name})`:''} → ${s.action}：${s.reason}${s.alert?' ⚠️'+s.alert:''}`
-).join('\n')}
-
-以上是今日已確認的個股建議，請勿與之矛盾。你的任務是在這些個股建議的基礎上，給出組合層面的策略彙整。
-` : '';
-
-    const system = `你是資深投資組合經理，有20年機構操作經驗。根據投資人提供的真實即時持倉數據與晨間個股分析結論，給出今日組合層面的行動建議。用繁體中文回覆，直接精準，不廢話。`;
-
-    const prompt = `今天是 ${today}，以下是我的完整持倉（數據為即時同步）：
-
-【台股持倉】
-${TW_HOLD.length ? TW_HOLD.map(fmtTW).join('\n') : '  （無台股持倉）'}
-
-【美股持倉】
-${allUS.length ? allUS.map(fmtUS).join('\n') : '  （無美股持倉）'}
-
-【加密貨幣】
-${cryptoLines.length ? cryptoLines.map(fmtCrypto).join('\n') : '  （無加密幣持倉）'}
-
-【整體概況】
-總市值 ${(total/10000).toFixed(0)}萬 TWD｜台股 ${total>0?(twMV/total*100).toFixed(1):0}%｜美股 ${total>0?(usMV/total*100).toFixed(1):0}%｜加密幣 ${total>0?(cryptoMV/total*100).toFixed(1):0}%
-${scanContext}
-請回答：
-
-**一、立刻需要處理（今日優先）**
-從損益、持倉比重角度，哪 1-3 筆最需要行動？說明原因與建議方向。
-
-**二、值得加碼的機會**
-哪 1-2 筆有相對好的買點？說明理由。若無明顯機會請直說。
-
-**三、組合最大風險暴露**
-目前整體組合最脆弱的地方（集中度、產業相關性、匯率、單一事件風險等）。
-
-**四、今天只做一件事**
-一句話，現在最重要的優先行動。`;
-
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
-        max_tokens: 1200,
-        temperature: 0.4,
-        messages: [{ role:'system', content:system }, { role:'user', content:prompt }]
-      })
-    });
-    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
-    const data = await res.json();
-    const reply = data.choices[0].message.content
-      .replace(/\n/g, '<br>')
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    document.getElementById('actionDrawerContent').innerHTML =
-      `<div style="font-size:11px;color:var(--text2);margin-bottom:14px">🤖 Groq AI · 根據即時持倉生成 · ${new Date().toLocaleTimeString('zh-TW')}
-       <button onclick="showActionPlan()" style="margin-left:10px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text1)">↻ 重新分析</button></div>
-       <div style="font-size:13px;line-height:1.9">${reply}</div>`;
-  } catch(e) {
-    document.getElementById('actionDrawerContent').innerHTML =
-      `<div style="color:var(--red);font-size:13px;padding:12px">分析失敗：${escHtml(e.message)}</div>
-       <button onclick="showActionPlanFallback()" style="margin-top:8px;padding:8px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text1);cursor:pointer;font-size:12px">改用規則建議</button>`;
-  }
-}
-
-function showActionPlanFallback() {
-  const plan = computeActionPlan();
-  const recColor = { ADD:'var(--green)', TRIM:'var(--yellow)', STOP:'var(--red)', EVAL:'var(--purple)' };
-
-  const addRows = plan.topAdd.length
-    ? plan.topAdd.map(h => `
-        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
-            <span style="color:${h.pct>=0?'var(--green)':'var(--red)'};font-size:12px">${h.pct>0?'+':''}${h.pct.toFixed(1)}%</span>
-          </div>
-          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
-        </div>`).join('')
-    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無明顯加碼機會</div>';
-
-  const reduceRows = plan.topReduce.length
-    ? plan.topReduce.map(h => `
-        <div style="padding:10px 0;border-bottom:1px solid var(--border)">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-            <span style="font-weight:600">${h.name} <span style="font-family:monospace;font-size:11px;color:var(--blue)">${h.ticker}</span></span>
-            <span style="display:flex;align-items:center;gap:6px">
-              <span style="color:${recColor[h.rec]||'var(--text2)'};font-weight:700;font-size:11px">${h.rec}</span>
-              <span style="color:var(--red);font-size:12px">${h.pct.toFixed(1)}%</span>
-            </span>
-          </div>
-          <div style="font-size:11px;color:var(--text2)">${h.reason.replace(/【[^】]*】/g,'')}</div>
-        </div>`).join('')
-    : '<div style="color:var(--text2);font-size:12px;padding:8px 0">無需緊急減碼</div>';
-
-  const rebalRows = plan.rebalance.map(t => `<div style="font-size:12px;color:var(--text2);padding:6px 0;border-bottom:1px solid var(--border)">${t}</div>`).join('');
-
-  document.getElementById('actionDrawerContent').innerHTML = `
-    <div style="font-size:11px;color:var(--text2);margin-bottom:12px">📊 規則引擎模式 · 設定 API Key 可啟用 AI 分析</div>
-    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;line-height:1.6">
-      ${plan.verdict}
-    </div>
-    <div style="font-weight:700;font-size:13px;color:var(--green);margin-bottom:8px">🟢 建議加碼</div>
-    ${addRows}
-    <div style="font-weight:700;font-size:13px;color:var(--red);margin:16px 0 8px">🔴 建議減碼/停損</div>
-    ${reduceRows}
-    <div style="font-weight:700;font-size:13px;color:var(--yellow);margin:16px 0 8px">⚖️ 再平衡提示</div>
-    ${rebalRows}`;
-}
-
-function closeActionPlan() {
-  document.getElementById('actionDrawer').classList.remove('open');
-  document.getElementById('actionOverlay').classList.remove('open');
-}
 </script>
 
 <!-- ── AI Chat Widget ── -->
@@ -6078,14 +5923,6 @@ function closeActionPlan() {
     <input type="text" id="chatInput" placeholder="輸入投資問題..." onkeypress="chatKeypress(event)">
     <button onclick="sendChat()">送出</button>
   </div>
-</div>
-<div class="action-overlay" id="actionOverlay" onclick="closeActionPlan()"></div>
-<div class="action-drawer" id="actionDrawer">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-    <div style="font-weight:700;font-size:16px">⚡ 今日行動建議</div>
-    <button onclick="closeActionPlan()" style="background:none;border:none;color:var(--text2);font-size:18px;cursor:pointer">✕</button>
-  </div>
-  <div id="actionDrawerContent">載入中…</div>
 </div>
 </body>
 </html>
