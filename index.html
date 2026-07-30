@@ -421,7 +421,7 @@
     <table>
       <thead>
         <tr>
-          <th>代號</th><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>未實現%</th><th>市值</th>
+          <th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th>
         </tr>
       </thead>
       <tbody id="twHoldTable"></tbody>
@@ -1959,14 +1959,17 @@ function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
   tbody.innerHTML = '';
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
+    const cost = s.cost ?? Math.round((s.shares||0) * (s.avg||0));
+    const pnl  = s.pnl  ?? (s.mv - cost);
     tbody.innerHTML += `<tr>
-      <td><span class="ticker">${s.code}</span></td>
-      <td>${s.name}</td>
-      <td>${s.shares.toLocaleString()}</td>
+      <td><span class="ticker">${s.code}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
+      <td style="font-family:monospace">${s.shares.toLocaleString()}</td>
       <td style="font-family:monospace">$${s.avg.toFixed(0)}</td>
       <td style="font-family:monospace">$${s.price.toFixed(0)}</td>
-      <td class="${pctCls(s.pct)}">${s.pct>0?'+':''}${s.pct.toFixed(2)}%</td>
-      <td>$${s.mv.toLocaleString()}</td>
+      <td style="font-family:monospace">$${Math.round(cost).toLocaleString()}</td>
+      <td style="font-family:monospace">$${Math.round(s.mv).toLocaleString()}</td>
+      <td class="${pctCls(pnl)}" style="font-family:monospace">${pnl>=0?'+':''} $${Math.round(pnl).toLocaleString()}</td>
+      <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
     </tr>`;
   });
 
@@ -2157,9 +2160,9 @@ async function runHoldingsAnalysis() {
 
   // 收集全部持倉，帶 type 標記
   const allHoldings = [
-    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:h.pct??0, avg:h.avg, price:h.price, type:'TW' })),
-    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:h.pct??0, avg:h.avg, price:h.price, type:'US' })),
-    ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, avg:c.avg, price:c.price, type:'CRYPTO' })),
+    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:h.pct??0, pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW' })),
+    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:h.pct??0, pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US' })),
+    ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, pnl:c.pnl??null, avg:c.avg, price:c.price, type:'CRYPTO' })),
   ];
   if (SHEET_ALLOC.ready && SHEET_ALLOC.binance && !allHoldings.some(h => h.type==='CRYPTO')) {
     const mv = SHEET_ALLOC.binance, cost = SHEET_ALLOC.binance_c||0;
