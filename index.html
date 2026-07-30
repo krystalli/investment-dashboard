@@ -340,7 +340,7 @@
 
 
   <div class="card" style="margin-bottom:14px">
-    <div class="card-title">🔔 需要操作
+    <div class="card-title">📋 操作建議
       <span style="margin-left:auto">
         <button onclick="localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis()" id="actionSignalsRefreshBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
       </span>
@@ -2268,31 +2268,37 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     return;
   }
 
-  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">` +
+  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">` +
     actionItems.map(item => {
       const h  = allHoldings[item.idx] || {};
       const lv = item.levels || {};
       const pct = h.pct || 0;
       const borderColor = ACTION_COLOR[item.action] || 'var(--border)';
+      const priceStr = h.price != null
+        ? (h.type === 'TW' ? `$${(+h.price).toLocaleString()}` : `$${(+h.price).toFixed(2)}`)
+        : '';
       const lvRow = [
         lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
         lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
         lv.rrRatio  ? `1:${lv.rrRatio}`                          : '',
       ].filter(Boolean).join('  ');
       const alertBadge = item.alert
-        ? `<span style="font-size:9px;color:var(--yellow);white-space:nowrap;flex-shrink:0">⚠️ ${item.alert}</span>` : '';
-      return `<div style="padding:8px 10px;background:var(--surface2);border-radius:7px;border-left:2px solid ${borderColor}">
-        <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px">
-          <span style="font-family:monospace;font-weight:700;font-size:12px">${h.key||''}</span>
-          <span style="color:var(--text3);font-size:10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name||''}</span>
-          <span style="font-size:11px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'};white-space:nowrap">${pct>=0?'+':''}${pct.toFixed(1)}%</span>
+        ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:${lvRow?'4px':'0'}">⚠️ ${item.alert}</div>` : '';
+      return `<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid ${borderColor}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+          <span style="font-family:monospace;font-weight:700;font-size:13px">${h.key||''}</span>
+          <span style="color:var(--text3);font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${h.name||''}</span>
+          <div style="text-align:right;flex-shrink:0">
+            <div style="font-size:12px;font-family:monospace;color:var(--text2)">${priceStr}</div>
+            <div style="font-size:12px;font-weight:600;color:${pct>=0?'var(--green)':'var(--red)'}">${pct>=0?'+':''}${pct.toFixed(1)}%</div>
+          </div>
         </div>
-        <div style="display:flex;align-items:flex-start;gap:5px;margin-bottom:${(alertBadge||lvRow)?'3px':'0'}">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">${item.action}</span>
-          <span style="font-size:11px;color:var(--text2);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.status||''}</span>
+        <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:${(alertBadge||lvRow)?'5px':'0'}">
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">${item.action}</span>
+          <span style="font-size:12px;color:var(--text2);line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.status||''}</span>
         </div>
-        ${alertBadge ? `<div style="margin-bottom:${lvRow?'3px':'0'}">${alertBadge}</div>` : ''}
-        ${lvRow ? `<div style="font-size:10px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
+        ${alertBadge}
+        ${lvRow ? `<div style="font-size:11px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
       </div>`;
     }).join('') + `</div>` + footer;
 }
