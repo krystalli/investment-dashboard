@@ -2229,8 +2229,10 @@ async function runHoldingsAnalysis() {
   for (let start = 0; start < allHoldings.length; start += 5) {
     const slice = allHoldings.slice(start, start+5);
     try {
-      const results = await callBatch(slice.map((h,j) => toLine(h, start+j)).join('\n'));
-      allResults.push(...results);
+      // 批次內用 0-based local index，收到後加 offset 還原全局 index
+      const results = await callBatch(slice.map((h,j) => toLine(h, j)).join('\n'));
+      const offsetted = results.map(r => ({...r, idx: start + r.idx}));
+      allResults.push(...offsetted);
       renderHoldingsAnalysis(allHoldings, allResults);
     } catch(e) { /* 批次失敗靜默跳過 */ }
   }
