@@ -339,6 +339,16 @@
   </div>
 
 
+  <div class="card" style="margin-bottom:14px" id="marketReportCard">
+    <div class="card-title">📊 大盤報告
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span id="marketReportTime" style="font-size:11px;font-weight:400;color:var(--text2)"></span>
+        <button onclick="localStorage.removeItem('inv_market_report');runMarketReport()" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 更新</button>
+      </span>
+    </div>
+    <div id="marketReportBody"><div style="color:var(--text3);font-size:13px;padding:8px 0">載入中…</div></div>
+  </div>
+
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">📋 操作建議
       <span style="margin-left:auto">
@@ -1397,7 +1407,7 @@ function showPage(id) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-' + id).classList.add('active');
   event.currentTarget.classList.add('active');
-  if (id === 'overview') { if (!window._overviewInit) { initOverviewCharts(); window._overviewInit = true; } runHoldingsAnalysis(); }
+  if (id === 'overview') { if (!window._overviewInit) { initOverviewCharts(); window._overviewInit = true; } runMarketReport(); runHoldingsAnalysis(); }
   if (id === 'holdings') { renderTwStocks(); renderUsStocks(); renderCrypto(); }
   if (id === 'perf' && !window._perfInit) {
     initHistoryCharts();
@@ -2206,7 +2216,7 @@ async function runHoldingsAnalysis() {
 - 出場訊號：跌破週MA52、現價遠低於均價且無止跌跡象、RSI<30
 
 最終 action 由你綜合判斷，禁止因缺乏籌碼資料就一律給「持有」。`;
-  const callBatch = async (lines) => {
+  const callBatch = async (lines, attempt = 0) => {
     const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
@@ -2214,13 +2224,19 @@ async function runHoldingsAnalysis() {
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
+    if (res.status === 429 && attempt < 3) {
+      const wait = [8000, 15000, 25000][attempt];
+      console.log(`Groq rate limit, retry in ${wait/1000}s (attempt ${attempt+1})`);
+      await new Promise(r => setTimeout(r, wait));
+      return callBatch(lines, attempt + 1);
+    }
     if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
     return JSON.parse(data.choices[0].message.content).results || [];
   };
 
   const allResults = [];
   for (let start = 0; start < allHoldings.length; start += 5) {
-    if (start > 0) await new Promise(r => setTimeout(r, 1200));
+    if (start > 0) await new Promise(r => setTimeout(r, 2000));
     const slice = allHoldings.slice(start, start+5);
     try {
       const results = await callBatch(slice.map((h, j) => toLine(h, start+j)).join('\n'));
@@ -3022,6 +3038,7 @@ try {
 } catch(e) {}
 initOverviewCharts();
 renderOverviewKPIs();
+runMarketReport();
 runHoldingsAnalysis();
 window._overviewInit = true;
 renderTwStocks();
@@ -3172,6 +3189,248 @@ function twYahooSym(code) {
   const isTWO = /[A-Za-z]$/.test(code) || /^[456]/.test(code) || KNOWN_TWO_SET.has(code);
   return code + (isTWO ? '.TWO' : '.TW');
 }
+
+// ── 大盤報告 ──────────────────────────────────────────────────────────────
+async function fetchTWSEMarketChipsAgg() {
+  const todayStr = new Date().toLocaleDateString('zh-TW');
+  const cacheKey = 'inv_mkt_chips_' + todayStr;
+  try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c; } catch(e) {}
+  const d = new Date();
+  const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
+  const isGH = location.hostname.includes('github.io');
+  const proxy = u => 'https://corsproxy.io/?' + encodeURIComponent(u);
+  const tryGet = async u => { const r = await fetch(u); return r.ok ? r.json() : null; };
+  let raw = null;
+  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
+  if (!raw) { try { raw = await tryGet(proxy(url)); } catch(e) {} }
+  if (!raw?.data?.length) return null;
+  const parse = v => { const n = parseInt((v||'').replace(/,/g,''), 10); return isNaN(n) ? 0 : n; };
+  let foreign = 0, trust = 0, dealer = 0;
+  raw.data.forEach(row => { foreign += parse(row[4]); trust += parse(row[10]); dealer += parse(row[13]); });
+  const result = { foreign, trust, dealer };
+  try { localStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+  return result;
+}
+
+async function runMarketReport() {
+  const apiKey = localStorage.getItem('inv_gemini_key');
+  const body   = document.getElementById('marketReportBody');
+  const timeEl = document.getElementById('marketReportTime');
+  if (!body) return;
+  if (!apiKey) {
+    body.innerHTML = '<div style="color:var(--text2);font-size:13px">設定 Groq API Key 後啟用大盤報告</div>';
+    return;
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  try {
+    const cache = JSON.parse(localStorage.getItem('inv_market_report') || '{}');
+    if (cache.date === todayKey && cache.result) {
+      renderMarketReport(cache.result);
+      if (timeEl && cache.time) timeEl.textContent = cache.time + ' 更新';
+      return;
+    }
+  } catch(e) {}
+
+  body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">📡 抓取大盤資料…</div>';
+  const today = new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'long' });
+
+  const [twRes, spxRes, qqqRes, chipsRes] = await Promise.allSettled([
+    fetchYahooHistory('^TWII'),
+    fetchYahooHistory('^GSPC'),
+    fetchYahooHistory('QQQ'),
+    fetchTWSEMarketChipsAgg(),
+  ]);
+  const twHist   = twRes.status   === 'fulfilled' ? twRes.value   : null;
+  const spxHist  = spxRes.status  === 'fulfilled' ? spxRes.value  : null;
+  const qqqHist  = qqqRes.status  === 'fulfilled' ? qqqRes.value  : null;
+  const twChips  = chipsRes.status === 'fulfilled' ? chipsRes.value : null;
+
+  const twInd  = twHist  ? calcIndicators(twHist,  null) : null;
+  const spxInd = spxHist ? calcIndicators(spxHist, null) : null;
+  const qqqInd = qqqHist ? calcIndicators(qqqHist, null) : null;
+
+  const fmtInd = (ind, name) => {
+    if (!ind) return `${name}：資料不足`;
+    const p = (+ind.price)?.toLocaleString() || '?';
+    return [
+      `${name} 現價 ${p}`,
+      ind.rsi    != null ? `週RSI=${ind.rsi}` : '',
+      ind.ma20   != null ? `${ind.price > ind.ma20 ? '站上' : '跌破'}週MA20(${(+ind.ma20)?.toLocaleString()})` : '',
+      ind.ma52   != null ? `${ind.price > ind.ma52 ? '站上' : '跌破'}週MA52(${(+ind.ma52)?.toLocaleString()})` : '',
+      ind.macdDir ? `MACD ${ind.macdDir}` : '',
+      ind.volRatio != null ? `量比 ${ind.volRatio}x` : '',
+    ].filter(Boolean).join('  ');
+  };
+
+  const fmtChips = c => {
+    if (!c) return '三大法人：今日無資料';
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    return `三大法人合計：外資 ${fmt(c.foreign)} / 投信 ${fmt(c.trust)} / 自營 ${fmt(c.dealer)} / 合計 ${fmt(c.foreign+c.trust+c.dealer)}`;
+  };
+
+  const techContext = [
+    fmtInd(twInd,  '台股加權指數(^TWII)'),
+    fmtChips(twChips),
+    '',
+    fmtInd(spxInd, 'S&P500(^GSPC)'),
+    fmtInd(qqqInd, 'NASDAQ-ETF(QQQ)'),
+  ].join('\n');
+
+  body.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">🤖 AI 分析中…</div>';
+
+  const system = `你是一位台美股資深市場分析師，每日早晨提供專業大盤報告。今日${today}。繁體中文。必須回傳JSON。
+
+分析要求：
+1. 結合提供的週線技術指標 + 你對當前市場環境的深度認知（總經、聯準會、地緣政治、產業趨勢）
+2. 支撐/壓力位要給出具體數值，不要給區間
+3. 多空力道評分（1-10，5=中性）要有依據
+4. 操作建議要具體，像市場分析師報告水準
+5. 有明確觀點，不說「市場可能」、「需關注」等廢話`;
+
+  const prompt = `今日大盤週線技術指標：
+${techContext}
+
+請回傳以下JSON：
+{
+  "tw": {
+    "score": 6,
+    "trend": "趨勢方向（如：多頭整理 / 空頭反彈 / 突破整理）",
+    "support": 20000,
+    "resistance": 22000,
+    "analysis": "台股技術面＋籌碼面綜合分析（100字以內）",
+    "catalyst": "近期關鍵催化劑或風險（30字以內，無則空字串）",
+    "plan": "本週操作策略（具體可執行，50字以內）"
+  },
+  "us": {
+    "score": 7,
+    "trend": "趨勢方向",
+    "spx_support": 5000,
+    "spx_resistance": 5500,
+    "qqq_key_level": 450,
+    "analysis": "美股技術面＋總經面綜合分析（100字以內）",
+    "catalyst": "近期關鍵催化劑或風險（30字以內，無則空字串）",
+    "plan": "本週操作策略（具體可執行，50字以內）"
+  },
+  "macro": "跨市場整體觀點，對持倉的影響（50字以內）"
+}`;
+
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        max_tokens: 1200,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+    const result = JSON.parse(data.choices[0].message.content);
+    result._tw_ind = twInd; result._spx_ind = spxInd; result._qqq_ind = qqqInd; result._chips = twChips;
+    renderMarketReport(result);
+    const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    if (timeEl) timeEl.textContent = timeStr + ' 更新';
+    try { localStorage.setItem('inv_market_report', JSON.stringify({ date: todayKey, time: timeStr, result })); } catch(e) {}
+  } catch(e) {
+    body.innerHTML = `<div style="color:var(--red);font-size:13px;padding:8px 0">分析失敗：${e.message}
+      <button onclick="localStorage.removeItem('inv_market_report');runMarketReport()" style="margin-left:8px;font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;cursor:pointer;color:var(--text1)">重試</button></div>`;
+  }
+}
+
+function renderMarketReport(result) {
+  const body = document.getElementById('marketReportBody');
+  if (!body || !result) return;
+
+  const tw  = result.tw  || {};
+  const us  = result.us  || {};
+  const twInd  = result._tw_ind;
+  const spxInd = result._spx_ind;
+  const qqqInd = result._qqq_ind;
+  const chips  = result._chips;
+
+  const scoreBar = score => {
+    const pct   = (score / 10) * 100;
+    const color = score >= 7 ? 'var(--green)' : score >= 4 ? 'var(--yellow)' : 'var(--red)';
+    const label = score >= 7 ? '偏多' : score >= 4 ? '中性' : '偏空';
+    return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="flex:1;height:6px;background:var(--surface3);border-radius:3px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${color};border-radius:3px;transition:width .4s"></div>
+      </div>
+      <span style="font-size:12px;font-weight:700;color:${color};white-space:nowrap;min-width:60px;text-align:right">${score}/10 ${label}</span>
+    </div>`;
+  };
+
+  const indPills = ind => {
+    if (!ind) return '';
+    const rsiColor = ind.rsi > 70 ? 'var(--red)' : ind.rsi < 30 ? 'var(--green)' : 'var(--text3)';
+    const pills = [
+      ind.rsi != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${rsiColor}">RSI ${ind.rsi}</span>` : '',
+      ind.macdDir ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.macdDir==='看多'?'var(--green)':'var(--red)'}">${ind.macdDir}</span>` : '',
+      ind.price != null && ind.ma20 != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.price>ind.ma20?'var(--green)':'var(--red)'}">${ind.price>ind.ma20?'▲':'▼'}MA20</span>` : '',
+      ind.price != null && ind.ma52 != null ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);color:${ind.price>ind.ma52?'var(--green)':'var(--red)'}">${ind.price>ind.ma52?'▲':'▼'}MA52</span>` : '',
+    ].filter(Boolean).join('');
+    return `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">${pills}</div>`;
+  };
+
+  const chipsRow = chips ? (() => {
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    const total = chips.foreign + chips.trust + chips.dealer;
+    const tc = total >= 0 ? 'var(--green)' : 'var(--red)';
+    return `<div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.8">
+      外資 <span style="color:${chips.foreign>=0?'var(--green)':'var(--red)'}">${fmt(chips.foreign)}</span>
+      投信 <span style="color:${chips.trust>=0?'var(--green)':'var(--red)'}">${fmt(chips.trust)}</span>
+      自營 <span style="color:${chips.dealer>=0?'var(--green)':'var(--red)'}">${fmt(chips.dealer)}</span>
+      合計 <span style="font-weight:700;color:${tc}">${fmt(total)}</span>
+    </div>`;
+  })() : '';
+
+  const col = (flag, label, ind, scoreVal, trend, sup, res, analysis, catalyst, plan, extra='') => `
+    <div style="flex:1;min-width:220px">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.8px;margin-bottom:8px">${flag} ${label}</div>
+      ${ind ? `<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px">
+        <span style="font-size:18px;font-weight:700;font-family:monospace;color:var(--text1)">${(+ind.price)?.toLocaleString()}</span>
+        ${ind.change != null ? `<span style="font-size:12px;color:${ind.change>=0?'var(--green)':'var(--red)'}">${ind.change>=0?'+':''}${ind.change?.toFixed(2)}%</span>` : ''}
+      </div>` : ''}
+      ${indPills(ind)}
+      ${extra}
+      ${scoreBar(scoreVal)}
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">趨勢：<span style="color:var(--text1);font-weight:600">${trend||'—'}</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+        支撐 <span style="color:var(--green);font-family:monospace;font-weight:600">${(+sup)?.toLocaleString()||'—'}</span>
+        <span style="color:var(--border);padding:0 6px">|</span>
+        壓力 <span style="color:var(--red);font-family:monospace;font-weight:600">${(+res)?.toLocaleString()||'—'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:6px">${analysis||''}</div>
+      ${catalyst ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:6px">⚡ ${catalyst}</div>` : ''}
+      <div style="padding:8px 10px;background:var(--surface3);border-radius:6px;font-size:12px;color:var(--text1);line-height:1.55">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;letter-spacing:.5px">本週策略</div>
+        ${plan||'—'}
+      </div>
+    </div>`;
+
+  const qqqExtra = qqqInd ? `<div style="font-size:11px;color:var(--text3);margin-bottom:6px">
+    QQQ <span style="font-family:monospace;color:var(--text1);font-weight:600">${(+qqqInd.price)?.toFixed(2)}</span>
+    <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:var(--surface3);margin-left:4px;color:${qqqInd.rsi>70?'var(--red)':qqqInd.rsi<30?'var(--green)':'var(--text3)'}">RSI ${qqqInd.rsi}</span>
+    ${us.qqq_key_level ? `<span style="font-size:10px;color:var(--text3);margin-left:6px">關鍵位 <span style="color:var(--text2)">${us.qqq_key_level}</span></span>` : ''}
+  </div>` : '';
+
+  body.innerHTML = `
+    <div style="display:flex;gap:20px;flex-wrap:wrap">
+      ${col('🇹🇼','台股', twInd, tw.score||5, tw.trend, tw.support, tw.resistance, tw.analysis, tw.catalyst, tw.plan, chipsRow)}
+      <div style="width:1px;background:var(--border);flex-shrink:0;align-self:stretch"></div>
+      ${col('🇺🇸','美股', spxInd, us.score||5, us.trend, us.spx_support, us.spx_resistance, us.analysis, us.catalyst, us.plan, qqqExtra)}
+    </div>
+    ${result.macro ? `<div style="margin-top:14px;padding:10px 12px;background:var(--surface2);border-radius:7px;border-left:3px solid var(--accent);font-size:12px;color:var(--text2);line-height:1.6">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:4px;letter-spacing:.5px">跨市場觀點</div>
+      ${result.macro}
+    </div>` : ''}`;
+}
+// ── end 大盤報告 ──────────────────────────────────────────────────────────
 
 // 回傳 { techLine: string (給 AI), levels: object (給渲染) } 的陣列
 async function buildTechLines(allHoldings) {
