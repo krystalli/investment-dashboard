@@ -2152,9 +2152,14 @@ async function runHoldingsAnalysis() {
   const CACHE_KEY = 'inv_holdings_v2';
 
   // 收集全部持倉，帶 type 標記
+  const calcPct = (h, isUS) => {
+    const cost = (h.shares||0) * (h.avg||0) * (isUS ? 1 : 1); // 單位一致
+    const pnl  = h.pnl ?? null;
+    return (pnl != null && cost > 0) ? pnl / cost * 100 : (h.pct ?? 0);
+  };
   const allHoldings = [
-    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:h.pct??0, pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW' })),
-    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:h.pct??0, pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US' })),
+    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:calcPct(h,false), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW' })),
+    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:calcPct(h,true), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US' })),
     ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, pnl:c.pnl??null, avg:c.avg, price:c.price, type:'CRYPTO' })),
   ];
   if (SHEET_ALLOC.ready && SHEET_ALLOC.binance && !allHoldings.some(h => h.type==='CRYPTO')) {
