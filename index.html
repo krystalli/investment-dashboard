@@ -316,6 +316,11 @@
       <div class="kpi-sub neutral" id="kpiUsPnlPct">—</div>
     </div>
     <div class="kpi-card">
+      <div class="kpi-label">加密幣未實現損益</div>
+      <div class="kpi-value neutral" id="kpiCryptoPnl">—</div>
+      <div class="kpi-sub neutral" id="kpiCryptoPnlPct">—</div>
+    </div>
+    <div class="kpi-card">
       <div class="kpi-label">銀行存款</div>
       <div class="kpi-value neutral" id="kpiBankPct">—</div>
       <div class="kpi-sub neutral" id="kpiBankVal">—</div>
@@ -386,7 +391,6 @@
   <div class="nav-tabs" style="margin-bottom:16px" id="holdingsSubTabs">
     <button class="nav-tab active" onclick="showHoldingsTab('tw')">🇹🇼 台股</button>
     <button class="nav-tab" onclick="showHoldingsTab('us')">🇺🇸 美股</button>
-    <button class="nav-tab" onclick="showHoldingsTab('crypto')">₿ 加密幣</button>
   </div>
 
   <!-- ── 台股區段 ── -->
@@ -509,41 +513,6 @@
 
   </div><!-- /holdings-us -->
 
-  <!-- ── 加密幣區段 ── -->
-  <div id="holdings-crypto" style="display:none">
-  <div style="margin:0 0 12px;font-size:16px;font-weight:700;color:var(--text1)">₿ 加密幣持倉</div>
-
-  <div class="kpi-grid" style="margin-bottom:14px">
-    <div class="kpi-card">
-      <div class="kpi-label">加密幣總市值 (USD)</div>
-      <div class="kpi-value neutral" id="cryptoKpiTotal">—</div>
-      <div class="kpi-sub neutral" id="cryptoKpiTotalSub">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">未實現損益</div>
-      <div class="kpi-value neutral" id="cryptoKpiPnl">—</div>
-      <div class="kpi-sub neutral" id="cryptoKpiPnlPct">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">最大虧損</div>
-      <div class="kpi-value neutral" id="cryptoKpiWorst">—</div>
-      <div class="kpi-sub neutral" id="cryptoKpiWorstSub">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">最大獲利</div>
-      <div class="kpi-value neutral" id="cryptoKpiBest">—</div>
-      <div class="kpi-sub neutral" id="cryptoKpiBestSub">—</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">💰 幣安持倉明細 <span class="badge" id="cryptoSyncBadge">同步後更新</span></div>
-    <table>
-      <thead><tr><th>代號</th><th>名稱</th><th>數量</th><th>均價</th><th>現價</th><th>成本(USD)</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>建議</th></tr></thead>
-      <tbody id="cryptoTable"></tbody>
-    </table>
-  </div>
-  </div><!-- /holdings-crypto -->
 </div>
 
 <!-- ═══ PAGE: US STOCKS (hidden, legacy) ═══ -->
@@ -1709,6 +1678,21 @@ function renderOverviewKPIs() {
     if (usCost > 0) {
       const pct = (usPnl / usCost * 100).toFixed(2);
       set('kpiUsPnlPct', `≈ TWD $${Math.abs(usPnlTwd).toLocaleString()}  (${pct >= 0 ? '+' : ''}${pct}%)`, 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+    }
+  }
+
+  // ── 加密幣未實現損益（取歷年損益表最新月幣安 MV - 成本）──
+  if (SHEET_ALLOC.ready && SHEET_ALLOC.binance > 0) {
+    const cryptoMV   = SHEET_ALLOC.binance;
+    const cryptoCost = SHEET_ALLOC.binance_c || 0;
+    const cryptoPnl  = cryptoMV - cryptoCost;
+    const sign = cryptoPnl >= 0;
+    set('kpiCryptoPnl', (sign ? '+' : '') + '$' + Math.abs(Math.round(cryptoPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    if (cryptoCost > 0) {
+      const pct = (cryptoPnl / cryptoCost * 100).toFixed(2);
+      set('kpiCryptoPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+    } else {
+      set('kpiCryptoPnlPct', `市值 $${Math.round(cryptoMV).toLocaleString()}`, 'kpi-sub neutral');
     }
   }
 
