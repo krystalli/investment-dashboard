@@ -686,6 +686,15 @@
 
 <!-- ═══ PAGE: RISK ANALYSIS ═══ -->
 <div id="page-risk" class="page">
+  <!-- 策略子 tab -->
+  <div class="nav-tabs" style="margin-bottom:16px" id="stratSubTabs">
+    <button class="nav-tab active" onclick="showStratTab('qqq')">🎯 QQQ 動態策略</button>
+    <button class="nav-tab" onclick="showStratTab('analysis')">📊 分析指標</button>
+  </div>
+
+  <!-- ── Tab 1: QQQ 動態策略 ── -->
+  <div id="strat-qqq">
+
   <!-- ── QQQ 訊號快覽 ── -->
   <div class="grid-2" style="margin-bottom:16px">
     <div id="signalPanel" class="signal-panel hold">
@@ -696,9 +705,11 @@
     <div class="card" style="margin-bottom:0">
       <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
       <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+      <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
       <div class="summary-row"><span class="summary-key">進場門檻 (SMA200×1.04)</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
       <div class="summary-row"><span class="summary-key">退場門檻 (SMA200×0.93)</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
       <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+      <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
       <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
     </div>
   </div>
@@ -715,82 +726,6 @@
     </div>
   </div>
 
-  <!-- ── 分析指標（附錄）── -->
-  <div style="margin:24px 0 12px;border-top:1px solid var(--border);padding-top:20px;font-size:16px;font-weight:700;color:var(--text1)">📊 風險分析指標 <span class="badge">附錄</span></div>
-  <div class="alert alert-info" style="margin-bottom:16px">
-    <div class="alert-icon">📊</div>
-    <div><strong>風險指標說明：</strong>基於 MONTHLY 月度資產快照計算。Sharpe／Sortino 使用年化報酬與波動，無風險利率設為 3%（台幣）。基準指數為估算值，僅供參考對比。</div>
-  </div>
-
-  <!-- Level 1: Risk KPIs -->
-  <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:8px"></div>
-  <div id="riskKpiExplain" style="margin-bottom:16px"></div>
-
-  <!-- Level 1: Benchmark Comparison -->
-  <div class="card">
-    <div class="card-title">📊 投資組合 vs 基準指數 <span class="badge">指數化（起始=100）</span>
-      <button onclick="syncBenchmarkData()" id="benchFetchBtn" class="btn-action btn-refresh" style="font-size:11px;padding:3px 10px;margin-left:auto">🔄 更新基準</button>
-      <span id="benchLastUpdate" style="font-size:11px;color:var(--text2);margin-left:6px"></span>
-    </div>
-    <div id="benchmarkSummaryRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px"></div>
-    <div class="chart-wrap-lg"><canvas id="chartBenchmark"></canvas></div>
-  </div>
-
-  <!-- Level 1: Cash Flow & Rolling Returns -->
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">💰 現金流分析 <span class="badge">投入 vs 收益</span></div>
-      <div id="cashFlowDetail"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">📅 滾動報酬 <span class="badge">各期間績效</span></div>
-      <div id="rollingReturnsDetail"></div>
-    </div>
-  </div>
-
-  <!-- Level 2: Monthly Return Heatmap -->
-  <div class="card">
-    <div class="card-title">🗓️ 月報酬熱圖 <span class="badge">顏色深淺代表漲跌幅</span></div>
-    <div id="monthlyHeatmap" style="overflow-x:auto"></div>
-  </div>
-
-  <!-- Level 2: Sector + Region Allocation Drill-down -->
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-title">🏭 產業配置分析</div>
-      <div id="sectorAllocDetail"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">🌍 地區配置分析</div>
-      <div id="regionAllocDetail"></div>
-    </div>
-  </div>
-
-  <!-- Level 2: Performance Attribution -->
-  <div class="card">
-    <div class="card-title">📈 績效歸因 — 哪個資產在賺錢</div>
-    <div style="overflow-x:auto"><div id="perfAttributionDetail"></div></div>
-  </div>
-
-  <!-- Level 2: Top Holdings Concentration -->
-  <div class="card">
-    <div class="card-title">🏆 前10大持倉集中度分析</div>
-    <div id="topHoldingsDetail"></div>
-  </div>
-
-  <!-- Level 3: Correlation Matrix -->
-  <div class="card">
-    <div class="card-title">🔗 資產類別相關係數矩陣 <span class="badge">基於月度報酬估算</span></div>
-    <div class="alert alert-warn" style="margin-bottom:10px">
-      <div class="alert-icon">⚠️</div>
-      <div>相關係數基於月度資產類別變化估算，因資料點有限（<12個月），供方向性參考。1=完全正相關，-1=完全負相關，0=無相關。</div>
-    </div>
-    <div id="correlationMatrix" style="overflow-x:auto"></div>
-  </div>
-
-  <!-- ── QQQ 槓桿策略 ── -->
-  <div style="margin:32px 0 16px;font-size:16px;font-weight:700;color:var(--text1);border-top:1px solid var(--border);padding-top:24px">🎯 QQQ 動態槓桿策略</div>
-
   <div class="card">
     <div class="card-title">📐 QQQ / QLD / TQQQ 動態槓桿策略 <span class="badge">$30,000 USD</span></div>
     <p style="color:var(--text2);font-size:13px;line-height:1.7;margin-bottom:16px">
@@ -803,53 +738,34 @@
     </div>
   </div>
 
-  <div class="grid-2">
-    <div>
-      <div id="signalPanel-dup" class="signal-panel hold">
-        <div class="signal-label">目前訊號</div>
-        <div id="signalText-dup" class="signal-big hold">HOLD ◆</div>
-        <div class="signal-label" id="signalDesc-dup">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+  <div class="card">
+    <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
+    <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
+      <div class="alert-icon" id="allocAlertIcon">⏸</div>
+      <div id="allocAlertText">QQQ 價格載入中…</div>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge-item">
+        <div class="gauge-pct" style="color:var(--blue)">60%</div>
+        <div class="gauge-name">QQQ ✅ 持有</div>
+        <div class="gauge-amount">$18,000</div>
+        <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
       </div>
-      <div class="card">
-        <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span style="color:var(--blue);font-family:monospace">$558.28</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
-        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span style="color:var(--green);font-family:monospace">$617.96</span></div>
-        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span style="color:var(--red);font-family:monospace">$552.61</span></div>
-        <div class="summary-row"><span class="summary-key">距進場門檻</span><span class="down">-$59.68 (-9.7%)</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
-        <div class="summary-row"><span class="summary-key">訊號狀態</span><span class="tag tag-yellow">⏸ 等待進場</span></div>
+      <div class="gauge-item" id="qldGauge" style="opacity:0.4">
+        <div class="gauge-pct" style="color:var(--purple)">30%</div>
+        <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
+        <div class="gauge-amount">$9,000</div>
+        <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+      </div>
+      <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
+        <div class="gauge-pct" style="color:var(--orange)">10%</div>
+        <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
+        <div class="gauge-amount">$3,000</div>
+        <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
-      <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
-        <div class="alert-icon" id="allocAlertIcon">⏸</div>
-        <div id="allocAlertText">QQQ 價格載入中…</div>
-      </div>
-      <div class="gauge-row">
-        <div class="gauge-item">
-          <div class="gauge-pct" style="color:var(--blue)">60%</div>
-          <div class="gauge-name">QQQ ✅ 持有</div>
-          <div class="gauge-amount">$18,000</div>
-          <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
-        </div>
-        <div class="gauge-item" id="qldGauge" style="opacity:0.4">
-          <div class="gauge-pct" style="color:var(--purple)">30%</div>
-          <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
-          <div class="gauge-amount">$9,000</div>
-          <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-        </div>
-        <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
-          <div class="gauge-pct" style="color:var(--orange)">10%</div>
-          <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
-          <div class="gauge-amount">$3,000</div>
-          <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-        </div>
-      </div>
-      <div style="margin-top:8px">
-        <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
-      </div>
+    <div style="margin-top:8px">
+      <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
     </div>
   </div>
 
@@ -1002,6 +918,85 @@
       </div>
     </div>
   </div>
+
+  </div><!-- end strat-qqq -->
+
+  <!-- ── Tab 2: 分析指標 ── -->
+  <div id="strat-analysis" style="display:none">
+
+  <div class="alert alert-info" style="margin-bottom:16px">
+    <div class="alert-icon">📊</div>
+    <div><strong>風險指標說明：</strong>基於 MONTHLY 月度資產快照計算。Sharpe／Sortino 使用年化報酬與波動，無風險利率設為 3%（台幣）。基準指數為估算值，僅供參考對比。</div>
+  </div>
+
+  <!-- Level 1: Risk KPIs -->
+  <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:8px"></div>
+  <div id="riskKpiExplain" style="margin-bottom:16px"></div>
+
+  <!-- Level 1: Benchmark Comparison -->
+  <div class="card">
+    <div class="card-title">📊 投資組合 vs 基準指數 <span class="badge">指數化（起始=100）</span>
+      <button onclick="syncBenchmarkData()" id="benchFetchBtn" class="btn-action btn-refresh" style="font-size:11px;padding:3px 10px;margin-left:auto">🔄 更新基準</button>
+      <span id="benchLastUpdate" style="font-size:11px;color:var(--text2);margin-left:6px"></span>
+    </div>
+    <div id="benchmarkSummaryRow" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px"></div>
+    <div class="chart-wrap-lg"><canvas id="chartBenchmark"></canvas></div>
+  </div>
+
+  <!-- Level 1: Cash Flow & Rolling Returns -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">💰 現金流分析 <span class="badge">投入 vs 收益</span></div>
+      <div id="cashFlowDetail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">📅 滾動報酬 <span class="badge">各期間績效</span></div>
+      <div id="rollingReturnsDetail"></div>
+    </div>
+  </div>
+
+  <!-- Level 2: Monthly Return Heatmap -->
+  <div class="card">
+    <div class="card-title">🗓️ 月報酬熱圖 <span class="badge">顏色深淺代表漲跌幅</span></div>
+    <div id="monthlyHeatmap" style="overflow-x:auto"></div>
+  </div>
+
+  <!-- Level 2: Sector + Region Allocation Drill-down -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">🏭 產業配置分析</div>
+      <div id="sectorAllocDetail"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">🌍 地區配置分析</div>
+      <div id="regionAllocDetail"></div>
+    </div>
+  </div>
+
+  <!-- Level 2: Performance Attribution -->
+  <div class="card">
+    <div class="card-title">📈 績效歸因 — 哪個資產在賺錢</div>
+    <div style="overflow-x:auto"><div id="perfAttributionDetail"></div></div>
+  </div>
+
+  <!-- Level 2: Top Holdings Concentration -->
+  <div class="card">
+    <div class="card-title">🏆 前10大持倉集中度分析</div>
+    <div id="topHoldingsDetail"></div>
+  </div>
+
+  <!-- Level 3: Correlation Matrix -->
+  <div class="card">
+    <div class="card-title">🔗 資產類別相關係數矩陣 <span class="badge">基於月度報酬估算</span></div>
+    <div class="alert alert-warn" style="margin-bottom:10px">
+      <div class="alert-icon">⚠️</div>
+      <div>相關係數基於月度資產類別變化估算，因資料點有限（<12個月），供方向性參考。1=完全正相關，-1=完全負相關，0=無相關。</div>
+    </div>
+    <div id="correlationMatrix" style="overflow-x:auto"></div>
+  </div>
+
+  </div><!-- end strat-analysis -->
+
 </div>
 
 <script>
@@ -1371,6 +1366,16 @@ function _applyPosWt(result, posWt, pct) {
     result.reason = `【佔比 ${posWt.toFixed(0)}%】${result.reason}`;
   }
   return result;
+}
+
+function showStratTab(tab) {
+  ['qqq','analysis'].forEach(t => {
+    const el = document.getElementById('strat-' + t);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#stratSubTabs .nav-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', (i === 0) === (tab === 'qqq'));
+  });
 }
 
 function showHoldingsTab(tab) {
