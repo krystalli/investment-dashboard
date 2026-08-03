@@ -711,6 +711,11 @@
       <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
       <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
       <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+      <div style="margin:10px 0 6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">🔬 技術面確認（週線，輔助判斷，非進出場依據）</div>
+      <div class="summary-row"><span class="summary-key">週RSI</span><span id="nasdaqRSI" style="font-family:monospace">—</span></div>
+      <div class="summary-row"><span class="summary-key">週MA20</span><span id="nasdaqMA20" style="font-family:monospace">—</span></div>
+      <div class="summary-row"><span class="summary-key">週MA52</span><span id="nasdaqMA52" style="font-family:monospace">—</span></div>
+      <div class="summary-row"><span class="summary-key">MACD</span><span id="nasdaqMACD" style="font-family:monospace">—</span></div>
     </div>
   </div>
 
@@ -807,6 +812,21 @@
   <!-- Level 1: Risk KPIs -->
   <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:8px"></div>
   <div id="riskKpiExplain" style="margin-bottom:16px"></div>
+
+  <!-- Level 1: 持股技術面 + 籌碼動向 -->
+  <div class="card">
+    <div class="card-title">🔬 持股技術面 + 籌碼動向 <span class="badge">週線指標 · 規則判斷，非 AI</span></div>
+    <div class="alert alert-info" style="margin-bottom:10px">
+      <div class="alert-icon">💡</div>
+      <div>RSI／均線／MACD 為週線技術指標，法人買賣超僅台股有資料（美股顯示—）。訊號僅供輔助參考，非買賣建議。</div>
+    </div>
+    <div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>標的</th><th>市場</th><th>現價</th><th>週RSI</th><th>週MA20</th><th>週MA52</th><th>MACD</th><th>量比</th><th>法人買賣超</th><th>訊號</th></tr></thead>
+      <tbody id="holdingsTechChipsBody"><tr><td colspan="10" style="color:var(--text2);text-align:center;padding:16px">載入中…</td></tr></tbody>
+    </table>
+    </div>
+  </div>
 
   <!-- Level 1: Benchmark Comparison -->
   <div class="card">
@@ -5675,6 +5695,76 @@ function renderRebalancingPlan() {
     </div>`;
 }
 
+// ── 持股技術面 + 籌碼動向（重用 fetchYahooHistory/calcIndicators/fetchTWSEChips）──
+function techSignalTag(ind) {
+  if (!ind) return '<span class="tag" style="background:var(--surface3);color:var(--text3)">資料不足</span>';
+  if (ind.rsi != null && ind.rsi > 72) return '<span class="tag tag-red">⚠️ 超買</span>';
+  if (ind.rsi != null && ind.rsi < 30) return '<span class="tag tag-green">⚠️ 超賣</span>';
+  if (ind.ma20 && ind.price > ind.ma20 && ind.macdDir === '看多') return '<span class="tag tag-green">▲ 多頭</span>';
+  if (ind.ma20 && ind.price < ind.ma20 && ind.macdDir === '看空') return '<span class="tag tag-red">▼ 空頭</span>';
+  return '<span class="tag tag-yellow">◆ 中性</span>';
+}
+
+async function renderHoldingsTechChips() {
+  const body = document.getElementById('holdingsTechChipsBody');
+  if (!body) return;
+
+  const holdings = [
+    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, market:'TW', price:h.price, avg:h.avg, mv:h.mv||0 })),
+    ...[...US_MAIN, ...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, market:'US', price:h.price, avg:h.avg, mv:h.mv||0 })),
+  ];
+  holdings.sort((a,b) => a.market !== b.market ? (a.market === 'TW' ? -1 : 1) : (b.mv - a.mv));
+
+  if (!holdings.length) {
+    body.innerHTML = '<tr><td colspan="10" style="color:var(--text2);text-align:center;padding:16px">尚無持股資料</td></tr>';
+    return;
+  }
+
+  const [indResults, chipsMap] = await Promise.all([
+    Promise.allSettled(holdings.map(h => {
+      const sym = h.market === 'TW' ? twYahooSym(h.key) : h.key;
+      return fetchYahooHistory(sym).then(hist => hist ? calcIndicators(hist, h.avg) : null);
+    })),
+    fetchTWSEChips(),
+  ]);
+
+  const fmtChip = n => (n >= 0 ? '+' : '') + Math.round(n/1000) + '千張';
+
+  body.innerHTML = holdings.map((h, i) => {
+    const ind = indResults[i].status === 'fulfilled' ? indResults[i].value : null;
+    const chips = h.market === 'TW' ? chipsMap[h.key] : null;
+    const chipsStr = h.market === 'TW'
+      ? (chips ? `外資${fmtChip(chips.foreign)} 投信${fmtChip(chips.trust)}` : '—')
+      : '<span style="color:var(--text3)">僅台股</span>';
+    return `<tr>
+      <td>${h.key}${h.market === 'TW' && h.name ? ' ' + h.name : ''}</td>
+      <td>${h.market === 'TW' ? '🇹🇼' : '🇺🇸'}</td>
+      <td>${h.price != null ? '$' + (+h.price).toFixed(2) : '—'}</td>
+      <td>${ind?.rsi != null ? ind.rsi : '—'}</td>
+      <td>${ind?.ma20 != null ? (h.price > ind.ma20 ? '站上 ' : '跌破 ') + '$' + ind.ma20 : '—'}</td>
+      <td>${ind?.ma52 != null ? (h.price > ind.ma52 ? '站上 ' : '跌破 ') + '$' + ind.ma52 : '—'}</td>
+      <td>${ind?.macdDir || '—'}</td>
+      <td>${ind?.volRatio != null ? ind.volRatio + 'x' : '—'}</td>
+      <td style="font-size:12px">${chipsStr}</td>
+      <td>${techSignalTag(ind)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── QQQ 週線技術面確認（獨立於 Groq API Key，隨時可見）──
+async function updateQQQTechConfirm() {
+  const rsiEl = document.getElementById('nasdaqRSI'), ma20El = document.getElementById('nasdaqMA20'),
+        ma52El = document.getElementById('nasdaqMA52'), macdEl = document.getElementById('nasdaqMACD');
+  if (!rsiEl) return;
+  const hist = await fetchYahooHistory('QQQ');
+  const ind = hist ? calcIndicators(hist, null) : null;
+  if (!ind) return;
+  if (ind.rsi != null) rsiEl.innerHTML = `${ind.rsi} <span class="tag ${ind.rsi>72?'tag-red':ind.rsi<30?'tag-green':'tag-yellow'}" style="margin-left:6px">${ind.rsi>72?'超買':ind.rsi<30?'超賣':'中性'}</span>`;
+  if (ind.ma20 != null) ma20El.textContent = `$${ind.ma20}（${ind.price > ind.ma20 ? '站上' : '跌破'}）`;
+  if (ind.ma52 != null) ma52El.textContent = `$${ind.ma52}（${ind.price > ind.ma52 ? '站上' : '跌破'}）`;
+  if (ind.macdDir) macdEl.textContent = ind.macdDir;
+}
+
 function initRiskPage() {
   const stats    = riskCalcStats();
   const cf       = riskCalcCashFlow();
@@ -5694,6 +5784,8 @@ function initRiskPage() {
   renderCorrelationMatrix(corrData);
   renderDividendCalendar();
   renderRebalancingPlan();
+  renderHoldingsTechChips();
+  updateQQQTechConfirm();
 
   // Show last-fetch time label
   const lbl = document.getElementById('benchLastUpdate');
