@@ -1057,7 +1057,8 @@ const YEARLY = [
   { y:2022, pnl:96107,  div:37866,  lend:0,    total:133973 },
   { y:2023, pnl:227678, div:75569,  lend:0,    total:303247 },
   { y:2024, pnl:555631, div:212738, lend:7615, total:775984 },
-  { y:2025, pnl:600450, div:279621, lend:0,    total:880071 },
+  { y:2025, pnl:600450, div:279621, lend:8701, total:888772 },
+  { y:2026, pnl:72014,  div:170458, lend:0,    total:242472 },
 ];
 
 // 投資論點追蹤（key: 股票代號或美股代碼，value: { thesis, date, status, note }）
@@ -1925,9 +1926,11 @@ function rerenderCharts() {
   if (window._historyInit) {
     if (window._yearlyPnlChart) {
       window._yearlyPnlChart.data.labels = YEARLY.map(r => r.y);
-      window._yearlyPnlChart.data.datasets[0].data = YEARLY.map(r => r.total);
-      window._yearlyPnlChart.data.datasets[1].data = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; });
-      window._yearlyPnlChart.data.datasets[1].backgroundColor = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#3fb950' : '#f85149'; });
+      window._yearlyPnlChart.data.datasets[0].data = YEARLY.map(r => r.pnl);
+      window._yearlyPnlChart.data.datasets[1].data = YEARLY.map(r => r.div);
+      window._yearlyPnlChart.data.datasets[2].data = YEARLY.map(r => r.lend || 0);
+      window._yearlyPnlChart.data.datasets[3].data = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; });
+      window._yearlyPnlChart.data.datasets[3].backgroundColor = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#bc8cff' : '#f85149'; });
       window._yearlyPnlChart.update();
     }
     if (window._dividendChart) {
@@ -2974,8 +2977,10 @@ function initHistoryCharts() {
     data: {
       labels: YEARLY.map(r => r.y),
       datasets: [
-        { label: '實現損益(含股息)', data: YEARLY.map(r => r.total), backgroundColor: '#58a6ff', borderRadius: 3 },
-        { label: '未實現損益', data: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; }), backgroundColor: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#3fb950' : '#f85149'; }), borderRadius: 3 }
+        { label: '損益', data: YEARLY.map(r => r.pnl), backgroundColor: '#58a6ff', borderRadius: 3 },
+        { label: '股利', data: YEARLY.map(r => r.div), backgroundColor: '#3fb950', borderRadius: 3 },
+        { label: '出借', data: YEARLY.map(r => r.lend || 0), backgroundColor: '#d29922', borderRadius: 3 },
+        { label: '未實現', data: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; }), backgroundColor: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#bc8cff' : '#f85149'; }), borderRadius: 3 }
       ]
     },
     options: { responsive: true, maintainAspectRatio: false,
