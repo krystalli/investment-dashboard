@@ -3942,10 +3942,7 @@ async function syncSheets() {
         .sort((a, b) => a.m.localeCompare(b.m));
       if (newMonthly.length) {
         MONTHLY.splice(0, MONTHLY.length, ...newMonthly);
-        // 只在當月尚無試算表小計時才用持股估算補上當月
-        const now2 = new Date();
-        const curM2 = `${now2.getFullYear()}/${String(now2.getMonth()+1).padStart(2,'0')}`;
-        if (!MONTHLY.some(r => r.m === curM2)) appendCurrentMonth();
+        // 同步後以 Sheet 小計為準，不再用估算覆蓋
         try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
         results.push(`歷年 ${newMonthly.length} 個月`);
       }
