@@ -1991,7 +1991,11 @@ function renderTwStocks() {
   // TW KPI summary
   const totalMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
   const totalCost = TW_HOLD.reduce((s, h) => s + ((h.shares || 0) * (h.avg || 0)), 0);
-  const totalPnl  = totalMV - totalCost;
+  // 優先用 Sheet 的損益欄（含配息），否則 fallback 市值-成本
+  const hasPnl   = TW_HOLD.some(h => h.pnl != null);
+  const totalPnl = hasPnl
+    ? TW_HOLD.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv || 0) - (h.shares||0)*(h.avg||0)), 0)
+    : totalMV - totalCost;
   const pnlPct    = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
   const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
   kset('twKpiTotal',    `$${Math.round(totalMV).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
