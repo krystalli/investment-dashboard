@@ -1704,11 +1704,11 @@ function renderOverviewKPIs() {
     const usPnl     = usAllHoldings.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv - h.cost)), 0);
     const usCost    = usAllHoldings.reduce((s, h) => s + (h.cost || 0), 0);
     const usPnlTwd  = Math.round(usPnl * USD_TWD);
-    const sign = usPnlTwd >= 0;
-    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnlTwd).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    const sign = usPnl >= 0;
+    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnl).toLocaleString(undefined, {maximumFractionDigits:0}), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (usCost > 0) {
       const pct = (usPnl / usCost * 100).toFixed(2);
-      set('kpiUsPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+      set('kpiUsPnlPct', `≈ TWD $${Math.abs(usPnlTwd).toLocaleString()}  (${pct >= 0 ? '+' : ''}${pct}%)`, 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
     }
   }
 
@@ -2514,7 +2514,7 @@ function renderUsPageKPIs() {
   s('usKpiTotalSub', `≈ TWD $${Math.round(totalMV * USD_TWD).toLocaleString()}`);
   s('usKpiPnl',      `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toLocaleString(undefined,{maximumFractionDigits:0})}`,
                      'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
-  s('usKpiPnlPct',   `${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`,
+  s('usKpiPnlPct',   `≈ TWD $${Math.round(totalPnl * USD_TWD).toLocaleString()}  (${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)`,
                      'kpi-sub ' + (pnlPct >= 0 ? 'up' : 'down'));
 
   const withPct = allUS.filter(h => h.mv && h.pct != null);
