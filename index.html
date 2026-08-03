@@ -1037,9 +1037,11 @@ const MONTHLY = [
 })();
 
 function calcCurrentTotal() {
-  const twMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
-  const usMV = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
-  return Math.round(twMV + usMV);
+  const twMV  = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
+  const usMV  = [...US_MAIN, ...US_ROY].reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
+  const bank  = SHEET_ALLOC.ready ? (SHEET_ALLOC.bank || 0) : 0;
+  const binance = SHEET_ALLOC.ready ? (SHEET_ALLOC.binance || 0) : 0;
+  return Math.round(twMV + usMV + bank + binance);
 }
 
 function appendCurrentMonth() {
@@ -1398,7 +1400,7 @@ function initOverviewCharts() {
           const pct = chart.data.datasets[0].data[i];
           const raw = chart.data.datasets[0].rawValues?.[i];
           const amt = raw != null ? `  $${Math.round(raw).toLocaleString()}` : '';
-          return { text: `${l}${amt}  (${pct}%)`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: 'transparent', index: i };
+          return { text: `${l}${amt}  (${pct}%)`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: 'transparent', fontColor: '#8b949e', index: i };
         })
       } },
       tooltip: { callbacks: { label: ctx => {
