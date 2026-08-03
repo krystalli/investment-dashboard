@@ -110,6 +110,11 @@
 
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th { color: var(--text2); font-weight: 500; text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 11px; white-space: nowrap; }
+  th.sortable { cursor: pointer; }
+  th.sortable:hover { color: var(--text1); }
+  th.sortable .sort-icon { opacity: 0.25; font-size: 10px; margin-left: 3px; }
+  th.sortable:hover .sort-icon { opacity: 0.7; }
+  th.sortable.sort-asc .sort-icon, th.sortable.sort-desc .sort-icon { opacity: 1; color: var(--blue); }
   td { padding: 9px 10px; border-bottom: 1px solid var(--border); }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: var(--surface2); }
@@ -2032,6 +2037,7 @@ function renderTwStocks() {
   document.getElementById('twTopLosers').innerHTML = losers.map(s =>
     `<div class="summary-row"><span>${s.name}</span><span class="down">${s.pct.toFixed(1)}% · ${recTag[s.rec]}</span></div>`
   ).join('');
+  makeTableSortable('twHoldTable');
 }
 
 // ─────── US STOCKS ───────
@@ -2061,6 +2067,8 @@ function renderUsStocks() {
   render(US_MAIN, 'usMainTable');
   render(US_ROY, 'usRoyTable');
   renderUsPageKPIs();
+  makeTableSortable('usMainTable');
+  makeTableSortable('usRoyTable');
 }
 
 // ─────── THESIS TRACKER ───────
@@ -2079,6 +2087,38 @@ function cycleThesisStatus(key) {
   THESIS_DATA[key].status = next;
   if (!THESIS_DATA[key].date) THESIS_DATA[key].date = new Date().toISOString().slice(0, 10);
   saveThesis();
+}
+
+function makeTableSortable(tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  const ths = [...tbody.closest('table').querySelectorAll('thead th')];
+  let col = -1, dir = 1;
+  ths.forEach((th, i) => {
+    if (!th.dataset.label) th.dataset.label = th.textContent.trim();
+    th.classList.add('sortable');
+    th.innerHTML = th.dataset.label + ' <span class="sort-icon">⇅</span>';
+    th.onclick = () => {
+      dir = (col === i) ? -dir : 1;
+      col = i;
+      ths.forEach((t, j) => {
+        t.classList.remove('sort-asc', 'sort-desc');
+        t.querySelector('.sort-icon').textContent = j === i ? (dir === 1 ? '▲' : '▼') : '⇅';
+      });
+      th.classList.add(dir === 1 ? 'sort-asc' : 'sort-desc');
+      const rows = [...tbody.querySelectorAll('tr')];
+      const parse = txt => {
+        const n = parseFloat(txt.replace(/[+$, ]/g, '').replace(/%$/, ''));
+        return isNaN(n) ? txt.trim().toLowerCase() : n;
+      };
+      rows.sort((a, b) => {
+        const av = parse(a.cells[i]?.textContent || '');
+        const bv = parse(b.cells[i]?.textContent || '');
+        return dir * (typeof av === 'string' ? av.localeCompare(bv, 'zh-TW') : av - bv);
+      });
+      rows.forEach(r => tbody.appendChild(r));
+    };
+  });
 }
 
 function closeAnalysisModal() {
