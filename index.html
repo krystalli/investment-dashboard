@@ -1392,7 +1392,21 @@ function initOverviewCharts() {
   window._allocChart = new Chart(document.getElementById('chartAlloc'), {
     type: 'doughnut',
     data: buildAllocData(),
-    options: { plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
+    options: { plugins: {
+      legend: { position: 'bottom', labels: { color: '#8b949e', font: { size: 12 }, padding: 16,
+        generateLabels: chart => chart.data.labels.map((l, i) => {
+          const pct = chart.data.datasets[0].data[i];
+          const raw = chart.data.datasets[0].rawValues?.[i];
+          const amt = raw != null ? `  $${Math.round(raw).toLocaleString()}` : '';
+          return { text: `${l}${amt}  (${pct}%)`, fillStyle: chart.data.datasets[0].backgroundColor[i], strokeStyle: 'transparent', index: i };
+        })
+      } },
+      tooltip: { callbacks: { label: ctx => {
+        const raw = ctx.dataset.rawValues?.[ctx.dataIndex];
+        const amt = raw != null ? `  $${Math.round(raw).toLocaleString()}` : '';
+        return ` ${ctx.label}${amt}  (${ctx.parsed}%)`;
+      } } }
+    }, responsive: true, maintainAspectRatio: false }
   });
 
   // Growth Line
@@ -1827,26 +1841,27 @@ function renderAllocAdvice() {
 }
 
 function buildAllocData() {
-  let labels, values, colors;
+  let labels, values, rawValues, colors;
   if (SHEET_ALLOC.ready) {
     const { stocks, subbroker, bank, binance, firstrade } = SHEET_ALLOC;
     const total = stocks + subbroker + bank + binance + firstrade;
-    const pct = v => +(v / total * 100).toFixed(2);
-    labels = []; values = []; colors = [];
+    const pct = v => +(v / total * 100).toFixed(1);
+    labels = []; values = []; rawValues = []; colors = [];
     [['股票',stocks,'#58a6ff'],['複委託',subbroker,'#3fb950'],['銀行',bank,'#f0c040'],['幣安',binance,'#f0883e'],['Firstrade',firstrade,'#bc8cff']]
       .filter(([,v]) => v > 0)
-      .forEach(([l,v,c]) => { labels.push(l); values.push(pct(v)); colors.push(c); });
+      .forEach(([l,v,c]) => { labels.push(l); values.push(pct(v)); rawValues.push(v); colors.push(c); });
   } else {
     const twMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
     const mainMV = US_MAIN.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
     const royMV  = US_ROY.reduce((s, h) => s + (h.mv || 0), 0) * USD_TWD;
     const total  = twMV + mainMV + royMV;
-    const pct = v => +(v / total * 100).toFixed(2);
+    const pct = v => +(v / total * 100).toFixed(1);
     labels = ['股票', '複委託', 'Firstrade'];
     values = [pct(twMV), pct(royMV), pct(mainMV)];
+    rawValues = [twMV, royMV, mainMV];
     colors = ['#58a6ff', '#3fb950', '#bc8cff'];
   }
-  return { labels, datasets: [{ data: values, backgroundColor: colors, borderWidth: 0 }] };
+  return { labels, datasets: [{ data: values, rawValues: rawValues || [], backgroundColor: colors, borderWidth: 0 }] };
 }
 
 function buildGrowthData() {
