@@ -574,7 +574,7 @@
 <div id="page-perf" class="page">
   <div class="kpi-grid">
     <div class="kpi-card">
-      <div class="kpi-label">累計實現損益</div>
+      <div class="kpi-label">累計總損益</div>
       <div class="kpi-value up" id="histKpiPnl">—</div>
       <div class="kpi-sub neutral" id="histKpiPnlSub">—</div>
     </div>
@@ -589,9 +589,9 @@
       <div class="kpi-sub up" id="histKpiBestSub">—</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">出借收益</div>
-      <div class="kpi-value up" id="histKpiLend">—</div>
-      <div class="kpi-sub neutral">股票出借收入</div>
+      <div class="kpi-label">年化報酬率 CAGR</div>
+      <div class="kpi-value up" id="histKpiCagr">—</div>
+      <div class="kpi-sub neutral" id="histKpiCagrSub">—</div>
     </div>
   </div>
 
@@ -601,8 +601,8 @@
       <div class="chart-wrap"><canvas id="chartYearlyPnl"></canvas></div>
     </div>
     <div class="card">
-      <div class="card-title">💰 歷年股息收入</div>
-      <div class="chart-wrap"><canvas id="chartDividend"></canvas></div>
+      <div class="card-title">📈 總資產成長走勢</div>
+      <div class="chart-wrap"><canvas id="chartGrowthPerf"></canvas></div>
     </div>
   </div>
 
@@ -681,6 +681,37 @@
 
 <!-- ═══ PAGE: RISK ANALYSIS ═══ -->
 <div id="page-risk" class="page">
+  <!-- ── QQQ 訊號快覽 ── -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div id="signalPanel" class="signal-panel hold">
+      <div class="signal-label">QQQ 動態策略訊號</div>
+      <div id="signalText" class="signal-big hold">HOLD ◆</div>
+      <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
+      <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+      <div class="summary-row"><span class="summary-key">進場門檻 (SMA200×1.04)</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
+      <div class="summary-row"><span class="summary-key">退場門檻 (SMA200×0.93)</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
+      <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+      <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+    </div>
+  </div>
+
+  <!-- ── 再平衡 + 股息日曆（操作層面）── -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span></div>
+      <div id="rebalancingDetail"></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📆 股息日曆 <span class="badge">各月預估配息收入</span></div>
+      <div id="dividendCalendarDetail"></div>
+    </div>
+  </div>
+
+  <!-- ── 分析指標（附錄）── -->
+  <div style="margin:24px 0 12px;border-top:1px solid var(--border);padding-top:20px;font-size:16px;font-weight:700;color:var(--text1)">📊 風險分析指標 <span class="badge">附錄</span></div>
   <div class="alert alert-info" style="margin-bottom:16px">
     <div class="alert-icon">📊</div>
     <div><strong>風險指標說明：</strong>基於 MONTHLY 月度資產快照計算。Sharpe／Sortino 使用年化報酬與波動，無風險利率設為 3%（台幣）。基準指數為估算值，僅供參考對比。</div>
@@ -710,18 +741,6 @@
       <div class="card-title">📅 滾動報酬 <span class="badge">各期間績效</span></div>
       <div id="rollingReturnsDetail"></div>
     </div>
-  </div>
-
-  <!-- Medium: Dividend Calendar -->
-  <div class="card">
-    <div class="card-title">📆 股息日曆 <span class="badge">各月預估配息收入</span></div>
-    <div id="dividendCalendarDetail"></div>
-  </div>
-
-  <!-- Medium: Rebalancing Action Plan -->
-  <div class="card">
-    <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span></div>
-    <div id="rebalancingDetail"></div>
   </div>
 
   <!-- Level 2: Monthly Return Heatmap -->
@@ -781,20 +800,20 @@
 
   <div class="grid-2">
     <div>
-      <div id="signalPanel" class="signal-panel hold">
+      <div id="signalPanel-dup" class="signal-panel hold">
         <div class="signal-label">目前訊號</div>
-        <div id="signalText" class="signal-big hold">HOLD ◆</div>
-        <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+        <div id="signalText-dup" class="signal-big hold">HOLD ◆</div>
+        <div class="signal-label" id="signalDesc-dup">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
       </div>
       <div class="card">
         <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
-        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span style="color:var(--blue);font-family:monospace">$558.28</span></div>
         <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
-        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
-        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
-        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+        <div class="summary-row"><span class="summary-key">進場門檻（SMA200 × 1.04）</span><span style="color:var(--green);font-family:monospace">$617.96</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻（SMA200 × 0.93）</span><span style="color:var(--red);font-family:monospace">$552.61</span></div>
+        <div class="summary-row"><span class="summary-key">距進場門檻</span><span class="down">-$59.68 (-9.7%)</span></div>
         <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
-        <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+        <div class="summary-row"><span class="summary-key">訊號狀態</span><span class="tag tag-yellow">⏸ 等待進場</span></div>
       </div>
     </div>
     <div class="card">
@@ -1933,10 +1952,10 @@ function rerenderCharts() {
       window._yearlyPnlChart.data.datasets[3].backgroundColor = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#bc8cff' : '#f85149'; });
       window._yearlyPnlChart.update();
     }
-    if (window._dividendChart) {
-      window._dividendChart.data.labels = YEARLY.map(r => r.y);
-      window._dividendChart.data.datasets[0].data = YEARLY.map(r => r.div);
-      window._dividendChart.update();
+    if (window._histGrowthChart) {
+      window._histGrowthChart.data.labels = MONTHLY.map(r => r.m);
+      window._histGrowthChart.data.datasets[0].data = MONTHLY.map(r => r.v);
+      window._histGrowthChart.update();
     }
     renderYearlyTable();
   } else {
@@ -2955,17 +2974,35 @@ function renderHistoryKPIs() {
   const totalPnl  = YEARLY.reduce((s, y) => s + (y.pnl  || 0), 0);
   const totalDiv  = YEARLY.reduce((s, y) => s + (y.div  || 0), 0);
   const totalLend = YEARLY.reduce((s, y) => s + (y.lend || 0), 0);
-  const bestYr    = YEARLY.reduce((a, b) => (b.pnl || 0) > (a.pnl || 0) ? b : a);
+  const bestYr    = YEARLY.reduce((a, b) => (b.total || 0) > (a.total || 0) ? b : a);
   const minYr     = YEARLY[0].y;
   const maxYr     = YEARLY[YEARLY.length-1].y;
   const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-  s('histKpiPnl',      '$' + totalPnl.toLocaleString());
-  s('histKpiPnlSub',   `${minYr} - ${maxYr}`);
-  s('histKpiDiv',      '$' + totalDiv.toLocaleString());
-  s('histKpiDivSub',   `含 ${minYr}-${maxYr}`);
+
+  // 累計總損益 = 實現損益 + 股息 + 出借 + 目前未實現
+  const latestUnrealized = (() => {
+    if (!MONTHLY.length) return 0;
+    const last = MONTHLY[MONTHLY.length - 1];
+    return (last.c > 0) ? last.v - last.c : 0;
+  })();
+  const totalGain = totalPnl + totalDiv + totalLend + latestUnrealized;
+  s('histKpiPnl',    '$' + Math.round(totalGain).toLocaleString());
+  s('histKpiPnlSub', `${minYr}~${maxYr} 實現+未實現`);
+
+  s('histKpiDiv',    '$' + totalDiv.toLocaleString());
+  s('histKpiDivSub', `含 ${minYr}-${maxYr}`);
+
   s('histKpiBestYear', bestYr.y);
-  s('histKpiBestSub',  `$${(bestYr.pnl||0).toLocaleString()} 實現損益`);
-  s('histKpiLend',     totalLend ? '$' + totalLend.toLocaleString() : '—');
+  s('histKpiBestSub',  `$${(bestYr.total||0).toLocaleString()} 合計損益`);
+
+  // CAGR：從 MONTHLY 最早到最新
+  if (MONTHLY.length >= 2) {
+    const first = MONTHLY[0], last = MONTHLY[MONTHLY.length - 1];
+    const months = MONTHLY.length - 1;
+    const cagr = (Math.pow(last.v / first.v, 12 / months) - 1) * 100;
+    s('histKpiCagr',    (cagr >= 0 ? '+' : '') + cagr.toFixed(1) + '%');
+    s('histKpiCagrSub', `${first.m} ～ ${last.m} 年化`);
+  }
 }
 
 function initHistoryCharts() {
@@ -2992,19 +3029,28 @@ function initHistoryCharts() {
     }
   });
 
-  // Dividend bar
-  if (window._dividendChart) { window._dividendChart.destroy(); window._dividendChart = null; }
-  window._dividendChart = new Chart(document.getElementById('chartDividend'), {
-    type: 'bar',
-    data: {
-      labels: YEARLY.map(r => r.y),
-      datasets: [{ label: '股息', data: YEARLY.map(r => r.div), backgroundColor: '#3fb950', borderRadius: 6 }]
-    },
-    options: { responsive: true, maintainAspectRatio: false,
-      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
-      plugins: { legend:{ labels:{ color:'#8b949e' } } }
-    }
-  });
+  // Portfolio growth line chart (from MONTHLY)
+  if (window._histGrowthChart) { window._histGrowthChart.destroy(); window._histGrowthChart = null; }
+  if (MONTHLY.length > 0) {
+    window._histGrowthChart = new Chart(document.getElementById('chartGrowthPerf'), {
+      type: 'line',
+      data: {
+        labels: MONTHLY.map(r => r.m),
+        datasets: [{ label: '總資產', data: MONTHLY.map(r => r.v),
+          borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,0.12)',
+          fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false,
+        scales: {
+          y: { ticks: { color:'#8b949e', callback: v => '$'+Math.round(v/10000)+'萬' }, grid:{ color:'#21262d' } },
+          x: { ticks:{ color:'#8b949e', maxTicksLimit: 12 }, grid:{ color:'#21262d' } }
+        },
+        plugins: { legend:{ labels:{ color:'#8b949e' } },
+          tooltip: { callbacks: { label: ctx => ' $' + ctx.parsed.y.toLocaleString() } }
+        }
+      }
+    });
+  }
 
   // History table
   renderYearlyTable();
