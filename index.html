@@ -597,7 +597,7 @@
 
   <div class="grid-2">
     <div class="card">
-      <div class="card-title">📊 歷年實現損益</div>
+      <div class="card-title">📊 歷年損益</div>
       <div class="chart-wrap"><canvas id="chartYearlyPnl"></canvas></div>
     </div>
     <div class="card">
@@ -609,14 +609,9 @@
   <div class="card">
     <div class="card-title">📋 歷年績效彙整</div>
     <table>
-      <thead><tr><th>年份</th><th>實現損益</th><th>股息</th><th>出借</th><th>合計</th><th>YoY成長</th></tr></thead>
+      <thead><tr><th>年份</th><th>實現損益</th><th>股息</th><th>出借</th><th>未實現損益</th><th>合計</th><th>YoY成長</th></tr></thead>
       <tbody id="historyTable"></tbody>
     </table>
-  </div>
-
-  <div class="card">
-    <div class="card-title">📅 月資產總覽</div>
-    <div class="chart-wrap-lg"><canvas id="chartMonthly"></canvas></div>
   </div>
 
   <!-- ── 配置明細與趨勢（從總覽移入） ── -->
@@ -1930,7 +1925,9 @@ function rerenderCharts() {
   if (window._historyInit) {
     if (window._yearlyPnlChart) {
       window._yearlyPnlChart.data.labels = YEARLY.map(r => r.y);
-      window._yearlyPnlChart.data.datasets[0].data = YEARLY.map(r => r.pnl);
+      window._yearlyPnlChart.data.datasets[0].data = YEARLY.map(r => r.total);
+      window._yearlyPnlChart.data.datasets[1].data = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; });
+      window._yearlyPnlChart.data.datasets[1].backgroundColor = YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#3fb950' : '#f85149'; });
       window._yearlyPnlChart.update();
     }
     if (window._dividendChart) {
@@ -2920,20 +2917,32 @@ function initCatTrendChart() {
   });
 }
 
+function getYearEndUnrealized(year) {
+  const entries = MONTHLY.filter(m => m.m.startsWith(String(year) + '/')).sort((a, b) => b.m.localeCompare(a.m));
+  if (!entries.length) return null;
+  const last = entries[0];
+  return (last.c > 0) ? last.v - last.c : null;
+}
+
 function renderYearlyTable() {
   const tbody = document.getElementById('historyTable');
   if (!tbody) return;
   tbody.innerHTML = '';
   YEARLY.forEach((r, i) => {
-    const prev   = i > 0 ? YEARLY[i-1].total : null;
-    const growth = prev ? ((r.total - prev) / prev * 100).toFixed(0) + '%' : '—';
+    const prev       = i > 0 ? YEARLY[i-1].total : null;
+    const unrealized = getYearEndUnrealized(r.y);
+    const total      = r.total + (unrealized || 0);
+    const growth     = prev ? ((total - (YEARLY[i-1].total + (getYearEndUnrealized(YEARLY[i-1].y) || 0))) / Math.abs(YEARLY[i-1].total + (getYearEndUnrealized(YEARLY[i-1].y) || 0)) * 100).toFixed(0) + '%' : '—';
+    const unrealCls  = unrealized == null ? 'neutral' : unrealized >= 0 ? 'up' : 'down';
+    const unrealTxt  = unrealized == null ? '—' : (unrealized >= 0 ? '+' : '') + '$' + Math.round(unrealized).toLocaleString();
     tbody.innerHTML += `<tr>
       <td>${r.y}</td>
       <td class="up">$${r.pnl.toLocaleString()}</td>
       <td class="up">$${r.div.toLocaleString()}</td>
       <td class="${r.lend ? 'up' : 'neutral'}">${r.lend ? '$' + r.lend.toLocaleString() : '—'}</td>
-      <td class="up" style="font-weight:600">$${r.total.toLocaleString()}</td>
-      <td class="up">${growth}</td>
+      <td class="${unrealCls}">${unrealTxt}</td>
+      <td class="${total >= 0 ? 'up' : 'down'}" style="font-weight:600">$${Math.round(total).toLocaleString()}</td>
+      <td class="${growth.startsWith('-') ? 'down' : 'up'}">${growth}</td>
     </tr>`;
   });
 }
@@ -2964,10 +2973,16 @@ function initHistoryCharts() {
     type: 'bar',
     data: {
       labels: YEARLY.map(r => r.y),
-      datasets: [{ label: '實現損益', data: YEARLY.map(r => r.pnl), backgroundColor: '#58a6ff', borderRadius: 6 }]
+      datasets: [
+        { label: '實現損益(含股息)', data: YEARLY.map(r => r.total), backgroundColor: '#58a6ff', borderRadius: 3 },
+        { label: '未實現損益', data: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return u != null ? u : 0; }), backgroundColor: YEARLY.map(r => { const u = getYearEndUnrealized(r.y); return (u == null || u >= 0) ? '#3fb950' : '#f85149'; }), borderRadius: 3 }
+      ]
     },
     options: { responsive: true, maintainAspectRatio: false,
-      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
+      scales: {
+        x: { stacked: true, ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } },
+        y: { stacked: true, ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() }, grid:{ color:'#21262d' } }
+      },
       plugins: { legend:{ labels:{ color:'#8b949e' } } }
     }
   });
@@ -2989,21 +3004,6 @@ function initHistoryCharts() {
   // History table
   renderYearlyTable();
 
-  // Monthly chart
-  window._monthlyChart = new Chart(document.getElementById('chartMonthly'), {
-    type: 'bar',
-    data: {
-      labels: MONTHLY.map(r => r.m.slice(5)),
-      datasets: [
-        { label: '總資產', data: MONTHLY.map(r => r.v), backgroundColor: '#58a6ff', borderRadius: 4 },
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      scales: { y: { ticks: { color:'#8b949e', callback: v => '$'+Math.round(v/10000)+'萬' }, grid:{ color:'#21262d' } }, x: { ticks:{ color:'#8b949e' }, grid:{ color:'#21262d' } } },
-      plugins: { legend:{ labels:{ color:'#8b949e' } } }
-    }
-  });
 }
 
 // ─────── INIT ───────
@@ -3938,7 +3938,7 @@ async function syncSheets() {
       const fmtMonth = d => { const [yr, mo] = d.split('/'); return `${yr}/${mo.padStart(2,'0')}`; };
       const newMonthly = Object.entries(monthGroups)
         .filter(([, g]) => g.small > 0)
-        .map(([d, g]) => ({ m: fmtMonth(d), v: g.small }))
+        .map(([d, g]) => ({ m: fmtMonth(d), v: g.small, c: g.small_c || 0 }))
         .sort((a, b) => a.m.localeCompare(b.m));
       if (newMonthly.length) {
         MONTHLY.splice(0, MONTHLY.length, ...newMonthly);
