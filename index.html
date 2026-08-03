@@ -1169,7 +1169,7 @@ const US_ROY = [
   } catch(e) {}
   const now = new Date();
   const curM = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
-  if (!MONTHLY.some(r => r.m === curM)) appendCurrentMonth();
+  try { if (!MONTHLY.some(r => r.m === curM)) appendCurrentMonth(); } catch(e) {}
 })();
 
 // 各類資產逐月歷史 [{m:'2025/04', stocks:N, bank:N, ...}]
