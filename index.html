@@ -320,16 +320,6 @@
       <div class="kpi-value neutral" id="kpiCryptoPnl">—</div>
       <div class="kpi-sub neutral" id="kpiCryptoPnlPct">—</div>
     </div>
-    <div class="kpi-card">
-      <div class="kpi-label">銀行存款</div>
-      <div class="kpi-value neutral" id="kpiBankPct">—</div>
-      <div class="kpi-sub neutral" id="kpiBankVal">—</div>
-    </div>
-    <div class="kpi-card">
-      <div class="kpi-label">美股 + 加密</div>
-      <div class="kpi-value neutral" id="kpiUsPct">—</div>
-      <div class="kpi-sub neutral">Firstrade + Binance</div>
-    </div>
   </div>
 
   <div class="grid-2">
@@ -3882,6 +3872,15 @@ async function syncSheets() {
         return null;
       };
 
+      // 先掃一遍找 header 行，取得成本/市值的欄位 index
+      let costCol = -1, mvCol = -1;
+      for (const row of histRows) {
+        const cells = row.map(c => (c||'').trim());
+        const ci = cells.findIndex(c => c === '成本' || c === '投入成本');
+        const mi = cells.findIndex(c => c === '市值' || c === '市場價值');
+        if (ci >= 0 && mi >= 0) { costCol = ci; mvCol = mi; break; }
+      }
+
       let curDate = null;
       const monthGroups = {}; // "YYYY/M" → { small: 0, small_c: 0, cats: {}, cats_c: {} }
       histRows.forEach(row => {
@@ -3890,10 +3889,17 @@ async function syncSheets() {
         if (!curDate) return;
         if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, small_c: 0, cats: {}, cats_c: {} };
 
-        // 找所有大數字（市值/成本通常 > 5萬）並排序：最小=成本，最大=市值
-        const largeNums = row.map(c => parseNum(c)).filter(n => n > 50000).sort((a,b) => a-b);
-        const bigMV   = largeNums.length > 0 ? largeNums[largeNums.length - 1] : 0;
-        const bigCost = largeNums.length > 1 ? largeNums[0] : 0;  // 有兩個大數時較小者為成本
+        // 若找到 header 欄位，直接按欄讀值（避免虧損時成本>市值被對調）
+        let bigMV, bigCost;
+        if (mvCol >= 0 && costCol >= 0) {
+          bigMV   = parseNum(row[mvCol])   || 0;
+          bigCost = parseNum(row[costCol]) || 0;
+        } else {
+          // fallback：大數最大=市值，次大=成本
+          const largeNums = row.map(c => parseNum(c)).filter(n => n > 50000).sort((a,b) => a-b);
+          bigMV   = largeNums.at(-1) || 0;
+          bigCost = largeNums.length > 1 ? largeNums[0] : 0;
+        }
 
         if (row.some(isSmalCell)) {
           if (bigMV > 0) monthGroups[curDate].small = bigMV;
