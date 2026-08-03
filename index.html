@@ -1392,7 +1392,16 @@ function initOverviewCharts() {
   window._allocChart = new Chart(document.getElementById('chartAlloc'), {
     type: 'doughnut',
     data: buildAllocData(),
-    options: { plugins: { legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 } } } }, responsive: true, maintainAspectRatio: false }
+    options: { plugins: {
+      legend: { position: 'right', labels: { color: '#8b949e', font: { size: 11 },
+        generateLabels: chart => chart.data.labels.map((l, i) => ({
+          text: `${l}  ${chart.data.datasets[0].data[i]}%`,
+          fillStyle: chart.data.datasets[0].backgroundColor[i],
+          strokeStyle: 'transparent', index: i
+        }))
+      } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed}%` } }
+    }, responsive: true, maintainAspectRatio: false }
   });
 
   // Growth Line
