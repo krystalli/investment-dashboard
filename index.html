@@ -352,7 +352,7 @@
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">📋 操作建議
       <span style="margin-left:auto">
-        <button onclick="localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis()" id="actionSignalsRefreshBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
+        <button onclick="const b=this;b.textContent='分析中…';b.disabled=true;localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis().finally(()=>{b.textContent='↻ 重新分析';b.disabled=false})" id="actionSignalsRefreshBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
       </span>
     </div>
     <div id="home-action-signals"><div style="color:var(--text3);font-size:13px;padding:8px 0">載入中…</div></div>
@@ -734,7 +734,9 @@
   <!-- ── 再平衡 + 股息日曆（操作層面）── -->
   <div class="grid-2" style="margin-bottom:16px">
     <div class="card" style="margin-bottom:0">
-      <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span></div>
+      <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span>
+        <span style="margin-left:auto"><button id="rebalRefreshBtn" onclick="const b=this;b.textContent='↻';b.disabled=true;renderRebalancingPlan();renderDividendCalendar();setTimeout(()=>{b.textContent='↻ 更新';b.disabled=false},400)" style="font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 更新</button></span>
+      </div>
       <div id="rebalancingDetail"></div>
     </div>
     <div class="card" style="margin-bottom:0">
@@ -1414,13 +1416,18 @@ function showPage(id) {
     initCatTrendChart();
     window._perfInit = true;
   }
-  if (id === 'risk' && !window._riskInit) {
-    initRiskPage();
-    initQQQChart();
-    initBacktestChart();
-    window._riskInit = true;
-    window._qqqInit = true;
-    window._btInit = true;
+  if (id === 'risk') {
+    if (!window._riskInit) {
+      initRiskPage();
+      initQQQChart();
+      initBacktestChart();
+      window._riskInit = true;
+      window._qqqInit = true;
+      window._btInit = true;
+    } else {
+      renderRebalancingPlan();
+      renderDividendCalendar();
+    }
   }
 }
 
