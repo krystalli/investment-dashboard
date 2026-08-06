@@ -2312,11 +2312,13 @@ async function runHoldingsAnalysis() {
   };
 
   const allResults = [];
-  for (let start = 0; start < allHoldings.length; start += 5) {
+  const totalH = allHoldings.length;
+  for (let start = 0; start < totalH; start += 5) {
     if (start > 0) await new Promise(r => setTimeout(r, 2000));
-    const slice = allHoldings.slice(start, start+5);
+    const slice = allHoldings.slice(start, start + 5);
+    setMsg(`🤖 AI 分析中… ${Math.min(start + 5, totalH)} / ${totalH}`);
     try {
-      const results = await callBatch(slice.map((h, j) => toLine(h, start+j)).join('\n'));
+      const results = await callBatch(slice.map((h, j) => toLine(h, start + j)).join('\n'));
       const offsetted = results.map(r => {
         const localPos = slice.findIndex(h => h.key === r.ticker);
         if (localPos < 0) return null;
@@ -2324,7 +2326,6 @@ async function runHoldingsAnalysis() {
         return { ...r, idx: absIdx, levels: techData[absIdx]?.levels || null };
       }).filter(Boolean);
       allResults.push(...offsetted);
-      renderHoldingsAnalysis(allHoldings, allResults);
     } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
   }
   localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
