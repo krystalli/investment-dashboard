@@ -2277,27 +2277,42 @@ async function runHoldingsAnalysis() {
     return techData[globalIdx]?.techLine ? base + '\n' + techData[globalIdx].techLine : base;
   };
 
-  const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師，每日早晨做持倉操作掃描。今日${today}。繁體中文。必須回傳JSON。
+  // ── 市場背景（注入總經環境，讓 AI 有全局視角）──
+  const qqqNow = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ')?.price
+    || parseFloat(document.getElementById('nasdaqPrice')?.textContent?.replace('$','')) || null;
+  const qqqSignalText = !qqqNow ? '未知'
+    : qqqNow >= QQQ_ENTRY ? `BUY — QQQ 強勢，高於 SMA200×1.04，槓桿策略已啟動`
+    : qqqNow <= QQQ_EXIT  ? `SELL — QQQ 跌破 SMA200×0.93，退場警戒`
+    : `HOLD — QQQ 低於進場門檻，等待訊號（${((qqqNow-QQQ_SMA200)/QQQ_SMA200*100).toFixed(1)}% vs SMA200）`;
+  const marketCtx = `
+當前市場環境（請據此調整建議的積極度）：
+- 美股（Nasdaq）大盤訊號：${qqqSignalText}
+- 台幣匯率：約 ${USD_TWD.toFixed(1)} 元/USD
+- 分析日期：${today}
+若大盤訊號為 HOLD 或 SELL，美股/科技類持倉建議應偏謹慎；若為 BUY，可積極看待趨勢向上的標的。`;
 
-任務：以投資分析師角色，綜合「週線技術指標」與「你對各標的的基本面/產業/總經認知」，給出今日操作方向。技術面是重要參考，但不是唯一依據——若基本面惡化、產業逆風或重大利空，即使技術面尚未破底也可建議減碼或出場；反之若基本面強勁、逢低佈局機會，技術面整理中也可考慮加碼。
+  const system = `你是一位擁有20年經驗的台股、美股、加密幣專業分析師，每日早晨做持倉操作掃描。繁體中文。必須回傳JSON。
+${marketCtx}
+任務：綜合「週線技術指標」、「基本面/產業趨勢」、「上方市場背景」三維度，給出今日操作方向。技術面是輔助參考，不是唯一依據。基本面惡化、產業逆風、大盤轉弱時，技術面未破底也可建議減碼；強趨勢＋強基本面時，技術整理也可加碼。
 
 欄位說明：
-- status：一句現況（≤20字，定性描述，技術面＋基本面綜合，勿重複數字）
+- status：一句現況（≤20字，技術＋基本面＋產業氛圍，禁止只複述數字）
 - action：持有｜加碼｜減碼｜出場
-- alert：近期重大催化劑或風險事件（財報/法說/政策/產業），無則空字串，≤15字
+- alert：近期具體催化劑或風險（財報日/法說/政策/產業事件），無則空字串，≤15字
 
-技術面參考指引（輔助判斷，非硬性規則）：
-- 加碼訊號：站上週MA20、MACD看多、RSI 40~60且量增、法人買超
-- 持有訊號：技術面中性整理、等待確認
-- 減碼訊號：RSI>72超買、跌破週MA20且MACD看空、法人持續賣超
-- 出場訊號：跌破週MA52、現價遠低於均價且無止跌跡象、RSI<30
+判斷原則（非硬性 if-else，需綜合三維度）：
+- 加碼：基本面強＋技術站穩（MA20）＋大盤不弱
+- 持有：基本面正常＋技術整理中，等待確認
+- 減碼：基本面趨弱 或 技術破位（跌破MA20且量增）或 大盤轉弱
+- 出場：基本面惡化 或 技術破 MA52 且無止跌 或 大盤訊號 SELL
 
-最終 action 由你綜合判斷，禁止因缺乏籌碼資料就一律給「持有」。`;
+禁止因「缺乏資料」就一律給持有；禁止 action 全部相同。`;
+
   const callBatch = async (lines, attempt = 0) => {
     const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1200, temperature:0.35,
+      body: JSON.stringify({ model:'llama-3.3-70b-versatile', max_tokens:1500, temperature:0.3,
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
