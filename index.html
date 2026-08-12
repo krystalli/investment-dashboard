@@ -200,11 +200,11 @@
   .summary-key { color: var(--text2); }
 
   /* SIGNAL PANEL */
-  .signal-panel { border: 2px solid var(--border); border-radius: 14px; padding: 24px; text-align: center; margin-bottom: 16px; }
+  .signal-panel { border: 2px solid var(--border); border-radius: 14px; padding: 14px 16px; text-align: center; margin-bottom: 16px; }
   .signal-panel.buy { border-color: var(--green); background: rgba(63,185,80,.05); }
   .signal-panel.sell { border-color: var(--red); background: rgba(248,81,73,.05); }
   .signal-panel.hold { border-color: var(--yellow); background: rgba(227,179,65,.05); }
-  .signal-big { font-size: 48px; font-weight: 900; margin: 8px 0; }
+  .signal-big { font-size: 26px; font-weight: 900; margin: 4px 0; }
   .signal-big.buy { color: var(--green); }
   .signal-big.sell { color: var(--red); }
   .signal-big.hold { color: var(--yellow); }
@@ -1665,6 +1665,7 @@ function renderMonthlyTable() {
     const gb = document.getElementById('growthBadge');
     if (gb) gb.textContent = `${first} ～ ${last}`;
   }
+  makeTableSortable('monthlyTable');
 }
 
 function renderOverviewKPIs() {
@@ -1831,8 +1832,10 @@ function renderAllocDetail() {
     <div style="overflow-x:auto">
     <table>
       <thead><tr><th>類別</th><th>成本</th><th>市值</th><th>損益</th><th>損益率</th><th>佔比</th></tr></thead>
-      <tbody>
+      <tbody id="allocDetailBody">
         ${rowsHtml}
+      </tbody>
+      <tfoot>
         <tr style="font-weight:600;border-top:2px solid var(--border)">
           <td>小計</td>
           <td style="font-family:monospace">${totalCost > 0 ? fmt(totalCost) : '—'}</td>
@@ -1841,10 +1844,11 @@ function renderAllocDetail() {
           <td>${totPct}</td>
           <td>100%</td>
         </tr>
-      </tbody>
+      </tfoot>
     </table>
     </div>
     ${!SHEET_ALLOC.ready ? '<div style="font-size:11px;color:var(--text2);margin-top:8px">* 尚未同步試算表，成本欄資料為估算值</div>' : ''}`;
+  makeTableSortable('allocDetailBody');
 }
 
 function renderAllocAdvice() {
@@ -3046,6 +3050,7 @@ function renderYearlyTable() {
       <td class="${growth.startsWith('-') ? 'down' : 'up'}">${growth}</td>
     </tr>`;
   });
+  makeTableSortable('historyTable');
 }
 
 function renderHistoryKPIs() {
