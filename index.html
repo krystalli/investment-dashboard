@@ -4126,15 +4126,17 @@ async function syncSheets() {
       }
 
       // 解析年度損益摘要表（掃描含有 4 位年份的行）
-      // isYearCell: 首欄以 20XX 開頭即視為年份行（允許 "2026 FT" 等後綴）
-      const extractYear = c => { const m = (c?.trim()||'').match(/^(20[12]\d)/); return m ? parseInt(m[1]) : null; };
+      // extractYear：只認「整格恰好是 20XX」或「20XX + 空白後綴（如 2026 FT）」，
+      // 避免誤判月度表的 "2020/1" 這類日期格（後面接 "/" 不算年份格）
+      const extractYear = c => { const m = (c?.trim()||'').match(/^(20[12]\d)(?:\s|$)/); return m ? parseInt(m[1]) : null; };
       const colMatch    = (h, keys) => h.findIndex(c => keys.some(k => c.toLowerCase().includes(k)));
       let yearHdrIdx = { pnl:-1, div:-1, lend:-1, total:-1 };
+      let yearColIdx = -1;
       let inYearTable = false;
       const newYearly = [];
       histRows.forEach(row => {
         const cells = row.map(c => (c||'').trim());
-        // 偵測年度表 header（含「損益」或「股息」關鍵字的行，且第一格含「年」）
+        // 偵測年度表 header（含「損益」或「股息」關鍵字的行）
         if (!inYearTable && cells.some(c => c.includes('損益') || c.includes('股息') || c.includes('股利'))) {
           const hi = cells.map(c => c.toLowerCase());
           yearHdrIdx = {
@@ -4143,21 +4145,21 @@ async function syncSheets() {
             lend:  colMatch(hi, ['借券','lending','出借']),
             total: colMatch(hi, ['加總','合計','total']),
           };
+          yearColIdx = cells.findIndex(c => c.includes('年份') || c.includes('年度'));
           if (yearHdrIdx.pnl >= 0 || yearHdrIdx.div >= 0) inYearTable = true;
           return;
         }
         if (!inYearTable) return;
-        // 解析年度資料行：找第一個以 20XX 開頭的格子
-        const yearCell = cells.find(c => extractYear(c) !== null);
-        if (!yearCell) return;
-        const y = extractYear(yearCell);
-        if (!y) return;
+        // 只在「年份」欄（固定欄位）找年份格，避免月度表日期格誤判、資料表串跑
+        const yearCellRaw = yearColIdx >= 0 ? cells[yearColIdx] : cells.find(c => extractYear(c) !== null);
+        const y = extractYear(yearCellRaw);
+        if (!y) { inYearTable = false; return; } // 離開年度表區塊，停止解析
         const get = idx => idx >= 0 ? (parseNum(cells[idx]) || 0) : 0;
         const pnl   = get(yearHdrIdx.pnl);
         const div   = get(yearHdrIdx.div);
         const lend  = get(yearHdrIdx.lend);
         const total = get(yearHdrIdx.total) || pnl + div + lend;
-        // 允許負損益（空行 pnl/div/total 都是 0 才跳過）
+        // 允許負損益（pnl/div/lend/total 全是 0 才跳過）
         if (pnl !== 0 || div !== 0 || lend !== 0 || total !== 0) newYearly.push({ y, pnl, div, lend, total });
       });
       if (newYearly.length) {
