@@ -719,32 +719,6 @@
     </div>
   </div>
 
-  <!-- ── 分析師今日摘要 ── -->
-  <div id="analystSummary" style="margin-bottom:16px"></div>
-
-  <!-- ── 現有 QQQ 部位 vs 策略目標 ── -->
-  <div class="card" style="margin-bottom:16px">
-    <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標 <span class="badge">今日操作缺口</span></div>
-    <table>
-      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
-      <tbody id="qqqHoldingsBody"></tbody>
-    </table>
-  </div>
-
-  <!-- ── 再平衡 + 股息日曆（操作層面）── -->
-  <div class="grid-2" style="margin-bottom:16px">
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span>
-        <span style="margin-left:auto"><button id="rebalRefreshBtn" onclick="const b=this;b.textContent='↻';b.disabled=true;renderRebalancingPlan();renderDividendCalendar();setTimeout(()=>{b.textContent='↻ 更新';b.disabled=false},400)" style="font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 更新</button></span>
-      </div>
-      <div id="rebalancingDetail"></div>
-    </div>
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">📆 股息日曆 <span class="badge">各月預估配息收入</span></div>
-      <div id="dividendCalendarDetail"></div>
-    </div>
-  </div>
-
   <div class="card">
     <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
     <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
@@ -773,6 +747,32 @@
     </div>
     <div style="margin-top:8px">
       <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ── 分析師今日摘要 ── -->
+  <div id="analystSummary" style="margin-bottom:16px"></div>
+
+  <!-- ── 現有 QQQ 部位 vs 策略目標 ── -->
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-title">⚡ 現有 QQQ 部位 vs 策略目標 <span class="badge">今日操作缺口</span></div>
+    <table>
+      <thead><tr><th>商品</th><th>持股數</th><th>均價</th><th>現價</th><th>市值(USD)</th><th>損益</th><th>損益%</th><th>策略目標</th><th>缺口</th><th>建議動作</th></tr></thead>
+      <tbody id="qqqHoldingsBody"></tbody>
+    </table>
+  </div>
+
+  <!-- ── 再平衡 + 股息日曆（操作層面）── -->
+  <div class="grid-2" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">⚖️ 再平衡行動計劃 <span class="badge">具體操作建議</span>
+        <span style="margin-left:auto"><button id="rebalRefreshBtn" onclick="const b=this;b.textContent='↻';b.disabled=true;renderRebalancingPlan();renderDividendCalendar();setTimeout(()=>{b.textContent='↻ 更新';b.disabled=false},400)" style="font-size:11px;padding:2px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 更新</button></span>
+      </div>
+      <div id="rebalancingDetail"></div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">📆 股息日曆 <span class="badge">各月預估配息收入</span></div>
+      <div id="dividendCalendarDetail"></div>
     </div>
   </div>
 
