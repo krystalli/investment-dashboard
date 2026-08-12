@@ -4133,11 +4133,12 @@ async function syncSheets() {
       let yearHdrIdx = { pnl:-1, div:-1, lend:-1, total:-1 };
       let yearColIdx = -1;
       let inYearTable = false;
+      let yearTableDone = false; // 年度表解析完一次後永久關閉，避免後面月度表的「損益率」欄、持股名稱「XX股息」等字樣誤觸發重新進入
       const newYearly = [];
       histRows.forEach(row => {
         const cells = row.map(c => (c||'').trim());
         // 偵測年度表 header（含「損益」或「股息」關鍵字的行）
-        if (!inYearTable && cells.some(c => c.includes('損益') || c.includes('股息') || c.includes('股利'))) {
+        if (!inYearTable && !yearTableDone && cells.some(c => c.includes('損益') || c.includes('股息') || c.includes('股利'))) {
           const hi = cells.map(c => c.toLowerCase());
           yearHdrIdx = {
             pnl:   colMatch(hi, ['損益','realized','獲利']),
@@ -4153,7 +4154,7 @@ async function syncSheets() {
         // 只在「年份」欄（固定欄位）找年份格，避免月度表日期格誤判、資料表串跑
         const yearCellRaw = yearColIdx >= 0 ? cells[yearColIdx] : cells.find(c => extractYear(c) !== null);
         const y = extractYear(yearCellRaw);
-        if (!y) { inYearTable = false; return; } // 離開年度表區塊，停止解析
+        if (!y) { inYearTable = false; yearTableDone = true; return; } // 離開年度表區塊，永久停止解析
         const get = idx => idx >= 0 ? (parseNum(cells[idx]) || 0) : 0;
         const pnl   = get(yearHdrIdx.pnl);
         const div   = get(yearHdrIdx.div);
