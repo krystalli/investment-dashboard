@@ -695,13 +695,47 @@
   <!-- ── Tab 1: QQQ 動態策略 ── -->
   <div id="strat-qqq">
 
-  <!-- ── QQQ 訊號快覽 ── -->
+  <!-- ── QQQ 訊號快覽 + 目前建議配置（左欄）／ 關鍵數值（右欄）── -->
   <div class="grid-2" style="margin-bottom:16px;align-items:start">
-    <div id="signalPanel" class="signal-panel hold" style="display:flex;flex-direction:column;justify-content:center;gap:2px">
-      <div class="signal-label">QQQ 動態策略訊號</div>
-      <div id="signalText" class="signal-big hold">HOLD ◆</div>
-      <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+    <div>
+      <div id="signalPanel" class="signal-panel hold" style="display:flex;flex-direction:column;justify-content:center;gap:2px">
+        <div class="signal-label">QQQ 動態策略訊號</div>
+        <div id="signalText" class="signal-big hold">HOLD ◆</div>
+        <div class="signal-label" id="signalDesc">Nasdaq 低於 SMA200×1.04，槓桿部位暫不啟動</div>
+      </div>
+
+      <div class="card" style="margin-bottom:0">
+        <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
+        <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
+          <div class="alert-icon" id="allocAlertIcon">⏸</div>
+          <div id="allocAlertText">QQQ 價格載入中…</div>
+        </div>
+        <div class="gauge-row">
+          <div class="gauge-item">
+            <div class="gauge-pct" style="color:var(--blue)">60%</div>
+            <div class="gauge-name">QQQ ✅ 持有</div>
+            <div class="gauge-amount">$18,000</div>
+            <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
+          </div>
+          <div class="gauge-item" id="qldGauge" style="opacity:0.4">
+            <div class="gauge-pct" style="color:var(--purple)">30%</div>
+            <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
+            <div class="gauge-amount">$9,000</div>
+            <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+          </div>
+          <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
+            <div class="gauge-pct" style="color:var(--orange)">10%</div>
+            <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
+            <div class="gauge-amount">$3,000</div>
+            <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
+          </div>
+        </div>
+        <div style="margin-top:8px">
+          <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
+        </div>
+      </div>
     </div>
+
     <div class="card" style="margin-bottom:0">
       <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
       <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
@@ -716,37 +750,6 @@
       <div class="summary-row"><span class="summary-key">週MA20</span><span id="nasdaqMA20" style="font-family:monospace">—</span></div>
       <div class="summary-row"><span class="summary-key">週MA52</span><span id="nasdaqMA52" style="font-family:monospace">—</span></div>
       <div class="summary-row"><span class="summary-key">MACD</span><span id="nasdaqMACD" style="font-family:monospace">—</span></div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-title">💰 目前建議配置 <span class="badge" id="allocBadge">$30,000 USD · 訊號：等待</span></div>
-    <div class="alert alert-warn" id="allocAlert" style="margin-bottom:12px">
-      <div class="alert-icon" id="allocAlertIcon">⏸</div>
-      <div id="allocAlertText">QQQ 價格載入中…</div>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge-item">
-        <div class="gauge-pct" style="color:var(--blue)">60%</div>
-        <div class="gauge-name">QQQ ✅ 持有</div>
-        <div class="gauge-amount">$18,000</div>
-        <div id="qqqSharesCalc" style="font-size:11px;color:var(--text2);margin-top:4px">≈ 32.2 股 @$558</div>
-      </div>
-      <div class="gauge-item" id="qldGauge" style="opacity:0.4">
-        <div class="gauge-pct" style="color:var(--purple)">30%</div>
-        <div class="gauge-name" id="qldName">QLD ⏸ 待機</div>
-        <div class="gauge-amount">$9,000</div>
-        <div id="qldText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-      </div>
-      <div class="gauge-item" id="tqqqGauge" style="opacity:0.4">
-        <div class="gauge-pct" style="color:var(--orange)">10%</div>
-        <div class="gauge-name" id="tqqqName">TQQQ ⏸ 待機</div>
-        <div class="gauge-amount">$3,000</div>
-        <div id="tqqqText" style="font-size:11px;color:var(--text2);margin-top:4px">條件未達，暫不建倉</div>
-      </div>
-    </div>
-    <div style="margin-top:8px">
-      <div class="chart-wrap"><canvas id="chartQQQAlloc"></canvas></div>
     </div>
   </div>
 
