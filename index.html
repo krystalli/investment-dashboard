@@ -2217,7 +2217,7 @@ async function analyzeThesis(key, name, pct, mv, isUS) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 1500,
         temperature: 0.5,
         messages: [
@@ -2319,7 +2319,7 @@ ${marketCtx}
     const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({ model:'llama-3.3-70b-versatile', max_tokens:1500, temperature:0.3,
+      body: JSON.stringify({ model:'llama-3.1-8b-instant', max_tokens:1500, temperature:0.3,
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
@@ -3454,7 +3454,7 @@ ${techContext}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 1200,
         temperature: 0.3,
         response_format: { type: 'json_object' },
@@ -3751,7 +3751,7 @@ ${stockList}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 800,
         temperature: 0.5,
         messages: [{ role: 'user', content: prompt }]
@@ -4404,7 +4404,7 @@ async function callGeminiAPI(question, apiKey) {
       'Authorization': `Bearer ${apiKey}`
     },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-3.1-8b-instant',
       max_tokens: 1024,
       messages: [
         { role: 'system', content: buildPortfolioContext() },
@@ -4612,7 +4612,7 @@ ${ctx}`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 700,
         temperature: 0.7,
         messages: [
@@ -4646,7 +4646,7 @@ ${ctx}`,
 
   const timeStr = new Date().toLocaleTimeString('zh-TW');
   setStatus(`✅ 分析完成 ${timeStr}`, 'var(--green)');
-  if (hint) { hint.textContent = `Groq llama-3.3-70b · ${timeStr}`; hint.style.color='var(--text2)'; }
+  if (hint) { hint.textContent = `Groq llama-3.1-8b · ${timeStr}`; hint.style.color='var(--text2)'; }
   btn.disabled = false; btn.textContent = '🔄 重新分析';
 }
 
@@ -6231,7 +6231,7 @@ ${watchLines.join('\n')}
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 1500,
         temperature: 0.3,
         response_format: { type: 'json_object' },
