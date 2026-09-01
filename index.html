@@ -419,7 +419,7 @@
     <table>
       <thead>
         <tr>
-          <th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th>
+          <th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th>
         </tr>
       </thead>
       <tbody id="twHoldTable"></tbody>
@@ -429,6 +429,7 @@
 
   <div class="card">
     <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">已賣出 + 建議清單</span></div>
+    <div id="twWatchSummary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="overflow-x:auto">
     <table>
       <thead>
@@ -827,6 +828,7 @@
       <div class="alert-icon">💡</div>
       <div>RSI／均線／MACD 為週線技術指標，法人買賣超僅台股有資料（美股顯示—）。訊號僅供輔助參考，非買賣建議。</div>
     </div>
+    <div id="holdingsTechSummary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="overflow-x:auto">
     <table>
       <thead><tr><th>標的</th><th>市場</th><th>現價</th><th>週RSI</th><th>週MA20</th><th>週MA52</th><th>MACD</th><th>量比</th><th>法人買賣超</th><th>訊號</th></tr></thead>
@@ -2004,6 +2006,7 @@ function rerenderCharts() {
 function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
   tbody.innerHTML = '';
+  const twTotalMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
     // 總成本固定用股數×均價（Sheet 的支出欄含累計進出，不適合當成本）
     const cost = Math.round((s.shares||0) * (s.avg||0));
@@ -2011,6 +2014,9 @@ function renderTwStocks() {
     const pnl  = s.pnl != null ? s.pnl : (s.mv - cost);
     // 損益率：由損益金額 / 成本算出，確保與金額一致
     const pct  = cost > 0 ? pnl / cost * 100 : 0;
+    // 建議：即時依目前損益%與部位權重重算，確保跟持股狀態同步（而非同步當下的舊值）
+    const posWt = (s.mv || 0) / twTotalMV * 100;
+    const advisor = advisorRec(s, false, posWt);
     tbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
       <td style="font-family:monospace">${s.shares.toLocaleString()}</td>
@@ -2020,11 +2026,14 @@ function renderTwStocks() {
       <td style="font-family:monospace">$${Math.round(s.mv).toLocaleString()}</td>
       <td class="${pctCls(pnl)}" style="font-family:monospace">${pnl>=0?'+':''} $${Math.round(pnl).toLocaleString()}</td>
       <td class="${pctCls(pct)}">${pct>=0?'+':''}${pct.toFixed(2)}%</td>
+      <td>${recTag[advisor.rec] || recTag['HOLD']}</td>
+      <td style="color:var(--text2);font-size:11px;max-width:220px">${advisor.reason}</td>
     </tr>`;
   });
 
   const wbody = document.getElementById('twWatchTable');
-  TW_WATCH.forEach(s => {
+  const WATCH_PRIORITY = { BUY:0, WATCH:1, AVOID:2 };
+  [...TW_WATCH].sort((a,b) => (WATCH_PRIORITY[a.rec]??9) - (WATCH_PRIORITY[b.rec]??9)).forEach(s => {
     wbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
       <td>${s.name}</td>
@@ -2034,6 +2043,13 @@ function renderTwStocks() {
       <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
     </tr>`;
   });
+  const watchBuyCount = TW_WATCH.filter(s => s.rec === 'BUY').length;
+  const watchSummaryEl = document.getElementById('twWatchSummary');
+  if (watchSummaryEl) {
+    watchSummaryEl.textContent = watchBuyCount
+      ? `💡 顧問觀點：目前 ${watchBuyCount} 檔建議布局，優先參考排序在前的標的`
+      : '目前觀察清單無明確買進建議，建議續觀望';
+  }
 
   // TW KPI summary
   const totalMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
@@ -2398,6 +2414,17 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     return;
   }
 
+  // 顧問總覽：先給結論再看細節，仿真人投顧報告開頭
+  const exitN  = actionItems.filter(i => i.action === '出場').length;
+  const trimN  = actionItems.filter(i => i.action === '減碼').length;
+  const addN   = actionItems.filter(i => i.action === '加碼').length;
+  const triageParts = [
+    exitN ? `<span style="color:var(--red);font-weight:600">${exitN} 檔出場</span>` : '',
+    trimN ? `<span style="color:#e3671a;font-weight:600">${trimN} 檔減碼</span>` : '',
+    addN  ? `<span style="color:var(--green);font-weight:600">${addN} 檔加碼</span>` : '',
+  ].filter(Boolean).join('、');
+  const triageSummary = `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">📌 今日共 ${triageParts} 需留意，優先處理出場與減碼項目</div>`;
+
   // 規則引擎 rec → 中文標籤/色系/方向（用來跟 AI 建議對照）
   const RULE_LABEL = {
     BUY:  { text:'買進',     color:'var(--green)',  dir:1  },
@@ -2408,7 +2435,7 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
   };
   const AI_DIR = { '加碼':1, '持有':0, '減碼':-1, '出場':-1 };
 
-  c.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">` +
+  c.innerHTML = triageSummary + `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">` +
     actionItems.map(item => {
       const h  = allHoldings[item.idx] || {};
       const lv = item.levels || {};
@@ -5477,15 +5504,32 @@ function renderTopHoldings() {
     ? `<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度偏高</div></div>`
     : `<div class="alert alert-success"><div class="alert-icon">✅</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度合理</div></div>`;
 
+  // 顧問總評：點名最大部位，並提示是否需要調整
+  const advisorTake = (() => {
+    if (!top10.length) return '';
+    const top1 = top10[0];
+    const top1Pct = totalMV > 0 ? top1.mv / totalMV * 100 : 0;
+    if (top1Pct > 20) {
+      return `💡 顧問觀點：單一部位 ${top1.name} 佔比高達 ${top1Pct.toFixed(1)}%，集中風險偏高，建議設定分批減碼上限`;
+    }
+    const laggard = top10.find(i => i.pct_gain < -20);
+    if (laggard) {
+      return `💡 顧問觀點：前10大中 ${laggard.name} 虧損 ${laggard.pct_gain.toFixed(1)}%，建議重新檢視持有邏輯是否仍成立`;
+    }
+    return `💡 顧問觀點：前10大持倉權重與績效均在合理範圍，維持現有配置`;
+  })();
+
   el.innerHTML = `
     ${concAlert}
+    <div style="font-size:12px;color:var(--text2);margin:10px 0">${advisorTake}</div>
     ${recLegend}
     <div style="overflow-x:auto;margin-top:10px">
       <table>
         <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th><th>建議</th><th>分析師備註</th></tr></thead>
-        <tbody>${rows}</tbody>
+        <tbody id="topHoldingsBody">${rows}</tbody>
       </table>
     </div>`;
+  makeTableSortable('topHoldingsBody');
 }
 
 function renderCorrelationMatrix(corrData) {
@@ -5803,12 +5847,16 @@ async function renderHoldingsTechChips() {
 
   const fmtChip = n => (n >= 0 ? '+' : '') + Math.round(n/1000) + '千張';
 
+  let overboughtN = 0, oversoldN = 0, bearishN = 0;
   body.innerHTML = holdings.map((h, i) => {
     const ind = indResults[i].status === 'fulfilled' ? indResults[i].value : null;
     const chips = h.market === 'TW' ? chipsMap[h.key] : null;
     const chipsStr = h.market === 'TW'
       ? (chips ? `外資${fmtChip(chips.foreign)} 投信${fmtChip(chips.trust)}` : '—')
       : '<span style="color:var(--text3)">僅台股</span>';
+    if (ind?.rsi != null && ind.rsi > 72) overboughtN++;
+    if (ind?.rsi != null && ind.rsi < 30) oversoldN++;
+    if (ind?.ma20 && h.price < ind.ma20 && ind.macdDir === '看空') bearishN++;
     return `<tr>
       <td>${h.key}${h.market === 'TW' && h.name ? ' ' + h.name : ''}</td>
       <td>${h.market === 'TW' ? '🇹🇼' : '🇺🇸'}</td>
@@ -5822,6 +5870,18 @@ async function renderHoldingsTechChips() {
       <td>${techSignalTag(ind)}</td>
     </tr>`;
   }).join('');
+
+  const summaryEl = document.getElementById('holdingsTechSummary');
+  if (summaryEl) {
+    const parts = [];
+    if (overboughtN) parts.push(`${overboughtN} 檔 RSI 超買`);
+    if (oversoldN)   parts.push(`${oversoldN} 檔 RSI 超賣`);
+    if (bearishN)    parts.push(`${bearishN} 檔跌破MA20且MACD看空`);
+    summaryEl.innerHTML = parts.length
+      ? `💡 顧問觀點：${parts.join('、')}，建議優先檢視訊號欄標紅的標的`
+      : '💡 顧問觀點：目前持股技術面無明顯極端訊號';
+  }
+  makeTableSortable('holdingsTechChipsBody');
 }
 
 // ── QQQ 週線技術面確認（獨立於 Groq API Key，隨時可見）──
