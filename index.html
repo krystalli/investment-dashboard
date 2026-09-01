@@ -821,21 +821,6 @@
   <div class="kpi-grid" id="riskKpiGrid" style="margin-bottom:8px"></div>
   <div id="riskKpiExplain" style="margin-bottom:16px"></div>
 
-  <!-- Level 1: 持股技術面 + 籌碼動向 -->
-  <div class="card">
-    <div class="card-title">🔬 持股技術面 + 籌碼動向 <span class="badge">週線指標 · 規則判斷，非 AI</span></div>
-    <div class="alert alert-info" style="margin-bottom:10px">
-      <div class="alert-icon">💡</div>
-      <div>RSI／均線／MACD 為週線技術指標，法人買賣超僅台股有資料（美股顯示—）。訊號僅供輔助參考，非買賣建議。</div>
-    </div>
-    <div id="holdingsTechSummary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
-    <div style="overflow-x:auto">
-    <table>
-      <thead><tr><th>標的</th><th>市場</th><th>現價</th><th>週RSI</th><th>週MA20</th><th>週MA52</th><th>MACD</th><th>量比</th><th>法人買賣超</th><th>訊號</th></tr></thead>
-      <tbody id="holdingsTechChipsBody"><tr><td colspan="10" style="color:var(--text2);text-align:center;padding:16px">載入中…</td></tr></tbody>
-    </table>
-    </div>
-  </div>
 
   <!-- Level 1: Benchmark Comparison -->
   <div class="card">
@@ -1109,6 +1094,22 @@ try {
 } catch(e) {}
 function saveThesis() {
   try { localStorage.setItem('inv_thesis', JSON.stringify(THESIS_DATA)); } catch(e) {}
+}
+
+// 統一持股分析結果（key: 股票代號/代碼，value: { action, status, alert, date }）
+// 由 runHoldingsAnalysis() 產生（整合技術面+籌碼+集中度權重+AI判斷），供台股持倉分析表格直接讀取顯示
+let AI_HOLDINGS_MAP = {};
+try {
+  const _a = localStorage.getItem('inv_ai_holdings_map');
+  if (_a) AI_HOLDINGS_MAP = JSON.parse(_a) || {};
+} catch(e) {}
+function updateAIHoldingsMap(allHoldings, allResults, todayKey) {
+  allResults.forEach(r => {
+    const h = allHoldings[r.idx];
+    if (!h) return;
+    AI_HOLDINGS_MAP[h.key] = { action: r.action, status: r.status || '', alert: r.alert || '', date: todayKey };
+  });
+  try { localStorage.setItem('inv_ai_holdings_map', JSON.stringify(AI_HOLDINGS_MAP)); } catch(e) {}
 }
 
 // Taiwan stock holdings (代號, 名稱, 持股, 均價, 現價, 未實現%, 市值)
@@ -2003,10 +2004,19 @@ function rerenderCharts() {
 }
 
 // ─────── TAIWAN STOCKS ───────
+// 統一分析結果（技術面+籌碼+集中度權重+AI）的建議標籤，跟 recTag 視覺風格一致
+const AI_ACTION_TAG = {
+  '加碼': '<span class="rec-buy">▲ 加碼</span>',
+  '持有': '<span class="rec-hold">◆ 持有</span>',
+  '減碼': '<span class="rec-sell">▼ 減碼</span>',
+  '出場': '<span class="rec-sell">⛔ 出場</span>',
+};
+
 function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
   tbody.innerHTML = '';
   const twTotalMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
+  const todayKey = new Date().toLocaleDateString('zh-TW');
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
     // 總成本固定用股數×均價（Sheet 的支出欄含累計進出，不適合當成本）
     const cost = Math.round((s.shares||0) * (s.avg||0));
@@ -2014,9 +2024,22 @@ function renderTwStocks() {
     const pnl  = s.pnl != null ? s.pnl : (s.mv - cost);
     // 損益率：由損益金額 / 成本算出，確保與金額一致
     const pct  = cost > 0 ? pnl / cost * 100 : 0;
-    // 建議：即時依目前損益%與部位權重重算，確保跟持股狀態同步（而非同步當下的舊值）
-    const posWt = (s.mv || 0) / twTotalMV * 100;
-    const advisor = advisorRec(s, false, posWt);
+
+    // 建議：優先用統一分析結果（技術面+籌碼+集中度+AI 綜合判斷，來自「操作建議」的同一份分析），
+    // 尚未跑過 AI 分析（無 API Key 或今天還沒分析）時，退回規則引擎即時計算
+    const ai = AI_HOLDINGS_MAP[s.code];
+    let recHtml, reasonHtml;
+    if (ai) {
+      recHtml = AI_ACTION_TAG[ai.action] || recTag['HOLD'];
+      const stale = ai.date !== todayKey ? `<span style="color:var(--text3);margin-right:3px">🕐${ai.date}</span>` : `<span style="color:var(--blue);margin-right:3px">🤖</span>`;
+      reasonHtml = `${stale}${ai.status || ''}${ai.alert ? ` · ⚠️${ai.alert}` : ''}`;
+    } else {
+      const posWt = (s.mv || 0) / twTotalMV * 100;
+      const advisor = advisorRec(s, false, posWt);
+      recHtml = recTag[advisor.rec] || recTag['HOLD'];
+      reasonHtml = advisor.reason;
+    }
+
     tbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span> <span style="font-size:11px;color:var(--text2)">${s.name}</span></td>
       <td style="font-family:monospace">${s.shares.toLocaleString()}</td>
@@ -2026,8 +2049,8 @@ function renderTwStocks() {
       <td style="font-family:monospace">$${Math.round(s.mv).toLocaleString()}</td>
       <td class="${pctCls(pnl)}" style="font-family:monospace">${pnl>=0?'+':''} $${Math.round(pnl).toLocaleString()}</td>
       <td class="${pctCls(pct)}">${pct>=0?'+':''}${pct.toFixed(2)}%</td>
-      <td>${recTag[advisor.rec] || recTag['HOLD']}</td>
-      <td style="color:var(--text2);font-size:11px;max-width:220px">${advisor.reason}</td>
+      <td>${recHtml}</td>
+      <td style="color:var(--text2);font-size:11px;max-width:220px">${reasonHtml}</td>
     </tr>`;
   });
 
@@ -2269,10 +2292,12 @@ async function runHoldingsAnalysis() {
     const pnl  = h.pnl ?? null;
     return (pnl != null && cost > 0) ? pnl / cost * 100 : (h.pct ?? 0);
   };
+  // 持倉集中度（佔 台股+美股 總市值權重，前10大集中度分析原本的算法併入此處）
+  const combinedTotalMV = TW_HOLD.reduce((s,h)=>s+(h.mv||0),0) + [...US_MAIN,...US_ROY].reduce((s,h)=>s+(h.mv||0),0) * USD_TWD;
   const allHoldings = [
-    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:calcPct(h,false), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW', ruleRec:h.rec||null })),
-    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:calcPct(h,true), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US', ruleRec:h.rec||null })),
-    ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, pnl:c.pnl??null, avg:c.avg, price:c.price, type:'CRYPTO', ruleRec:c.rec||null })),
+    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, pct:calcPct(h,false), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'TW', ruleRec:h.rec||null, wt: combinedTotalMV>0 ? (h.mv||0)/combinedTotalMV*100 : null })),
+    ...[...US_MAIN,...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, pct:calcPct(h,true), pnl:h.pnl??null, avg:h.avg, price:h.price, type:'US', ruleRec:h.rec||null, wt: combinedTotalMV>0 ? (h.mv||0)*USD_TWD/combinedTotalMV*100 : null })),
+    ...CRYPTO.filter(c => (c.mv||0) > 0).map(c => ({ key:c.sym, name:c.name, pct:c.pct??0, pnl:c.pnl??null, avg:c.avg, price:c.price, type:'CRYPTO', ruleRec:c.rec||null, wt:null })),
   ];
   if (SHEET_ALLOC.ready && SHEET_ALLOC.binance && !allHoldings.some(h => h.type==='CRYPTO')) {
     const mv = SHEET_ALLOC.binance, cost = SHEET_ALLOC.binance_c||0;
@@ -2287,7 +2312,11 @@ async function runHoldingsAnalysis() {
 
   // 讀快取
   const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
-  if (cached?.date === todayKey) { renderHoldingsAnalysis(allHoldings, cached.results); return; }
+  if (cached?.date === todayKey) {
+    updateAIHoldingsMap(allHoldings, cached.results, todayKey);
+    renderHoldingsAnalysis(allHoldings, cached.results);
+    return;
+  }
 
   setMsg('📡 抓取週線資料…');
   const techData = await buildTechLines(allHoldings);
@@ -2295,9 +2324,10 @@ async function runHoldingsAnalysis() {
 
   const toLine = (h, globalIdx) => {
     const p = `${h.pct>=0?'+':''}${h.pct.toFixed(1)}%`;
+    const wtStr = h.wt != null ? ` 佔組合${h.wt.toFixed(1)}%` : '';
     let base = '';
-    if (h.type==='TW') base = `${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}`;
-    else if (h.type==='US') base = `${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}`;
+    if (h.type==='TW') base = `${h.key}(${h.name}) 台股 均價$${h.avg?.toFixed(0)||'?'} 現價$${h.price?.toFixed(0)||'?'} ${p}${wtStr}`;
+    else if (h.type==='US') base = `${h.key} 美股 均價$${h.avg?.toFixed(2)||'?'} 現價$${h.price?.toFixed(2)||'?'} ${p}${wtStr}`;
     else base = `${h.key}(${h.name||''}) 加密幣 ${p}`;
     return techData[globalIdx]?.techLine ? base + '\n' + techData[globalIdx].techLine : base;
   };
@@ -2335,6 +2365,11 @@ ${marketCtx}
 - 已獲利 >80%：即使技術面續強，也應優先考慮「持有」或小幅「減碼」鎖利，避免無腦「加碼」追高
 - 已虧損 >30%：即使技術面止跌，若基本面未同步好轉，「持有」比「加碼」更保守合理
 - 獲利/虧損在 ±30% 內：以技術面＋基本面為主要依據，損益不是決定性因素
+
+持倉集中度（佔投資組合權重，已在每筆資料中標示）也要納入判斷，避免建議加碼已過度集中的部位：
+- 權重 >20%：即使技術/基本面續強，也不建議「加碼」，最多「持有」，並可考慮「減碼」分散風險
+- 權重 10-20%：加碼需更嚴謹的理由（趨勢與基本面都明確強勁）才成立
+- 權重 <10%：正常依技術＋基本面判斷，不受集中度限制
 
 禁止因「缺乏資料」就一律給持有；禁止 action 全部相同。`;
 
@@ -2374,6 +2409,7 @@ ${marketCtx}
     } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
   }
   localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
+  updateAIHoldingsMap(allHoldings, allResults, todayKey);
   renderHoldingsAnalysis(allHoldings, allResults);
 }
 
@@ -5460,11 +5496,6 @@ function renderTopHoldings() {
   const rows = top10.map((item, i) => {
     const pct = totalMV > 0 ? item.mv / totalMV * 100 : 0;
     cumPct += pct;
-    const isTW = item.region === '台股';
-    const mockS = isTW ? { code: item.code, pct: item.pct_gain } : { sym: item.code, pct: item.pct_gain };
-    const ar = advisorRec(mockS, !isTW, pct);
-    const recColors = { HOLD:'var(--blue)', ADD:'var(--green)', TRIM:'var(--yellow)', EVAL:'var(--orange)', STOP:'var(--red)', SELL:'var(--red)' };
-    const recBadge = `<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${recColors[ar.rec]||'var(--text2)'};color:#fff;white-space:nowrap">${ar.rec}</span>`;
     return `<tr>
       <td style="color:var(--text2);font-size:12px">${i + 1}</td>
       <td><span class="ticker">${item.code}</span></td>
@@ -5481,22 +5512,8 @@ function renderTopHoldings() {
       </td>
       <td style="font-size:11px;color:var(--text2)">${cumPct.toFixed(1)}%</td>
       <td class="${item.pct_gain >= 0 ? 'up' : 'down'}">${item.pct_gain >= 0 ? '+' : ''}${item.pct_gain.toFixed(1)}%</td>
-      <td>${recBadge}</td>
-      <td style="color:var(--text2);font-size:11px;max-width:180px">${ar.reason}</td>
     </tr>`;
   }).join('');
-
-  const recLegend = `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;padding:10px 12px;background:var(--surface2);border-radius:8px;font-size:11px;color:var(--text2)">
-      <span style="font-weight:600;color:var(--text);margin-right:4px">建議說明：</span>
-      <span><span style="background:var(--green);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">ADD</span> 加碼買進</span>
-      <span><span style="background:var(--blue);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">HOLD</span> 持有不動</span>
-      <span><span style="background:var(--yellow);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">TRIM</span> 分批減碼獲利了結</span>
-      <span><span style="background:var(--orange);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">EVAL</span> 重新評估，考慮停損</span>
-      <span><span style="background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">STOP</span> 執行停損出場</span>
-      <span><span style="background:var(--red);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px">SELL</span> 認賠賣出</span>
-      <span style="margin-left:8px">⚠️ 佔比≥15%的負面部位會自動升級緊急程度</span>
-    </div>`;
 
   const concAlert = concPct > 80
     ? `<div class="alert alert-danger"><div class="alert-icon">🔴</div><div>前10大持倉佔比 ${concPct.toFixed(0)}%，集中度極高</div></div>`
@@ -5522,10 +5539,10 @@ function renderTopHoldings() {
   el.innerHTML = `
     ${concAlert}
     <div style="font-size:12px;color:var(--text2);margin:10px 0">${advisorTake}</div>
-    ${recLegend}
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">個股操作建議請見「持倉」頁台股持倉分析表 / 今日頁操作建議卡片（同一套整合分析）</div>
     <div style="overflow-x:auto;margin-top:10px">
       <table>
-        <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th><th>建議</th><th>分析師備註</th></tr></thead>
+        <thead><tr><th>#</th><th>代號</th><th>名稱</th><th>市場</th><th>市值</th><th>佔比</th><th>累計佔比</th><th>損益%</th></tr></thead>
         <tbody id="topHoldingsBody">${rows}</tbody>
       </table>
     </div>`;
@@ -5812,78 +5829,6 @@ function renderRebalancingPlan() {
     </div>`;
 }
 
-// ── 持股技術面 + 籌碼動向（重用 fetchYahooHistory/calcIndicators/fetchTWSEChips）──
-function techSignalTag(ind) {
-  if (!ind) return '<span class="tag" style="background:var(--surface3);color:var(--text3)">資料不足</span>';
-  if (ind.rsi != null && ind.rsi > 72) return '<span class="tag tag-red">⚠️ 超買</span>';
-  if (ind.rsi != null && ind.rsi < 30) return '<span class="tag tag-green">⚠️ 超賣</span>';
-  if (ind.ma20 && ind.price > ind.ma20 && ind.macdDir === '看多') return '<span class="tag tag-green">▲ 多頭</span>';
-  if (ind.ma20 && ind.price < ind.ma20 && ind.macdDir === '看空') return '<span class="tag tag-red">▼ 空頭</span>';
-  return '<span class="tag tag-yellow">◆ 中性</span>';
-}
-
-async function renderHoldingsTechChips() {
-  const body = document.getElementById('holdingsTechChipsBody');
-  if (!body) return;
-
-  const holdings = [
-    ...TW_HOLD.filter(h => (h.mv||0) > 0).map(h => ({ key:h.code, name:h.name, market:'TW', price:h.price, avg:h.avg, mv:h.mv||0 })),
-    ...[...US_MAIN, ...US_ROY].filter(h => (h.mv||0) > 0).map(h => ({ key:h.sym, name:h.sym, market:'US', price:h.price, avg:h.avg, mv:h.mv||0 })),
-  ];
-  holdings.sort((a,b) => a.market !== b.market ? (a.market === 'TW' ? -1 : 1) : (b.mv - a.mv));
-
-  if (!holdings.length) {
-    body.innerHTML = '<tr><td colspan="10" style="color:var(--text2);text-align:center;padding:16px">尚無持股資料</td></tr>';
-    return;
-  }
-
-  const [indResults, chipsMap] = await Promise.all([
-    Promise.allSettled(holdings.map(h => {
-      const sym = h.market === 'TW' ? twYahooSym(h.key) : h.key;
-      return fetchYahooHistory(sym).then(hist => hist ? calcIndicators(hist, h.avg) : null);
-    })),
-    fetchTWSEChips(),
-  ]);
-
-  const fmtChip = n => (n >= 0 ? '+' : '') + Math.round(n/1000) + '千張';
-
-  let overboughtN = 0, oversoldN = 0, bearishN = 0;
-  body.innerHTML = holdings.map((h, i) => {
-    const ind = indResults[i].status === 'fulfilled' ? indResults[i].value : null;
-    const chips = h.market === 'TW' ? chipsMap[h.key] : null;
-    const chipsStr = h.market === 'TW'
-      ? (chips ? `外資${fmtChip(chips.foreign)} 投信${fmtChip(chips.trust)}` : '—')
-      : '<span style="color:var(--text3)">僅台股</span>';
-    if (ind?.rsi != null && ind.rsi > 72) overboughtN++;
-    if (ind?.rsi != null && ind.rsi < 30) oversoldN++;
-    if (ind?.ma20 && h.price < ind.ma20 && ind.macdDir === '看空') bearishN++;
-    return `<tr>
-      <td>${h.key}${h.market === 'TW' && h.name ? ' ' + h.name : ''}</td>
-      <td>${h.market === 'TW' ? '🇹🇼' : '🇺🇸'}</td>
-      <td>${h.price != null ? '$' + (+h.price).toFixed(2) : '—'}</td>
-      <td>${ind?.rsi != null ? ind.rsi : '—'}</td>
-      <td>${ind?.ma20 != null ? (h.price > ind.ma20 ? '站上 ' : '跌破 ') + '$' + ind.ma20 : '—'}</td>
-      <td>${ind?.ma52 != null ? (h.price > ind.ma52 ? '站上 ' : '跌破 ') + '$' + ind.ma52 : '—'}</td>
-      <td>${ind?.macdDir || '—'}</td>
-      <td>${ind?.volRatio != null ? ind.volRatio + 'x' : '—'}</td>
-      <td style="font-size:12px">${chipsStr}</td>
-      <td>${techSignalTag(ind)}</td>
-    </tr>`;
-  }).join('');
-
-  const summaryEl = document.getElementById('holdingsTechSummary');
-  if (summaryEl) {
-    const parts = [];
-    if (overboughtN) parts.push(`${overboughtN} 檔 RSI 超買`);
-    if (oversoldN)   parts.push(`${oversoldN} 檔 RSI 超賣`);
-    if (bearishN)    parts.push(`${bearishN} 檔跌破MA20且MACD看空`);
-    summaryEl.innerHTML = parts.length
-      ? `💡 顧問觀點：${parts.join('、')}，建議優先檢視訊號欄標紅的標的`
-      : '💡 顧問觀點：目前持股技術面無明顯極端訊號';
-  }
-  makeTableSortable('holdingsTechChipsBody');
-}
-
 // ── QQQ 週線技術面確認（獨立於 Groq API Key，隨時可見）──
 async function updateQQQTechConfirm() {
   const rsiEl = document.getElementById('nasdaqRSI'), ma20El = document.getElementById('nasdaqMA20'),
@@ -5917,7 +5862,6 @@ function initRiskPage() {
   renderCorrelationMatrix(corrData);
   renderDividendCalendar();
   renderRebalancingPlan();
-  renderHoldingsTechChips();
   updateQQQTechConfirm();
 
   // Show last-fetch time label
