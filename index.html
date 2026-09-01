@@ -736,25 +736,27 @@
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:0">
-      <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
-      <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
-      <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
-      <div class="summary-row"><span class="summary-key">進場門檻 (SMA200×1.04)</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
-      <div class="summary-row"><span class="summary-key">退場門檻 (SMA200×0.93)</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
-      <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
-      <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
-      <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
-      <div style="margin:10px 0 6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">🔬 技術面確認（週線，輔助判斷，非進出場依據）</div>
-      <div class="summary-row"><span class="summary-key">週RSI</span><span id="nasdaqRSI" style="font-family:monospace">—</span></div>
-      <div class="summary-row"><span class="summary-key">週MA20</span><span id="nasdaqMA20" style="font-family:monospace">—</span></div>
-      <div class="summary-row"><span class="summary-key">週MA52</span><span id="nasdaqMA52" style="font-family:monospace">—</span></div>
-      <div class="summary-row"><span class="summary-key">MACD</span><span id="nasdaqMACD" style="font-family:monospace">—</span></div>
+    <div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">📊 關鍵數值 <span class="badge">QQQ ETF</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ 現價</span><span id="nasdaqPrice" style="color:var(--blue);font-family:monospace">$558.28</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ SMA200</span><span id="nasdaqSMA" style="color:var(--text);font-family:monospace">$594.20</span></div>
+        <div class="summary-row"><span class="summary-key">進場門檻 (SMA200×1.04)</span><span id="nasdaqEntry" style="color:var(--green);font-family:monospace">$617.96</span></div>
+        <div class="summary-row"><span class="summary-key">退場門檻 (SMA200×0.93)</span><span id="nasdaqExit" style="color:var(--red);font-family:monospace">$552.61</span></div>
+        <div class="summary-row"><span class="summary-key">距進場門檻</span><span id="nasdaqDiff" class="down">-$59.68 (-9.7%)</span></div>
+        <div class="summary-row"><span class="summary-key">QQQ vs SMA200</span><span id="nasdaqVsSMA" class="down">-6.0%（低於SMA200）</span></div>
+        <div class="summary-row"><span class="summary-key">訊號狀態</span><span id="nasdaqSignal" class="tag tag-yellow">⏸ 等待進場</span></div>
+        <div style="margin:10px 0 6px;font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:8px">🔬 技術面確認（週線，輔助判斷，非進出場依據）</div>
+        <div class="summary-row"><span class="summary-key">週RSI</span><span id="nasdaqRSI" style="font-family:monospace">—</span></div>
+        <div class="summary-row"><span class="summary-key">週MA20</span><span id="nasdaqMA20" style="font-family:monospace">—</span></div>
+        <div class="summary-row"><span class="summary-key">週MA52</span><span id="nasdaqMA52" style="font-family:monospace">—</span></div>
+        <div class="summary-row"><span class="summary-key">MACD</span><span id="nasdaqMACD" style="font-family:monospace">—</span></div>
+      </div>
+
+      <!-- ── 分析師今日摘要 ── -->
+      <div id="analystSummary"></div>
     </div>
   </div>
-
-  <!-- ── 分析師今日摘要 ── -->
-  <div id="analystSummary" style="margin-bottom:16px"></div>
 
   <!-- ── 現有 QQQ 部位 vs 策略目標 ── -->
   <div class="card" style="margin-bottom:16px">
