@@ -484,7 +484,7 @@
     <div class="card-title">🇺🇸 美股持倉 — 主帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr></thead>
       <tbody id="usMainTable"></tbody>
     </table>
     </div>
@@ -494,7 +494,7 @@
     <div class="card-title">🏦 美股持倉 — 複委託帳戶</div>
     <div style="overflow-x:auto">
     <table>
-      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th></tr></thead>
+      <thead><tr><th>股票</th><th>持股</th><th>均價</th><th>現價</th><th>總成本</th><th>市值</th><th>損益</th><th>損益%</th><th>建議</th><th>理由</th></tr></thead>
       <tbody id="usRoyTable"></tbody>
     </table>
     </div>
@@ -2113,6 +2113,7 @@ function renderTwStocks() {
 
 // ─────── US STOCKS ───────
 function renderUsStocks() {
+  const todayKey = new Date().toLocaleDateString('zh-TW');
   const render = (data, tbodyId) => {
     const tbody = document.getElementById(tbodyId);
     tbody.innerHTML = '';
@@ -2123,6 +2124,17 @@ function renderUsStocks() {
         if (!s.reason) s.reason = a.reason;
         if (s.rec === 'HOLD' && a.rec !== 'HOLD') s.rec = a.rec;
       }
+      // 建議：優先用統一分析結果（跟台股持倉分析、操作建議同一套），否則退回規則引擎
+      const ai = AI_HOLDINGS_MAP[s.sym];
+      let recHtml, reasonHtml;
+      if (ai) {
+        recHtml = AI_ACTION_TAG[ai.action] || recTag['HOLD'];
+        const stale = ai.date !== todayKey ? `<span style="color:var(--text3);margin-right:3px">🕐${ai.date}</span>` : `<span style="color:var(--blue);margin-right:3px">🤖</span>`;
+        reasonHtml = `${stale}${ai.status || ''}${ai.alert ? ` · ⚠️${ai.alert}` : ''}`;
+      } else {
+        recHtml = recTag[s.rec] || recTag['HOLD'];
+        reasonHtml = s.reason || '';
+      }
       tbody.innerHTML += `<tr>
         <td><span class="ticker">${s.sym}</span></td>
         <td>${s.shares}</td>
@@ -2132,6 +2144,8 @@ function renderUsStocks() {
         <td style="font-family:monospace">$${s.mv.toLocaleString(undefined,{maximumFractionDigits:0})}</td>
         <td class="${pctCls(s.pnl)}" style="font-family:monospace">${s.pnl>=0?'+':''} $${s.pnl.toFixed(0)}</td>
         <td class="${pctCls(s.pct)}">${s.pct>=0?'+':''}${s.pct.toFixed(2)}%</td>
+        <td>${recHtml}</td>
+        <td style="color:var(--text2);font-size:11px;max-width:220px">${reasonHtml}</td>
       </tr>`;
     });
   };
