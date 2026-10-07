@@ -2904,9 +2904,15 @@ function buildTeamAnalysisContext() {
   const latest = MONTHLY[MONTHLY.length-1];
   const prev   = MONTHLY[MONTHLY.length-2];
   const qqqPos = allUS.find(s => s.sym==='QQQ');
-  // 台股持倉（確實持有）
-  const twHoldStr = TW_HOLD.length
-    ? TW_HOLD.map(h => `  ${h.name}(${h.code}): ${h.shares}股 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()} [${h.rec}]`).join('\n')
+  // 台股持倉（確實持有）— 取前15大市值 + 損益<-15% 的警示個股（最多20筆）
+  const twSorted = [...TW_HOLD].sort((a,b) => (b.mv||0) - (a.mv||0));
+  const top15 = twSorted.slice(0, 15);
+  const bigLoss = twSorted.slice(15).filter(h => (h.pct||0) < -15);
+  const twDisplay = [...top15, ...bigLoss].slice(0, 20);
+  const skippedCount = TW_HOLD.length - twDisplay.length;
+  const twHoldStr = twDisplay.length
+    ? twDisplay.map(h => `  ${h.name}(${h.code}): ${h.shares}股 均價${h.avg} 現價${h.price} 損益${h.pct?.toFixed(1)}% 市值NT$${(h.mv||0).toLocaleString()} [${h.rec}]`).join('\n')
+      + (skippedCount > 0 ? `\n  （另有${skippedCount}檔小部位略過）` : '')
     : '  （無資料，請先同步試算表）';
 
   // 台股觀察清單（未持有，評估是否買入）
@@ -3015,17 +3021,18 @@ async function runTeamAIAnalysis() {
 回覆格式：僅輸出以下JSON，不加任何其他文字或markdown符號：
 {"alex":"...","sophia":"...","max":"...","emma":"...","david":"...","ryan":"..."}
 
-每位顧問文字格式（用\\n換行，段落標題後直接換行接 1.）：
+每位顧問文字格式（用\\n換行，段落標題後直接換行接 1.，每段最多2條，必須簡潔）：
 📊 持倉分析：
-1. [分析持倉股票，附損益%]
-2. ...
+1. [最重要持倉，附損益%]
+2. [第二重要]
 
 💡 新投資機會：
-1. [推薦標的，附理由+目標價/進場區間]
-2. ...
+1. [推薦標的，附目標價/進場區間]
+2. [第二推薦]
 
 🎯 本週操作重點：
-1. [最具體的1-2個行動]
+1. [最具體的操作行動]
+2. [次要行動]
 
 各顧問專責：
 - alex：技術分析（趨勢、支撐壓力、K線、進出場時機）
@@ -3043,7 +3050,7 @@ ${buildTeamAnalysisContext()}`;
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
-        max_tokens: 3500,
+        max_tokens: 5000,
         temperature: 0.6,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -3057,11 +3064,23 @@ ${buildTeamAnalysisContext()}`;
     let advice;
     try { advice = JSON.parse(jsonStr); }
     catch(e) {
-      // JSON 解析失敗：把原始文字塞進第一個顧問卡顯示
-      const fallbackEl = document.getElementById('team-body-alex');
-      if (fallbackEl) fallbackEl.innerHTML = `<div class="team-section" style="grid-column:1/-1">
-        <div style="font-size:13px;line-height:1.8;white-space:pre-wrap">${escHtml(raw)}</div></div>`;
-      btn.disabled=false; btn.textContent='🔄 重新分析'; return;
+      // JSON 解析失敗：嘗試補全截斷的 JSON
+      let recovered = false;
+      try {
+        // 嘗試在最後一個完整 key 後補上結尾
+        const fixAttempt = jsonStr.replace(/,\s*"[^"]*":\s*"[^"]*$/, '').replace(/,?\s*$/, '') + '}';
+        advice = JSON.parse(fixAttempt);
+        recovered = true;
+      } catch(e2) { /* still failed */ }
+
+      if (!recovered) {
+        const fallbackEl = document.getElementById('team-body-alex');
+        if (fallbackEl) fallbackEl.innerHTML = `<div class="team-section" style="grid-column:1/-1">
+          <div style="color:var(--yellow);font-size:13px;margin-bottom:8px">⚠️ AI 回應被截斷（Token 不足），顯示原始內容：</div>
+          <div style="font-size:12px;line-height:1.7;white-space:pre-wrap;opacity:0.8">${escHtml(raw.slice(0, 2000))}${raw.length > 2000 ? '…（略）' : ''}</div></div>`;
+        setStatus('⚠️ 回應截斷，請重試', 'var(--yellow)');
+        btn.disabled=false; btn.textContent='🔄 重新分析'; return;
+      }
     }
 
     const advisors = [
