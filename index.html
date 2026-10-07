@@ -1093,74 +1093,92 @@ const STOCK_PROFILES = {
   'BOXX':  { type:'bond',    thesis:'現金替代品，短期國庫券策略，穩定持有' },
 };
 
-function advisorRec(s, isUS) {
+function advisorRec(s, isUS, posWt) {
   const code = isUS ? s.sym : s.code;
   const profile = STOCK_PROFILES[code] || {};
   const type = profile.type || 'unknown';
   const thesis = profile.thesis || '';
   const pct = s.pct || 0;
   const p = pct.toFixed(1);
+  posWt = posWt || 0;
+
+  const applyWt = (r) => {
+    if (posWt >= 15 && ['EVAL','STOP','SELL'].includes(r.rec)) {
+      r.rec = r.rec === 'EVAL' ? 'STOP' : r.rec;
+      r.reason = `【⚠️ 重大部位 ${posWt.toFixed(0)}%，優先處理】${r.reason}`;
+    } else if (posWt >= 10 && ['EVAL','STOP','SELL'].includes(r.rec)) {
+      r.reason = `【佔比 ${posWt.toFixed(0)}%，優先關注】${r.reason}`;
+    }
+    return r;
+  };
 
   // 債券 ETF — 降息環境持有，輕易不動
   if (type === 'bond') {
-    if (pct > 5)   return { rec: 'HOLD', reason: `${thesis}，降息環境利多，繼續持有領息待價差` };
-    if (pct > -5)  return { rec: 'HOLD', reason: `${thesis}，短期波動正常，持有等降息資本利得` };
-    if (pct > -15) return { rec: 'ADD',  reason: `${thesis}，跌幅 ${p}% 反而是加碼機會，降息後反彈` };
-    return             { rec: 'EVAL', reason: `${thesis}，跌幅 ${p}% 超預期，重新評估利率走向` };
+    if (pct > 5)   return applyWt({ rec: 'HOLD', reason: `${thesis}，降息環境利多，繼續持有領息待價差` });
+    if (pct > -5)  return applyWt({ rec: 'HOLD', reason: `${thesis}，短期波動正常，持有等降息資本利得` });
+    if (pct > -15) return applyWt({ rec: 'ADD',  reason: `${thesis}，跌幅 ${p}% 反而是加碼機會，降息後反彈` });
+    return         applyWt({ rec: 'EVAL', reason: `${thesis}，跌幅 ${p}% 超預期，重新評估利率走向` });
   }
 
   // 高息 ETF — 核心存股，逢低加碼
   if (type === 'div-etf') {
-    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利但月配息持續流入，核心存股不動` };
-    if (pct > -5)  return { rec: 'ADD',  reason: `${thesis}，持續定期定額，股息再投入複利加速` };
-    return             { rec: 'ADD',  reason: `${thesis}，下跌提升殖利率，逢低加碼更划算` };
+    if (pct > 30)  return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 獲利但月配息持續流入，核心存股不動` });
+    if (pct > -5)  return applyWt({ rec: 'ADD',  reason: `${thesis}，持續定期定額，股息再投入複利加速` });
+    return         applyWt({ rec: 'ADD',  reason: `${thesis}，下跌提升殖利率，逢低加碼更划算` });
   }
 
   // 寬基指數 ETF — 長期持有，大跌才加碼
   if (type === 'etf-tw' || type === 'etf-us') {
-    if (pct > 100) return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅獲利，可分批了結 20-30% 鎖利，保留核心` };
-    if (pct > 50)  return { rec: 'TRIM', reason: `${thesis}，${p}% 顯著獲利，考慮了結 15-20% 提高現金水位` };
-    if (pct > 0)   return { rec: 'HOLD', reason: `${thesis}，表現良好，長期持有勿追高` };
-    return             { rec: 'ADD',  reason: `${thesis}，指數逢跌是買點，加碼攤低成本` };
+    if (pct > 100) return applyWt({ rec: 'TRIM', reason: `${thesis}，${p}% 大幅獲利，可分批了結 20-30% 鎖利，保留核心` });
+    if (pct > 50)  return applyWt({ rec: 'TRIM', reason: `${thesis}，${p}% 顯著獲利，考慮了結 15-20% 提高現金水位` });
+    if (pct > 0)   return applyWt({ rec: 'HOLD', reason: `${thesis}，表現良好，長期持有勿追高` });
+    return         applyWt({ rec: 'ADD',  reason: `${thesis}，指數逢跌是買點，加碼攤低成本` });
+  }
+
+  // 主動型 ETF — 看績效，跑贏大盤才留
+  if (type === 'active') {
+    if (pct > 30)  return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 良好，主動管理績效持續，持有` });
+    if (pct > -10) return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，等待主動管理發揮` });
+    return         applyWt({ rec: 'EVAL', reason: `${thesis}，${p}% 回跌，評估是否繼續跑贏大盤` });
   }
 
   // 成長股 — 基本面優，跌幅是機會
   if (type === 'growth') {
-    if (pct > 80)  return { rec: 'TRIM', reason: `${thesis}，${p}% 大幅領先，可了結 15-25% 保護利潤，保留核心` };
-    if (pct > 30)  return { rec: 'HOLD', reason: `${thesis}，${p}% 良好，基本面持續支撐，繼續持有` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，基本面無變，持有` };
-    if (pct > -30) return { rec: 'ADD',  reason: `${thesis}，${p}% 回調幅度大，基本面強勁，分批加碼機會` };
-    return             { rec: 'EVAL', reason: `${thesis}，${p}% 深度回調，確認基本面是否惡化，設停損` };
+    if (pct > 80)  return applyWt({ rec: 'TRIM', reason: `${thesis}，${p}% 大幅領先，可了結 15-25% 保護利潤，保留核心` });
+    if (pct > 30)  return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 良好，基本面持續支撐，繼續持有` });
+    if (pct > -15) return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 在合理波動內，基本面無變，持有` });
+    if (pct > -30) return applyWt({ rec: 'ADD',  reason: `${thesis}，${p}% 回調幅度大，基本面強勁，分批加碼機會` });
+    return         applyWt({ rec: 'EVAL', reason: `${thesis}，${p}% 深度回調，確認基本面是否惡化，設停損` });
   }
 
   // 價值股/配息股 — 看殖利率，不追跌
   if (type === 'value' || type === 'div') {
-    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，${p}% 獲利加股息，持有勿輕易賣` };
-    if (pct > -20) return { rec: 'HOLD', reason: `${thesis}，${p}% 波動正常，殖利率撐住，長期存股` };
-    return             { rec: 'EVAL', reason: `${thesis}，${p}% 回跌，重新評估殖利率與基本面` };
+    if (pct > 20)  return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 獲利加股息，持有勿輕易賣` });
+    if (pct > -20) return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 波動正常，殖利率撐住，長期存股` });
+    return         applyWt({ rec: 'EVAL', reason: `${thesis}，${p}% 回跌，重新評估殖利率與基本面` });
   }
 
   // 景氣循環股 — 等週期回升
   if (type === 'cyclical') {
-    if (pct > 20)  return { rec: 'HOLD', reason: `${thesis}，景氣回升已反映，持有等下一波` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，景氣低谷期，持有等待週期反轉` };
-    if (pct > -35) return { rec: 'EVAL', reason: `${thesis}，${p}% 跌幅，評估景氣反轉時間點，設停損` };
-    return             { rec: 'STOP', reason: `${thesis}，${p}% 深度虧損，景氣未見底，建議停損出場` };
+    if (pct > 20)  return applyWt({ rec: 'HOLD', reason: `${thesis}，景氣回升已反映，持有等下一波` });
+    if (pct > -15) return applyWt({ rec: 'HOLD', reason: `${thesis}，景氣低谷期，持有等待週期反轉` });
+    if (pct > -35) return applyWt({ rec: 'EVAL', reason: `${thesis}，${p}% 跌幅，評估景氣反轉時間點，設停損` });
+    return         applyWt({ rec: 'STOP', reason: `${thesis}，${p}% 深度虧損，景氣未見底，建議停損出場` });
   }
 
   // 投機/高風險 — 嚴格停損
   if (type === 'speculative') {
-    if (pct > 30)  return { rec: 'TRIM', reason: `${thesis}，${p}% 獲利，投機部位應分批了結，鎖定利潤` };
-    if (pct > -15) return { rec: 'HOLD', reason: `${thesis}，${p}% 小幅回調，暫持有但設緊止損點` };
-    if (pct > -30) return { rec: 'STOP', reason: `${thesis}，${p}% 跌幅超預期，投機部位應停損出場` };
-    return             { rec: 'SELL', reason: `${thesis}，${p}% 嚴重虧損，投機部位無縫手，認賠出場` };
+    if (pct > 30)  return applyWt({ rec: 'TRIM', reason: `${thesis}，${p}% 獲利，投機部位應分批了結，鎖定利潤` });
+    if (pct > -15) return applyWt({ rec: 'HOLD', reason: `${thesis}，${p}% 小幅回調，暫持有但設緊止損點` });
+    if (pct > -30) return applyWt({ rec: 'STOP', reason: `${thesis}，${p}% 跌幅超預期，投機部位應停損出場` });
+    return         applyWt({ rec: 'SELL', reason: `${thesis}，${p}% 嚴重虧損，投機部位無縫手，認賠出場` });
   }
 
   // 未知股票 fallback — 保守策略
-  if (pct > 50)  return { rec: 'TRIM', reason: `+${p}% 大幅獲利，分批了結 20-30% 鎖利` };
-  if (pct > -15) return { rec: 'HOLD', reason: `${p}% 在合理波動範圍，繼續持有` };
-  if (pct > -30) return { rec: 'EVAL', reason: `${p}% 明顯虧損，設定停損點避免擴大` };
-  return             { rec: 'STOP', reason: `${p}% 深度虧損，嚴格停損評估` };
+  if (pct > 50)  return applyWt({ rec: 'TRIM', reason: `+${p}% 大幅獲利，分批了結 20-30% 鎖利` });
+  if (pct > -15) return applyWt({ rec: 'HOLD', reason: `${p}% 在合理波動範圍，繼續持有` });
+  if (pct > -30) return applyWt({ rec: 'EVAL', reason: `${p}% 明顯虧損，設定停損點避免擴大` });
+  return         applyWt({ rec: 'STOP', reason: `${p}% 深度虧損，嚴格停損評估` });
 }
 
 function showPage(id) {
@@ -1669,7 +1687,13 @@ function rerenderCharts() {
 // ─────── TAIWAN STOCKS ───────
 function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
+  tbody.innerHTML = '';
+  const totalTWMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
   TW_HOLD.sort((a,b) => a.pct - b.pct).forEach(s => {
+    const posWt = totalTWMV > 0 ? s.mv / totalTWMV * 100 : 0;
+    const ar    = advisorRec(s, false, posWt);
+    s.rec    = ar.rec;
+    s.reason = ar.reason;
     tbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
       <td>${s.name}</td>
