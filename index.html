@@ -357,7 +357,7 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">已賣出 + 建議清單</span></div>
+    <div class="card-title">🔍 觀察清單 — 可考慮買進 <span class="badge" id="watchBadge">自動排除已持有</span></div>
     <div style="overflow-x:auto">
     <table>
       <thead>
@@ -1683,8 +1683,14 @@ function renderTwStocks() {
     </tr>`;
   });
 
+  const heldCodes = new Set(TW_HOLD.map(h => h.code));
+  const watchList = TW_WATCH.filter(s => !heldCodes.has(s.code));
+  const skipped   = TW_WATCH.length - watchList.length;
+  const wb = document.getElementById('watchBadge');
+  if (wb) wb.textContent = skipped > 0 ? `已過濾 ${skipped} 檔已持有` : '自動排除已持有';
   const wbody = document.getElementById('twWatchTable');
-  TW_WATCH.forEach(s => {
+  wbody.innerHTML = '';
+  watchList.forEach(s => {
     wbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
       <td>${s.name}</td>
