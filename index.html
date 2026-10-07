@@ -2291,6 +2291,20 @@ async function analyzeThesis(key, name, pct, mv, isUS) {
   }
 }
 
+// 整合規則引擎與 AI 成「單一建議」：小模型常忽略 prompt 裡的規則，所以對「加碼」做程式碼層硬性把關
+function reconcileHoldingAction(h, r) {
+  if (!h || r.action !== '加碼') return r;
+  const RULE_DIR = { BUY:1, ADD:1, HOLD:0, TRIM:-1, SELL:-1, STOP:-1, EVAL:-1 };
+  const rr = r.levels?.rrRatio;
+  let note = '';
+  if (h.wt != null && h.wt > 20)                    note = `佔組合 ${h.wt.toFixed(0)}% 已過度集中，不再加碼`;
+  else if (h.pct > 80)                              note = `已獲利 ${h.pct.toFixed(0)}%，先鎖利不追高`;
+  else if ((RULE_DIR[h.ruleRec] ?? 0) < 0)          note = '損益面訊號偏向減碼，與技術面分歧，先觀察';
+  else if (rr != null && rr < 0.5)                  note = `風報比僅 1:${rr}，上檔空間有限，等回測週MA20再加`;
+  if (!note) return r;
+  return { ...r, action: '持有', status: `${note}。${r.status || ''}` };
+}
+
 // ─────── 持倉 inline AI 操作建議（全部一次跑，只顯示需操作的）───────
 async function runHoldingsAnalysis() {
   const apiKey = localStorage.getItem('inv_gemini_key');
@@ -2326,9 +2340,11 @@ async function runHoldingsAnalysis() {
 
   // 讀快取
   const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
-  if (cached?.date === todayKey) {
-    updateAIHoldingsMap(allHoldings, cached.results, todayKey);
-    renderHoldingsAnalysis(allHoldings, cached.results);
+  // 完整分析的快取整天有效；不完整的（部分批次失敗）只信任 30 分鐘，避免整天卡在殘缺結果又不狂打 API
+  if (cached?.date === todayKey && (cached.complete !== false || Date.now() - (cached.ts || 0) < 30*60*1000)) {
+    const finalCached = cached.results.map(r => reconcileHoldingAction(allHoldings[r.idx], r));
+    updateAIHoldingsMap(allHoldings, finalCached, todayKey);
+    renderHoldingsAnalysis(allHoldings, finalCached);
     return;
   }
 
@@ -2391,7 +2407,7 @@ ${marketCtx}
     const prompt = `持倉清單（含週線技術指標）：\n${lines}\n\n回傳（ticker 必須與輸入代號完全一致）：\n{"results":[{"ticker":"代號","status":"一句現況","action":"持有|加碼|減碼|出場","alert":"近期事件或空字串"}]}`;
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({ model:'openai/gpt-oss-20b', max_tokens:1500, temperature:0.3,
+      body: JSON.stringify({ model:'openai/gpt-oss-20b', max_tokens:2000, temperature:0.3, reasoning_effort:'low',
         response_format:{type:'json_object'}, messages:[{role:'system',content:system},{role:'user',content:prompt}] })
     });
     const data = await res.json();
@@ -2405,6 +2421,10 @@ ${marketCtx}
     return JSON.parse(data.choices[0].message.content).results || [];
   };
 
+  // ticker 比對容錯：模型可能回數字（2330）、小寫、或「2330(台積電)」
+  const normTicker = s => String(s ?? '').trim().toUpperCase().split(/[\s(（]/)[0];
+
+  window._holdingsAnalysisErr = '';
   const allResults = [];
   const totalH = allHoldings.length;
   for (let start = 0; start < totalH; start += 5) {
@@ -2414,17 +2434,22 @@ ${marketCtx}
     try {
       const results = await callBatch(slice.map((h, j) => toLine(h, start + j)).join('\n'));
       const offsetted = results.map(r => {
-        const localPos = slice.findIndex(h => h.key === r.ticker);
+        const localPos = slice.findIndex(h => normTicker(h.key) === normTicker(r.ticker));
         if (localPos < 0) return null;
         const absIdx = start + localPos;
         return { ...r, idx: absIdx, levels: techData[absIdx]?.levels || null };
       }).filter(Boolean);
+      if (offsetted.length < slice.length) window._holdingsAnalysisErr = `第 ${start/5 + 1} 批只回傳 ${offsetted.length}/${slice.length} 檔（代號對不上或回應被截斷）`;
       allResults.push(...offsetted);
-    } catch(e) { console.error('holdings batch failed (start='+start+')', e?.message||e); }
+    } catch(e) {
+      window._holdingsAnalysisErr = e?.message || String(e);
+      console.error('holdings batch failed (start='+start+')', window._holdingsAnalysisErr);
+    }
   }
-  localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults }));
-  updateAIHoldingsMap(allHoldings, allResults, todayKey);
-  renderHoldingsAnalysis(allHoldings, allResults);
+  localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults, ts: Date.now(), complete: allResults.length >= totalH }));
+  const finalResults = allResults.map(r => reconcileHoldingAction(allHoldings[r.idx], r));
+  updateAIHoldingsMap(allHoldings, finalResults, todayKey);
+  renderHoldingsAnalysis(allHoldings, finalResults);
 }
 
 function renderHoldingsAnalysis(allHoldings, allResults) {
@@ -2457,7 +2482,10 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
     mktCount.US     ? `美股 ${mktCount.US}` : '',
     mktCount.CRYPTO ? `加密 ${mktCount.CRYPTO}` : '',
   ].filter(Boolean).join(' / ');
-  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} 支（${mktSummary}）</div>`;
+  const missingN = allHoldings.length - analyzedIdxs.size;
+  const missingWarn = missingN > 0
+    ? `<div style="color:var(--orange);margin-top:3px">⚠️ 還有 ${missingN} 檔沒取得分析${window._holdingsAnalysisErr ? `（${String(window._holdingsAnalysisErr).slice(0,90)}）` : ''}，按「↻ 重新分析」重試</div>` : '';
+  const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} / ${allHoldings.length} 支（${mktSummary}）${missingWarn}</div>`;
 
   if (!actionItems.length) {
     c.innerHTML = `<div style="font-size:13px;color:var(--text3);padding:8px 0">✅ 所有持倉目前建議持有，無需操作</div>` + footer;
@@ -2475,16 +2503,6 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
   ].filter(Boolean).join('、');
   const triageSummary = `<div style="font-size:13px;color:var(--text2);margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">📌 今日共 ${triageParts} 需留意，優先處理出場與減碼項目</div>`;
 
-  // 規則引擎 rec → 中文標籤/色系/方向（用來跟 AI 建議對照）
-  const RULE_LABEL = {
-    BUY:  { text:'買進',     color:'var(--green)',  dir:1  },
-    TRIM: { text:'部分獲利', color:'var(--yellow)', dir:-1 },
-    SELL: { text:'賣出',     color:'var(--red)',    dir:-1 },
-    STOP: { text:'停損評估', color:'var(--red)',    dir:-1 },
-    HOLD: { text:'持有',     color:'var(--text3)',  dir:0  },
-  };
-  const AI_DIR = { '加碼':1, '持有':0, '減碼':-1, '出場':-1 };
-
   c.innerHTML = triageSummary + `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">` +
     actionItems.map(item => {
       const h  = allHoldings[item.idx] || {};
@@ -2494,23 +2512,17 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
       const priceStr = h.price != null
         ? (h.type === 'TW' ? `$${(+h.price).toLocaleString()}` : `$${(+h.price).toFixed(2)}`)
         : '';
+      // 價位只顯示有意義的：停損價若已高於現價＝已跌破，標示為「已破」而非當成待設的停損；目標價須高於現價
+      const px = +h.price;
+      const stopTxt = lv.stopLoss
+        ? (px && lv.stopLoss >= px ? `⛔已破停損 $${(+lv.stopLoss).toLocaleString()}` : `停損 $${(+lv.stopLoss).toLocaleString()}`) : '';
       const lvRow = [
-        lv.stopLoss ? `停損 $${(+lv.stopLoss).toLocaleString()}` : '',
-        lv.target   ? `目標 $${(+lv.target).toLocaleString()}`   : '',
-        lv.rrRatio  ? `1:${lv.rrRatio}`                          : '',
+        stopTxt,
+        lv.target && (!px || lv.target > px) ? `目標 $${(+lv.target).toLocaleString()}` : '',
+        lv.rrRatio ? `1:${lv.rrRatio}` : '',
       ].filter(Boolean).join('  ');
       const alertBadge = item.alert
         ? `<div style="font-size:11px;color:var(--yellow);margin-bottom:${lvRow?'4px':'0'}">⚠️ ${item.alert}</div>` : '';
-
-      // 規則引擎建議（來源不同，跟 AI 未必一致，並列顯示避免互相矛盾卻只看到一種說法）
-      const rule = h.ruleRec ? RULE_LABEL[h.ruleRec] : null;
-      const aiDir = AI_DIR[item.action] ?? 0;
-      const conflict = rule && rule.dir !== 0 && aiDir !== 0 && rule.dir !== aiDir;
-      const ruleBadge = rule
-        ? `<span style="font-size:10px;padding:1px 6px;border-radius:6px;color:${rule.color};background:var(--surface3);white-space:nowrap">規則:${rule.text}</span>`
-        : '';
-      const conflictNote = conflict
-        ? `<div style="font-size:10px;color:var(--orange);margin-top:4px">⚡ 規則引擎與 AI 判斷不一致，僅供參考、自行判斷</div>` : '';
 
       return `<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid ${borderColor}">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -2522,13 +2534,11 @@ function renderHoldingsAnalysis(allHoldings, allResults) {
           </div>
         </div>
         <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:${(alertBadge||lvRow)?'5px':'0'}">
-          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">AI:${item.action}</span>
-          ${ruleBadge}
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;white-space:nowrap;color:${borderColor};background:${ACTION_BG[item.action]||'var(--surface3)'};flex-shrink:0">${item.action}</span>
         </div>
         <div style="font-size:12px;color:var(--text2);line-height:1.45;margin-bottom:${(alertBadge||lvRow)?'5px':'0'};overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${item.status||''}</div>
         ${alertBadge}
         ${lvRow ? `<div style="font-size:11px;color:var(--text3);font-family:monospace">${lvRow}</div>` : ''}
-        ${conflictNote}
       </div>`;
     }).join('') + `</div>` + footer;
 }
