@@ -3176,11 +3176,11 @@ function renderHistoryKPIs() {
 
   // CAGR：從 MONTHLY 最早到最新
   if (MONTHLY.length >= 2) {
+    const twr = portfolioTWR();
     const first = MONTHLY[0], last = MONTHLY[MONTHLY.length - 1];
-    const months = MONTHLY.length - 1;
-    const cagr = (Math.pow(last.v / first.v, 12 / months) - 1) * 100;
+    const cagr = (Math.pow(twr.index[twr.index.length - 1] / 100, 12 / twr.spanMonths) - 1) * 100;
     s('histKpiCagr',    (cagr >= 0 ? '+' : '') + cagr.toFixed(1) + '%');
-    s('histKpiCagrSub', `${first.m} ～ ${last.m} 年化`);
+    s('histKpiCagrSub', `${first.m} ～ ${last.m} 年化${twr.adjusted ? '（扣除新投入）' : ''}`);
   }
 }
 
@@ -4405,12 +4405,15 @@ async function syncSheets() {
       }
 
       let curDate = null;
-      const monthGroups = {}; // "YYYY/M" → { small: 0, small_c: 0, cats: {}, cats_c: {} }
+      const monthGroups = {}; // "YYYY/M" → { small: 0, small_c: 0, cats: {}, cats_c: {}, closed: false }
+      const dupMonths = new Set();
       histRows.forEach(row => {
         // 找日期格（任意欄）
         for (const c of row) { if (isDateCell(c)) { curDate = c.trim(); break; } }
         if (!curDate) return;
-        if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, small_c: 0, cats: {}, cats_c: {} };
+        if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, small_c: 0, cats: {}, cats_c: {}, closed: false };
+        // 同月份出現多個區塊時（例如舊區塊的銀行列算錯被漏掉），以第一個已出現小計的完整區塊為準，其後整塊忽略
+        if (monthGroups[curDate].closed) { dupMonths.add(curDate); return; }
 
         // 若找到 header 欄位，直接按欄讀值（避免虧損時成本>市值被對調）
         let bigMV, bigCost;
@@ -4425,7 +4428,7 @@ async function syncSheets() {
         }
 
         if (row.some(isSmalCell)) {
-          if (bigMV > 0) monthGroups[curDate].small = bigMV;
+          if (bigMV > 0) { monthGroups[curDate].small = bigMV; monthGroups[curDate].closed = true; }
           if (bigCost > 0) monthGroups[curDate].small_c = bigCost;
         } else {
           // 找分類名稱格
@@ -4451,6 +4454,7 @@ async function syncSheets() {
         // 同步後以 Sheet 小計為準，不再用估算覆蓋
         try { localStorage.setItem('inv_monthly_data', JSON.stringify(MONTHLY)); } catch(e) {}
         results.push(`歷年 ${newMonthly.length} 個月`);
+        if (dupMonths.size) results.push(`⚠️ ${[...dupMonths].join('、')} 在試算表有重複區塊，已取第一個（請檢查另一個是否有誤）`);
       }
 
       // 建立逐月分類資料 MONTHLY_CATS
@@ -5115,8 +5119,40 @@ const SECTOR_MAP = {
   'QLD':'槓桿ETF','TQQQ':'槓桿ETF',
 };
 
+// 組合時間加權報酬：MONTHLY.v 是「總資產」，含新投入的錢，直接拿來算成長會高估報酬。
+// 當期獲利 = 未實現損益變動 (v-c) + 已實現/股利/出借（YEARLY 年度數字按月均分估算）；缺成本欄的月份沿用前一個月成本
+const _ymIdx = m => { const [y, mo] = m.split('/').map(Number); return y * 12 + mo; };
+function portfolioTWR() {
+  const n = MONTHLY.length;
+  const idx = [100], rawIdx = [100], returns = [];
+  const hasCost = n >= 2 && MONTHLY[0].c > 0;
+  const costs = [];
+  MONTHLY.forEach((r, i) => costs.push(r.c > 0 ? r.c : (i > 0 ? costs[i - 1] : 0)));
+  const lastYear = n ? +MONTHLY[n - 1].m.split('/')[0] : 0;
+  const incomePerMonth = y => {
+    const row = YEARLY.find(x => x.y === y);
+    if (!row) return 0;
+    const moInYear = MONTHLY.filter(x => x.m.startsWith(y + '/')).map(x => +x.m.split('/')[1]);
+    const span = (y === lastYear && moInYear.length) ? Math.max(...moInYear) : 12;
+    return ((row.pnl || 0) + (row.div || 0) + (row.lend || 0)) / span;
+  };
+  for (let i = 1; i < n; i++) {
+    const p = MONTHLY[i - 1], c = MONTHLY[i];
+    const gap = Math.max(1, _ymIdx(c.m) - _ymIdx(p.m));
+    const gain = hasCost
+      ? (c.v - costs[i]) - (p.v - costs[i - 1]) + incomePerMonth(+c.m.split('/')[0]) * gap
+      : c.v - p.v;
+    const r = p.v > 0 ? gain / p.v * 100 : 0;
+    returns.push(r);
+    idx.push(+(idx[i - 1] * (1 + r / 100)).toFixed(2));
+    rawIdx.push(+(c.v / MONTHLY[0].v * 100).toFixed(2));
+  }
+  const spanMonths = n >= 2 ? Math.max(1, _ymIdx(MONTHLY[n - 1].m) - _ymIdx(MONTHLY[0].m)) : 0;
+  return { returns, index: idx, rawIndex: rawIdx, adjusted: hasCost, spanMonths };
+}
+
 function riskGetMonthlyReturns() {
-  return MONTHLY.slice(1).map((r, i) => (r.v - MONTHLY[i].v) / MONTHLY[i].v * 100);
+  return portfolioTWR().returns;
 }
 
 function riskCalcStats() {
@@ -5129,21 +5165,21 @@ function riskCalcStats() {
   const monthlyVol = Math.sqrt(variance);
   const annualVol  = monthlyVol * Math.sqrt(12);
 
-  // CAGR from first to last month
-  const first = MONTHLY[0].v;
-  const last  = MONTHLY[MONTHLY.length - 1].v;
-  const months = MONTHLY.length - 1;
-  const totalReturn = (last - first) / first * 100;
-  const cagr = (Math.pow(last / first, 12 / months) - 1) * 100;
+  // 報酬率一律用時間加權（扣除新投入資金），年化用實際日曆月數（快照可能跳月）
+  const twr = portfolioTWR();
+  const months = twr.spanMonths || (MONTHLY.length - 1);
+  const growth = twr.index[twr.index.length - 1] / 100;
+  const totalReturn = (growth - 1) * 100;
+  const cagr = (Math.pow(growth, 12 / months) - 1) * 100;
 
   const riskFree = 3.0; // % annualized (TWD)
   const sharpe   = annualVol > 0 ? (cagr - riskFree) / annualVol : 0;
 
   // Max Drawdown
-  let maxDD = 0, peak = MONTHLY[0].v;
-  MONTHLY.forEach(r => {
-    if (r.v > peak) peak = r.v;
-    const dd = (peak - r.v) / peak * 100;
+  let maxDD = 0, peak = twr.index[0];
+  twr.index.forEach(v => {
+    if (v > peak) peak = v;
+    const dd = (peak - v) / peak * 100;
     if (dd > maxDD) maxDD = dd;
   });
 
@@ -5202,8 +5238,8 @@ function riskCalcCashFlow() {
 
 function riskBuildBenchmarkSeries() {
   if (!MONTHLY.length) return null;
-  const base = MONTHLY[0].v;
-  const portSeries = MONTHLY.map(r => +(r.v / base * 100).toFixed(2));
+  const twr = portfolioTWR();
+  const portSeries = twr.index;
 
   // Use real data if available, otherwise fall back to hardcoded estimates
   const hasRealSPY  = BENCHMARK_DATA.SPY  && Object.keys(BENCHMARK_DATA.SPY).length  > 2;
@@ -5213,9 +5249,14 @@ function riskBuildBenchmarkSeries() {
 
   const buildBenchmark = (table) => {
     const vals = [100];
-    MONTHLY.slice(1).forEach(r => {
-      const ret = table[r.m] || 0;
-      vals.push(+(vals[vals.length - 1] * (1 + ret / 100)).toFixed(2));
+    MONTHLY.slice(1).forEach((r, i) => {
+      // 兩次快照之間若跳過月份（例如缺 2026/7），中間每個日曆月的報酬都要複利進去
+      let f = 1;
+      for (let k = _ymIdx(MONTHLY[i].m) + 1; k <= _ymIdx(r.m); k++) {
+        const mk = `${Math.floor((k - 1) / 12)}/${String(((k - 1) % 12) + 1).padStart(2, '0')}`;
+        f *= 1 + (table[mk] || 0) / 100;
+      }
+      vals.push(+(vals[vals.length - 1] * f).toFixed(2));
     });
     return vals;
   };
@@ -5223,6 +5264,9 @@ function riskBuildBenchmarkSeries() {
   return {
     labels: MONTHLY.map(r => r.m),
     portfolio: portSeries,
+    rawPortfolio: twr.rawIndex,
+    adjusted: twr.adjusted,
+    spanMonths: twr.spanMonths,
     sp500: buildBenchmark(sp500Table),
     tw50:  buildBenchmark(tw50Table),
     isRealData: hasRealSPY && hasRealTW50,
@@ -5377,6 +5421,7 @@ function renderBenchmarkSummary(bench, stats) {
   const portTotal   = ((bench.portfolio[bench.portfolio.length-1] - 100)).toFixed(1);
   const sp500Total  = ((bench.sp500[bench.sp500.length-1]  - 100)).toFixed(1);
   const tw50Total   = ((bench.tw50[bench.tw50.length-1]    - 100)).toFixed(1);
+  const rawTotal    = (bench.rawPortfolio[bench.rawPortfolio.length-1] - 100).toFixed(1);
   const alpha_sp500 = (portTotal - sp500Total).toFixed(1);
   const alpha_tw50  = (portTotal - tw50Total).toFixed(1);
 
@@ -5389,10 +5434,11 @@ function renderBenchmarkSummary(bench, stats) {
 
   const spyLabel  = bench.hasRealSPY  ? 'S&P500（SPY 實際）'   : 'S&P500（估算）';
   const tw50Label = bench.hasRealTW50 ? '台灣0050（實際）'      : '台灣0050（估算）';
-  const dataSrc   = bench.isRealData  ? '✅ Yahoo Finance 真實資料' : '⚠️ 估算值，按「更新基準」取得真實資料';
+  const dataSrc   = (bench.isRealData  ? '✅ Yahoo Finance 真實資料' : '⚠️ 估算值，按「更新基準」取得真實資料') + '｜0050/SPY 為日曆月底報酬，組合為每月快照日，兩者有半個月內的時間誤差';
 
   el.innerHTML =
-    card('我的投資組合', portTotal, portTotal >= 0 ? 'var(--green)' : 'var(--red)', `近 ${bench.labels.length-1} 個月累積`) +
+    card('我的投資組合', portTotal, portTotal >= 0 ? 'var(--green)' : 'var(--red)', `近 ${bench.spanMonths} 個月累積${bench.adjusted ? '（扣除新投入，含已實現+股利估算）' : '（缺成本資料，含新投入）'}`) +
+    (bench.adjusted ? card('總資產成長（含新投入）', rawTotal, 'var(--text2)', '僅供對照，不是報酬率') : '') +
     card(spyLabel,  sp500Total, sp500Total >= 0 ? 'var(--blue)'   : 'var(--red)', bench.hasRealSPY  ? '真實 SPY 月收益' : '⚠️ 估算') +
     card(tw50Label, tw50Total,  tw50Total  >= 0 ? 'var(--orange)' : 'var(--red)', bench.hasRealTW50 ? '真實 0050 月收益' : '⚠️ 估算') +
     card('超額報酬 vs SPY',  alpha_sp500, alpha_sp500 >= 0 ? 'var(--green)' : 'var(--red)', alpha_sp500 >= 0 ? '✅ 跑贏大盤' : '❌ 跑輸大盤') +
@@ -5410,7 +5456,8 @@ function renderBenchmarkChart(bench) {
     data: {
       labels: bench.labels,
       datasets: [
-        { label: '我的組合',   data: bench.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+        { label: bench.adjusted ? '我的組合（扣除新投入）' : '我的組合',   data: bench.portfolio, borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+        ...(bench.adjusted ? [{ label: '總資產成長（含新投入）', data: bench.rawPortfolio, borderColor: '#6e7681', backgroundColor: 'transparent', tension: 0.4, pointRadius: 0, borderWidth: 1.2, borderDash: [2,3] }] : []),
         { label: bench.hasRealSPY  ? 'S&P500 (SPY)'  : 'S&P500 (估)', data: bench.sp500, borderColor: '#3fb950', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: bench.hasRealSPY  ? [] : [4,3] },
         { label: bench.hasRealTW50 ? '台灣0050'       : '台灣0050 (估)', data: bench.tw50, borderColor: '#e3b341', backgroundColor: 'transparent', tension: 0.4, pointRadius: 2, borderWidth: 1.5, borderDash: bench.hasRealTW50 ? [] : [4,3] },
       ]
