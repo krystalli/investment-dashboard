@@ -428,12 +428,17 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">已賣出 + 建議清單</span></div>
+    <div class="card-title">🔍 未持有台股 — 可考慮買進 <span class="badge">市場掃描 · 籌碼+技術+AI</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span id="twScanStatus" style="font-size:11px;font-weight:400;color:var(--text2)"></span>
+        <button id="twScanBtn" onclick="runTwScan(true)" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新掃描</button>
+      </span>
+    </div>
     <div id="twWatchSummary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
     <div style="overflow-x:auto">
     <table>
       <thead>
-        <tr><th>代號</th><th>股票</th><th>現價(估)</th><th>建議</th><th>理由</th><th>風險</th></tr>
+        <tr><th>代號</th><th>股票</th><th>現價</th><th>法人買超（近日累計）</th><th>技術分</th><th>建議</th><th>理由與價位</th><th>風險</th></tr>
       </thead>
       <tbody id="twWatchTable"></tbody>
     </table>
@@ -1147,25 +1152,6 @@ const TW_HOLD = [
   { code:'006208',name:'富邦台50',   shares:6000,  avg:77.37,  price:173.50, pct:140.92, mv:1041000, rec:'TRIM',  reason:'+141%驚人獲利！可考慮分批了結20-30%，落袋為安' },
 ];
 
-// Taiwan watchlist (not currently held)
-const TW_WATCH = [
-  { code:'2454',  name:'聯發科',   price:1000, rec:'BUY',   reason:'手機+AI晶片雙引擎，進入AI PC時代受益',        risk:'估值偏高，關稅影響中國出貨' },
-  { code:'2382',  name:'廣達',     price:310,  rec:'BUY',   reason:'AI伺服器出貨高速成長，輝達DGXH100合作',       risk:'毛利率壓力，客戶集中' },
-  { code:'2317',  name:'鴻海',     price:199,  rec:'WATCH', reason:'已出場獲利，台幣計價AI佈局，等待修正再布局',    risk:'蘋果依賴度高' },
-  { code:'2308',  name:'台達電',   price:350,  rec:'BUY',   reason:'AI資料中心電源供應需求爆發，長線看好',          risk:'估值偏高' },
-  { code:'00919', name:'群益精選高息',price:21,rec:'BUY',   reason:'高股息ETF，殖利率5%+，尚未持有可補倉',        risk:'成立時間較短，歷史資料少' },
-  { code:'00929', name:'復華台灣科技優息',price:22,rec:'BUY',reason:'科技+高息，填補AI主題部位',                  risk:'集中科技，波動較大' },
-  { code:'6669',  name:'緯穎',     price:3420, rec:'BUY',   reason:'AI伺服器ODM龍頭，已賣出但可考慮低點買回',      risk:'客戶集中(微軟)' },
-  { code:'2385',  name:'群光',     price:121,  rec:'WATCH', reason:'光學元件，已獲利出場，等待再次布局時機',        risk:'產業週期影響大' },
-];
-
-// 「未持有」觀察清單 = 上面手動整理的候選名單 − 目前已持有（TW_HOLD 隨試算表同步，買進後就不該再列為未持有）
-function getTwWatchlist() {
-  const norm = c => String(c ?? '').trim().toUpperCase();
-  const held = new Set(TW_HOLD.filter(h => (h.shares || 0) > 0).map(h => norm(h.code)));
-  return TW_WATCH.filter(w => !held.has(norm(w.code)));
-}
-
 // Binance crypto holdings
 const CRYPTO = [
   { sym:'BTC',  name:'Bitcoin',   shares:0,  avg:0, price:0, cost:0, mv:0, pct:0, rec:'HOLD', reason:'數位黃金，長期核心持倉' },
@@ -1422,7 +1408,7 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   event.currentTarget.classList.add('active');
   if (id === 'overview') { if (!window._overviewInit) { initOverviewCharts(); window._overviewInit = true; } runMarketReport(); runHoldingsAnalysis(); }
-  if (id === 'holdings') { renderTwStocks(); renderUsStocks(); renderCrypto(); }
+  if (id === 'holdings') { renderTwStocks(); renderUsStocks(); renderCrypto(); maybeAutoTwScan(); }
   if (id === 'perf' && !window._perfInit) {
     initHistoryCharts();
     renderMonthlyTable();
@@ -2061,30 +2047,7 @@ function renderTwStocks() {
     </tr>`;
   });
 
-  const wbody = document.getElementById('twWatchTable');
-  wbody.innerHTML = '';
-  const watchlist = getTwWatchlist();
-  const WATCH_PRIORITY = { BUY:0, WATCH:1, AVOID:2 };
-  [...watchlist].sort((a,b) => (WATCH_PRIORITY[a.rec]??9) - (WATCH_PRIORITY[b.rec]??9)).forEach(s => {
-    wbody.innerHTML += `<tr>
-      <td><span class="ticker">${s.code}</span></td>
-      <td>${s.name}</td>
-      <td style="font-family:monospace">${s.live ? '' : '<span style="color:var(--text2);font-size:10px">估 </span>'}$${s.price.toLocaleString()}</td>
-      <td>${recTag[s.rec]}</td>
-      <td style="color:var(--text2);font-size:11px;max-width:200px">${s.aiUpdated ? '<span style="color:var(--blue);margin-right:3px">🤖</span>' : ''}${s.reason}</td>
-      <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
-    </tr>`;
-  });
-  if (!watchlist.length) wbody.innerHTML = '<tr><td colspan="6" style="color:var(--text2);text-align:center;padding:16px">候選名單的標的都已持有</td></tr>';
-  const watchBuyCount = watchlist.filter(s => s.rec === 'BUY').length;
-  const nowHeld = TW_WATCH.filter(w => !watchlist.includes(w)).map(w => w.name);
-  const watchSummaryEl = document.getElementById('twWatchSummary');
-  if (watchSummaryEl) {
-    watchSummaryEl.textContent = (watchBuyCount
-      ? `💡 顧問觀點：目前 ${watchBuyCount} 檔建議布局，優先參考排序在前的標的`
-      : '目前觀察清單無明確買進建議，建議續觀望')
-      + (nowHeld.length ? `（${nowHeld.join('、')} 已在持倉中，不再列入）` : '');
-  }
+  renderTwScan();
 
   // TW KPI summary
   const totalMV   = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0);
@@ -3452,6 +3415,310 @@ function twYahooSym(code) {
   return code + (isTWO ? '.TWO' : '.TW');
 }
 
+// ═══ 台股市場選股（未持有）：法人籌碼 → 技術面 → 大盤環境 → AI 整合持倉 ═══
+// 全市場掃描，不再使用手動維護的名單。只掃上市一般股（4 位數代號，T86 不含上櫃/ETF）。
+function twScanKey() { return 'inv_tw_scan_v1'; }
+
+function readTwScan() {
+  try { return JSON.parse(localStorage.getItem(twScanKey()) || 'null'); } catch(e) { return null; }
+}
+
+// 未持有的候選 = 最近一次市場掃描的建議 − 目前已持有（買進後自動剔除）
+function getTwWatchlist() {
+  const norm = c => String(c ?? '').trim().toUpperCase();
+  const held = new Set(TW_HOLD.filter(h => (h.shares || 0) > 0).map(h => norm(h.code)));
+  return (readTwScan()?.picks || []).filter(p => !held.has(norm(p.code)));
+}
+
+function twDateStr(dt) { return `${dt.getFullYear()}${String(dt.getMonth() + 1).padStart(2, '0')}${String(dt.getDate()).padStart(2, '0')}`; }
+
+// 證交所三大法人買賣超（全市場一次抓）。回傳 { 代號: {n:名稱, f:外資股數, t:投信股數} }，該日無資料回 null
+async function fetchT86Day(ds) {
+  const cacheKey = 'inv_t86_' + ds;
+  try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c.none ? null : c; } catch(e) {}
+  const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
+  const isGH = location.hostname.includes('github.io');
+  const tryGet = async u => { const r = await fetch(u); return r.ok ? r.json() : null; };
+  let raw = null;
+  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
+  if (!raw) { try { raw = await tryGet('https://corsproxy.io/?' + encodeURIComponent(url)); } catch(e) {} }
+  if (!raw) return null;
+  const parse = v => { const n = parseInt(String(v || '').replace(/,/g, ''), 10); return isNaN(n) ? 0 : n; };
+  const map = {};
+  (raw.data || []).forEach(row => {
+    const code = (row[0] || '').trim();
+    if (code) map[code] = { n: (row[1] || '').trim(), f: parse(row[4]), t: parse(row[10]) };
+  });
+  const empty = !Object.keys(map).length;
+  // 今天盤後才公布：今天沒資料不快取負結果；過去日期沒資料（假日）才快取，避免重複請求
+  try {
+    if (!empty) localStorage.setItem(cacheKey, JSON.stringify(map));
+    else if (ds < twDateStr(new Date())) localStorage.setItem(cacheKey, JSON.stringify({ none: true }));
+  } catch(e) {}
+  return empty ? null : map;
+}
+
+// 從今天往回找最近 need 個有資料的交易日
+async function fetchRecentFlows(need, onProgress) {
+  const days = [];
+  const now = Date.now();
+  for (let back = 0; back < 10 && days.length < need; back++) {
+    const dt = new Date(now - back * 86400000);
+    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+    const ds = twDateStr(dt);
+    if (onProgress) onProgress(days.length, need);
+    const wasCached = localStorage.getItem('inv_t86_' + ds) != null;
+    const m = await fetchT86Day(ds);
+    if (m) days.push({ ds, m });
+    if (!wasCached) await new Promise(r => setTimeout(r, 700));   // 證交所對連續請求會限流
+  }
+  try {
+    const cutoff = 'inv_t86_' + twDateStr(new Date(now - 7 * 86400000));
+    Object.keys(localStorage).filter(k => k.startsWith('inv_t86_') && k < cutoff).forEach(k => localStorage.removeItem(k));
+  } catch(e) {}
+  return days;
+}
+
+function aggregateFlows(days) {
+  const flow = {};
+  days.forEach(({ m }) => Object.entries(m).forEach(([code, v]) => {
+    const x = flow[code] || (flow[code] = { name: v.n, f: 0, t: 0, tDays: 0 });
+    x.f += v.f; x.t += v.t;
+    if (v.t > 0) x.tDays++;
+  }));
+  return flow;
+}
+
+// 候選池：一般股（排除 ETF/權證）、排除已持有；外資買超前25 ∪ 投信買超前25
+function selectFlowCandidates(flow, heldSet) {
+  const pool = Object.entries(flow).filter(([c]) => /^[1-9]\d{3}$/.test(c) && !heldSet.has(c));
+  const top = key => pool.filter(([, x]) => x[key] > 0).sort((a, b) => b[1][key] - a[1][key]).slice(0, 25);
+  return { universe: pool.length, codes: [...new Set([...top('f'), ...top('t')].map(([c]) => c))] };
+}
+
+// 技術面 + 籌碼評分（滿分 8）。BUY 需高分、未短線過熱、且大盤不是偏弱
+function scoreTwCandidate(fl, ind, regimeKey) {
+  let score = (fl.f > 0 ? 1 : 0) + (fl.t > 0 ? 1 : 0) + (fl.tDays >= 2 ? 1 : 0);
+  if (ind.price > ind.ma20) score++;
+  if (ind.macdDir === '看多') score++;
+  if (ind.rsi != null && ind.rsi >= 45 && ind.rsi <= 68) score++;
+  if (ind.volRatio != null && ind.volRatio >= 1) score++;
+  if (ind.rrRatio != null && ind.rrRatio >= 1) score++;
+  const extended = !!ind.ma20 && ind.price > ind.ma20 * 1.08;
+  const tier = (score >= 6 && !extended && regimeKey !== 'bear') ? 'BUY' : 'WATCH';
+  return { score, extended, tier };
+}
+
+function ruleReason(c) {
+  const bits = [];
+  if (c.tDays >= 2) bits.push(`投信連${c.tDays}日買超`); else if (c.t > 0) bits.push('投信買超');
+  if (c.f > 0) bits.push('外資買超');
+  bits.push(c.price > c.ma20 ? '站上週MA20' : '週MA20之下');
+  if (c.macdDir === '看多') bits.push('MACD看多');
+  if (c.extended) bits.push('短線偏離，等回測');
+  return bits.join('、');
+}
+function ruleRisk(c) {
+  if (c.extended) return '短線漲多，追高風險';
+  if (c.rsi != null && c.rsi > 68) return `週RSI ${c.rsi} 偏高`;
+  return `跌破週MA52($${c.ma52})轉弱`;
+}
+
+// AI 結果把關：代號必須在候選內；只能降級（BUY→WATCH），不能把規則判成 WATCH 的升成 BUY
+function mergeAiPicks(cands, aiPicks) {
+  const byCode = new Map(cands.map(c => [c.code, c]));
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(aiPicks) ? aiPicks : []).forEach(p => {
+    const code = String(p?.code ?? '').trim();
+    const c = byCode.get(code);
+    if (!c || seen.has(code)) return;
+    seen.add(code);
+    out.push({
+      ...c,
+      rec: (p.rec === 'BUY' && c.tier === 'BUY') ? 'BUY' : 'WATCH',
+      reason: String(p.reason || '').slice(0, 60) || ruleReason(c),
+      risk: String(p.risk || '').slice(0, 40) || ruleRisk(c),
+      source: 'ai',
+    });
+  });
+  return out.slice(0, 5);
+}
+function rulePicks(cands) {
+  return cands.slice(0, 5).map(c => ({ ...c, rec: c.tier, reason: ruleReason(c), risk: ruleRisk(c), source: 'rule' }));
+}
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const k = i++; out[k] = await fn(items[k], k); }
+  }));
+  return out;
+}
+
+// 大盤環境：加權指數週線
+async function getTwRegime() {
+  const hist = await fetchYahooHistory('^TWII');
+  const ind = hist ? calcIndicators(hist, null) : null;
+  if (!ind || !ind.ma52) return { key: 'unknown', text: '加權指數資料不足，大盤環境未納入判斷' };
+  const key = ind.price < ind.ma52 ? 'bear' : (ind.price > ind.ma20 ? 'bull' : 'neutral');
+  const rel = `${ind.price > ind.ma20 ? '站上' : '跌破'}週MA20、${ind.price > ind.ma52 ? '站上' : '跌破'}週MA52`;
+  const tag = key === 'bull' ? '偏多' : key === 'bear' ? '偏弱，BUY 一律降為觀察' : '整理';
+  return { key, text: `加權指數 ${Math.round(ind.price).toLocaleString()} ${rel}，週RSI ${ind.rsi ?? '—'}，MACD${ind.macdDir || '—'}（${tag}）` };
+}
+
+async function askTwScanAI(apiKey, cands, regime, nDays) {
+  const today = new Date().toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' });
+  const qqq = [...US_MAIN, ...US_ROY].find(s => s.sym === 'QQQ')?.price;
+  const qqqTxt = !qqq ? '未知' : qqq >= QQQ_ENTRY ? 'BUY（強勢）' : qqq <= QQQ_EXIT ? 'SELL（退場警戒）' : 'HOLD（等待訊號）';
+  const twTotal = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
+  const heldList = [...TW_HOLD].filter(h => (h.mv || 0) > 0).sort((a, b) => b.mv - a.mv).slice(0, 10)
+    .map(h => `${h.code} ${h.name} 佔台股${(h.mv / twTotal * 100).toFixed(0)}%`).join('\n') || '（無）';
+  const k = n => Math.round(n / 1000).toLocaleString();
+  const lines = cands.map(c =>
+    `${c.code} ${c.name} 現價$${c.price} 週RSI${c.rsi ?? '?'} ${c.price > c.ma20 ? '站上' : '跌破'}週MA20 MACD${c.macdDir || '?'} 量比${c.volRatio ?? '?'}x ` +
+    `近${nDays}日外資${k(c.f)}張 投信${k(c.t)}張(投信買超${c.tDays}日) 技術分${c.score}/8${c.extended ? ' 短線偏離大' : ''}`).join('\n');
+  const system = '你是資深台股分析師，擅長從法人籌碼＋技術面＋大盤環境挑選布局標的，並考量客戶現有持倉的產業重疊與集中度。繁體中文，只輸出 JSON。';
+  const prompt = `今日 ${today}。
+大盤環境：${regime.text}。QQQ 動態策略訊號：${qqqTxt}。
+
+客戶目前台股持倉（前10大）：
+${heldList}
+
+候選（皆為近${nDays}日法人買超、且站上週MA52的未持有個股）：
+${lines}
+
+任務：從候選挑 3~5 檔建議布局，依優先順序排列。
+- rec：BUY=可分批買進；WATCH=值得追蹤但等回檔／確認（例如短線偏離大、與現有持倉主題重疊且該持倉已重押、大盤偏弱）
+- reason：≤35字，結合籌碼＋技術＋你所知該公司的產業定位，須具體，不得編造財報數字
+- risk：≤20字
+- 與已重押主題（佔比高）高度重疊者降為 WATCH 或不選
+只能使用候選清單內的代號。輸出：{"picks":[{"code":"代號","rec":"BUY|WATCH","reason":"...","risk":"..."}]}`;
+  let data = null, res = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({ model: 'openai/gpt-oss-20b', max_tokens: 1800, temperature: 0.3, reasoning_effort: 'low',
+        response_format: { type: 'json_object' }, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] })
+    });
+    data = await res.json();
+    if (res.status !== 429 || attempt === 2) break;
+    await new Promise(r => setTimeout(r, [8000, 15000][attempt]));
+  }
+  if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+  return JSON.parse(data.choices[0].message.content).picks || [];
+}
+
+async function runTwScan(force) {
+  if (window._twScanRunning) return;
+  const todayKey = new Date().toLocaleDateString('zh-TW');
+  if (!force && readTwScan()?.date === todayKey) { renderTwScan(); return; }
+  window._twScanRunning = true;
+  window._twScanErr = '';
+  const btn = document.getElementById('twScanBtn');
+  if (btn) btn.disabled = true;
+  const setSt = msg => { const el = document.getElementById('twScanStatus'); if (el) el.textContent = msg; };
+  renderTwScan();
+  try {
+    setSt('抓法人籌碼…');
+    const days = await fetchRecentFlows(3, (i, n) => setSt(`抓法人籌碼 ${i + 1}/${n}`));
+    if (!days.length) throw new Error('取不到證交所法人買賣超資料（證交所或代理暫時失敗，稍後再試）');
+    const flow = aggregateFlows(days);
+    const held = new Set(TW_HOLD.filter(h => (h.shares || 0) > 0).map(h => String(h.code).trim().toUpperCase()));
+    const { universe, codes } = selectFlowCandidates(flow, held);
+
+    setSt('判斷大盤環境…');
+    const regime = await getTwRegime();
+
+    let done = 0;
+    const inds = await mapLimit(codes, 5, async code => {
+      let ind = null;
+      try { const hist = await fetchYahooHistory(code + '.TW'); ind = hist ? calcIndicators(hist, null) : null; } catch(e) {}
+      setSt(`技術面掃描 ${++done}/${codes.length}`);
+      return ind;
+    });
+    const cands = [];
+    codes.forEach((code, i) => {
+      const ind = inds[i], fl = flow[code];
+      if (!ind || !ind.ma20 || !ind.ma52 || ind.price <= ind.ma52 || (ind.rsi != null && ind.rsi >= 78)) return;
+      const s = scoreTwCandidate(fl, ind, regime.key);
+      cands.push({ code, name: fl.name, price: ind.price, ma20: ind.ma20, ma52: ind.ma52, rsi: ind.rsi, macdDir: ind.macdDir,
+        volRatio: ind.volRatio, rr: ind.rrRatio, entry: ind.addPoint, stop: ind.stopLoss, target: ind.target,
+        f: fl.f, t: fl.t, tDays: fl.tDays, score: s.score, extended: s.extended, tier: s.tier });
+    });
+    cands.sort((a, b) => b.score - a.score || (b.f + b.t) - (a.f + a.t));
+    const top = cands.slice(0, 8);
+
+    let picks = [], aiUsed = false;
+    const apiKey = localStorage.getItem('inv_gemini_key');
+    if (apiKey && top.length) {
+      setSt('AI 整合持倉與大盤…');
+      try { picks = mergeAiPicks(top, await askTwScanAI(apiKey, top, regime, days.length)); aiUsed = picks.length > 0; }
+      catch(e) { window._twScanErr = 'AI 整合失敗，已改用規則篩選：' + (e?.message || e); }
+    }
+    if (!picks.length) picks = rulePicks(top);
+    localStorage.setItem(twScanKey(), JSON.stringify({
+      date: todayKey, ts: Date.now(), picks, regime, ai: aiUsed,
+      funnel: { universe, flowCands: codes.length, techOk: cands.length, flowDates: days.map(d => d.ds) },
+    }));
+  } catch(e) {
+    window._twScanErr = e?.message || String(e);
+    window._twScanFailedAt = Date.now();
+  } finally {
+    window._twScanRunning = false;
+    setSt('');
+    if (btn) btn.disabled = false;
+    renderTwScan();
+  }
+}
+
+// 進入持倉頁時，當天還沒掃過就自動掃一次（失敗 10 分鐘內不重試，避免狂打證交所）
+function maybeAutoTwScan() {
+  if (window._twScanRunning) return;
+  if (readTwScan()?.date === new Date().toLocaleDateString('zh-TW')) return;
+  if (window._twScanFailedAt && Date.now() - window._twScanFailedAt < 10 * 60 * 1000) return;
+  runTwScan(false);
+}
+
+function renderTwScan() {
+  const wbody = document.getElementById('twWatchTable');
+  if (!wbody) return;
+  const sumEl = document.getElementById('twWatchSummary');
+  const esc = v => escHtml(String(v ?? ''));
+  const errHtml = window._twScanErr ? `<div style="color:var(--orange);margin-top:4px">⚠️ ${esc(String(window._twScanErr).slice(0, 160))}</div>` : '';
+  const scan = readTwScan();
+  if (!scan) {
+    wbody.innerHTML = `<tr><td colspan="8" style="color:var(--text2);text-align:center;padding:16px">${window._twScanRunning ? '掃描中…' : '尚未掃描，點右上角「↻ 重新掃描」'}</td></tr>`;
+    if (sumEl) sumEl.innerHTML = errHtml;
+    return;
+  }
+  const list = getTwWatchlist();
+  const listCodes = new Set(list.map(p => p.code));
+  const bought = (scan.picks || []).filter(p => !listCodes.has(p.code)).map(p => p.name);
+  const fmtK = n => { const k = Math.round(n / 1000); return (k >= 0 ? '+' : '') + k.toLocaleString(); };
+  wbody.innerHTML = list.length ? list.map(p => {
+    const lv = [p.entry ? `進場≈$${p.entry}(週MA20)` : '', p.stop ? `停損$${p.stop}` : '', p.target && p.target > p.price ? `目標$${p.target}` : ''].filter(Boolean).join(' · ');
+    return `<tr>
+      <td><span class="ticker">${esc(p.code)}</span></td>
+      <td>${esc(p.name)}</td>
+      <td style="font-family:monospace">$${(+p.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+      <td style="font-size:11px;white-space:nowrap">外資 ${fmtK(p.f)} 張<br>投信 ${fmtK(p.t)} 張（${p.tDays}日買超）</td>
+      <td>${p.score}/8${p.extended ? ' <span class="tag tag-yellow">偏離大</span>' : ''}</td>
+      <td>${recTag[p.rec] || recTag['WATCH']}</td>
+      <td style="color:var(--text2);font-size:11px;max-width:240px">${p.source === 'ai' ? '<span style="color:var(--blue);margin-right:3px">🤖</span>' : ''}${esc(p.reason)}<div style="color:var(--text3);font-family:monospace;margin-top:2px">${esc(lv)}</div></td>
+      <td style="color:var(--orange);font-size:11px;max-width:140px">${esc(p.risk)}</td>
+    </tr>`;
+  }).join('') : `<tr><td colspan="8" style="color:var(--text2);text-align:center;padding:16px">這次掃描沒有符合條件的標的（法人買超且站上週MA52）</td></tr>`;
+  if (sumEl) {
+    const f = scan.funnel || {};
+    const dates = (f.flowDates || []).map(d => d.slice(4, 6) + '/' + d.slice(6)).join('、');
+    const when = (scan.date === new Date().toLocaleDateString('zh-TW') ? '今日' : scan.date) + ' ' + new Date(scan.ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+    sumEl.innerHTML = `<div>📡 ${esc(scan.regime?.text)}</div>
+      <div style="margin-top:3px">全市場 ${f.universe} 檔 → 法人買超 ${f.flowCands} 檔 → 技術合格 ${f.techOk} 檔 → 建議 ${(scan.picks || []).length} 檔（${scan.ai ? 'AI 整合持倉' : '規則篩選'}｜法人資料 ${esc(dates)}｜${esc(when)} 掃描）${bought.length ? `｜${bought.map(esc).join('、')} 已買進，不再列入` : ''}</div>${errHtml}`;
+  }
+}
+
 // ── 大盤報告 ──────────────────────────────────────────────────────────────
 async function fetchTWSEMarketChipsAgg() {
   const todayStr = new Date().toLocaleDateString('zh-TW');
@@ -3787,8 +4054,8 @@ async function refreshPrices() {
     // 美股
     const usSym = [...new Set([...US_MAIN, ...US_ROY].map(s => s.sym))];
     const allUsSym = [...usSym, '^IXIC'];
-    // 台股（持倉 + 觀察）
-    const twCodes = [...new Set([...TW_HOLD.map(s => s.code), ...TW_WATCH.map(s => s.code)])];
+    // 台股（持倉）
+    const twCodes = [...new Set(TW_HOLD.map(s => s.code))];
     const twSym   = twCodes.map(c => c + '.TW');
 
     const [usPrices, twPrices] = await Promise.all([
@@ -3827,12 +4094,6 @@ async function refreshPrices() {
     });
     try { localStorage.setItem('inv_tw_hold', JSON.stringify(TW_HOLD)); } catch(e) {}
 
-    // 更新台股觀察清單（更新現價，rec/reason 保留人工設定）
-    TW_WATCH.forEach(s => {
-      const p = twPriceMap[s.code];
-      if (p) { s.price = p; s.live = true; }
-    });
-
     const nasdaq = priceMap['QQQ'];
     if (nasdaq) updateNasdaqDisplay(nasdaq);
 
@@ -3845,78 +4106,10 @@ async function refreshPrices() {
 
     // 記錄本次更新時間
     try { localStorage.setItem('inv_last_price_refresh', Date.now()); } catch(e) {}
-
-    // 若有 API Key，自動更新觀察清單 AI 建議
-    const apiKey = localStorage.getItem('inv_gemini_key');
-    if (apiKey) refreshWatchAI(apiKey);
   } catch(e) {
     showStatus('❌ 股價更新失敗：' + e.message, 'error');
   } finally {
     if (btn) { btn.textContent = '🔄 刷新股價'; btn.disabled = false; }
-  }
-}
-
-async function refreshWatchAI(apiKey) {
-  const watchlist = getTwWatchlist();
-  if (!watchlist.length) return;
-  showStatus('🤖 AI 評估觀察清單中…', 'loading');
-  const date = new Date().toLocaleDateString('zh-TW');
-  const stockList = watchlist.map(s =>
-    `${s.code} ${s.name} 現價$${s.price}${s.live ? '' : '(估)'} 背景:${s.reason} 風險:${s.risk}`
-  ).join('\n');
-
-  // 最新台股持倉（隨試算表同步）：讓 AI 知道目前已經重押什麼，避免再推薦同質標的
-  const twTotal = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
-  const heldList = [...TW_HOLD].filter(h => (h.mv || 0) > 0).sort((a, b) => b.mv - a.mv).slice(0, 10)
-    .map(h => `${h.code} ${h.name} 佔台股${(h.mv / twTotal * 100).toFixed(0)}% 損益${(h.pct || 0) >= 0 ? '+' : ''}${(h.pct || 0).toFixed(0)}%`).join('\n');
-
-  const prompt = `今天是${date}，請根據台股今日市場現況，對以下觀察清單給予即時操作建議。
-
-目前已持有的台股（前10大）：
-${heldList || '（無）'}
-
-觀察清單（尚未持有）：
-${stockList}
-
-⚠️ 規則：
-1. 建議只能是 BUY / WATCH / AVOID 其中一個
-2. 理由必須結合今日市場動態（技術面、法人動向、產業消息）給出具體依據，不超過30字
-3. 要考慮現有持倉：與已大量持有的標的產業/主題高度重疊、會讓集中度更高者，不給 BUY（給 WATCH 並在理由說明）；能補足目前缺少的類型者才優先給 BUY
-4. 只輸出 JSON，不加任何說明或 markdown
-
-格式：{"代號":{"rec":"BUY|WATCH|AVOID","reason":"理由"},...}`;
-
-  try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
-        max_tokens: 1500,
-        temperature: 0.5,
-        reasoning_effort: 'low',
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    const raw = data.choices[0].message.content.trim()
-      .replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
-    const advice = JSON.parse(raw);
-    watchlist.forEach(s => {
-      const a = advice[s.code];
-      if (!a) return;
-      if (a.rec && ['BUY','WATCH','AVOID'].includes(a.rec)) s.rec = a.rec;
-      if (a.reason) { s.reason = a.reason; s.aiUpdated = true; }
-    });
-    // 確保 AVOID tag 存在
-    if (!recTag['AVOID']) recTag['AVOID'] = '<span class="rec-sell">✕ 避開</span>';
-    const wbody = document.getElementById('twWatchTable');
-    if (wbody) { wbody.innerHTML = ''; renderTwStocks(); }
-    showStatus(`✅ AI 已更新觀察清單建議（${new Date().toLocaleTimeString('zh-TW')}）`, 'success');
-  } catch(e) {
-    showStatus(`⚠️ 股價已更新，AI 建議失敗：${e.message}`, 'loading');
   }
 }
 
