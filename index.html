@@ -4409,11 +4409,13 @@ async function syncSheets() {
       const dupMonths = new Set();
       histRows.forEach(row => {
         // 找日期格（任意欄）
-        for (const c of row) { if (isDateCell(c)) { curDate = c.trim(); break; } }
+        let rowHasDate = false;
+        for (const c of row) { if (isDateCell(c)) { curDate = c.trim(); rowHasDate = true; break; } }
         if (!curDate) return;
         if (!monthGroups[curDate]) monthGroups[curDate] = { small: 0, small_c: 0, cats: {}, cats_c: {}, closed: false };
-        // 同月份出現多個區塊時（例如舊區塊的銀行列算錯被漏掉），以第一個已出現小計的完整區塊為準，其後整塊忽略
-        if (monthGroups[curDate].closed) { dupMonths.add(curDate); return; }
+        // 同月份出現多個區塊時（例如舊區塊的銀行列算錯被漏掉），以第一個已出現小計的完整區塊為準，其後整塊忽略；
+        // 只有「這一列自己帶著該月份日期」才算重複區塊，區塊結尾的分隔線等無日期列只是靜默略過
+        if (monthGroups[curDate].closed) { if (rowHasDate) dupMonths.add(curDate); return; }
 
         // 若找到 header 欄位，直接按欄讀值（避免虧損時成本>市值被對調）
         let bigMV, bigCost;
