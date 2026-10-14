@@ -1159,6 +1159,13 @@ const TW_WATCH = [
   { code:'2385',  name:'群光',     price:121,  rec:'WATCH', reason:'光學元件，已獲利出場，等待再次布局時機',        risk:'產業週期影響大' },
 ];
 
+// 「未持有」觀察清單 = 上面手動整理的候選名單 − 目前已持有（TW_HOLD 隨試算表同步，買進後就不該再列為未持有）
+function getTwWatchlist() {
+  const norm = c => String(c ?? '').trim().toUpperCase();
+  const held = new Set(TW_HOLD.filter(h => (h.shares || 0) > 0).map(h => norm(h.code)));
+  return TW_WATCH.filter(w => !held.has(norm(w.code)));
+}
+
 // Binance crypto holdings
 const CRYPTO = [
   { sym:'BTC',  name:'Bitcoin',   shares:0,  avg:0, price:0, cost:0, mv:0, pct:0, rec:'HOLD', reason:'數位黃金，長期核心持倉' },
@@ -1535,7 +1542,7 @@ function renderTeamPage() {
     b('var(--green)', `${h.name}(${h.code}) ${h.reason}`)).join('');
   const sophiaConcern = twByLoss.slice(0,3).map(h =>
     b(h.pct<-30?'var(--red)':'var(--orange)', `${h.name}(${h.code}) ${h.pct.toFixed(1)}% — ${h.reason}`)).join('');
-  const sophiaWatch = TW_WATCH.filter(w=>w.rec==='BUY').slice(0,3).map(w =>
+  const sophiaWatch = getTwWatchlist().filter(w=>w.rec==='BUY').slice(0,3).map(w =>
     b('var(--purple)', `${w.name}(${w.code}) — ${w.reason}`)).join('');
 
   // ── Max 風險管理師 ──
@@ -2055,8 +2062,10 @@ function renderTwStocks() {
   });
 
   const wbody = document.getElementById('twWatchTable');
+  wbody.innerHTML = '';
+  const watchlist = getTwWatchlist();
   const WATCH_PRIORITY = { BUY:0, WATCH:1, AVOID:2 };
-  [...TW_WATCH].sort((a,b) => (WATCH_PRIORITY[a.rec]??9) - (WATCH_PRIORITY[b.rec]??9)).forEach(s => {
+  [...watchlist].sort((a,b) => (WATCH_PRIORITY[a.rec]??9) - (WATCH_PRIORITY[b.rec]??9)).forEach(s => {
     wbody.innerHTML += `<tr>
       <td><span class="ticker">${s.code}</span></td>
       <td>${s.name}</td>
@@ -2066,12 +2075,15 @@ function renderTwStocks() {
       <td style="color:var(--orange);font-size:11px;max-width:140px">${s.risk}</td>
     </tr>`;
   });
-  const watchBuyCount = TW_WATCH.filter(s => s.rec === 'BUY').length;
+  if (!watchlist.length) wbody.innerHTML = '<tr><td colspan="6" style="color:var(--text2);text-align:center;padding:16px">候選名單的標的都已持有</td></tr>';
+  const watchBuyCount = watchlist.filter(s => s.rec === 'BUY').length;
+  const nowHeld = TW_WATCH.filter(w => !watchlist.includes(w)).map(w => w.name);
   const watchSummaryEl = document.getElementById('twWatchSummary');
   if (watchSummaryEl) {
-    watchSummaryEl.textContent = watchBuyCount
+    watchSummaryEl.textContent = (watchBuyCount
       ? `💡 顧問觀點：目前 ${watchBuyCount} 檔建議布局，優先參考排序在前的標的`
-      : '目前觀察清單無明確買進建議，建議續觀望';
+      : '目前觀察清單無明確買進建議，建議續觀望')
+      + (nowHeld.length ? `（${nowHeld.join('、')} 已在持倉中，不再列入）` : '');
   }
 
   // TW KPI summary
@@ -3845,21 +3857,32 @@ async function refreshPrices() {
 }
 
 async function refreshWatchAI(apiKey) {
+  const watchlist = getTwWatchlist();
+  if (!watchlist.length) return;
   showStatus('🤖 AI 評估觀察清單中…', 'loading');
   const date = new Date().toLocaleDateString('zh-TW');
-  const stockList = TW_WATCH.map(s =>
+  const stockList = watchlist.map(s =>
     `${s.code} ${s.name} 現價$${s.price}${s.live ? '' : '(估)'} 背景:${s.reason} 風險:${s.risk}`
   ).join('\n');
 
+  // 最新台股持倉（隨試算表同步）：讓 AI 知道目前已經重押什麼，避免再推薦同質標的
+  const twTotal = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
+  const heldList = [...TW_HOLD].filter(h => (h.mv || 0) > 0).sort((a, b) => b.mv - a.mv).slice(0, 10)
+    .map(h => `${h.code} ${h.name} 佔台股${(h.mv / twTotal * 100).toFixed(0)}% 損益${(h.pct || 0) >= 0 ? '+' : ''}${(h.pct || 0).toFixed(0)}%`).join('\n');
+
   const prompt = `今天是${date}，請根據台股今日市場現況，對以下觀察清單給予即時操作建議。
 
-觀察清單：
+目前已持有的台股（前10大）：
+${heldList || '（無）'}
+
+觀察清單（尚未持有）：
 ${stockList}
 
 ⚠️ 規則：
 1. 建議只能是 BUY / WATCH / AVOID 其中一個
 2. 理由必須結合今日市場動態（技術面、法人動向、產業消息）給出具體依據，不超過30字
-3. 只輸出 JSON，不加任何說明或 markdown
+3. 要考慮現有持倉：與已大量持有的標的產業/主題高度重疊、會讓集中度更高者，不給 BUY（給 WATCH 並在理由說明）；能補足目前缺少的類型者才優先給 BUY
+4. 只輸出 JSON，不加任何說明或 markdown
 
 格式：{"代號":{"rec":"BUY|WATCH|AVOID","reason":"理由"},...}`;
 
@@ -3869,8 +3892,10 @@ ${stockList}
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
-        max_tokens: 800,
+        max_tokens: 1500,
         temperature: 0.5,
+        reasoning_effort: 'low',
+        response_format: { type: 'json_object' },
         messages: [{ role: 'user', content: prompt }]
       })
     });
@@ -3879,7 +3904,7 @@ ${stockList}
     const raw = data.choices[0].message.content.trim()
       .replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/```\s*$/,'').trim();
     const advice = JSON.parse(raw);
-    TW_WATCH.forEach(s => {
+    watchlist.forEach(s => {
       const a = advice[s.code];
       if (!a) return;
       if (a.rec && ['BUY','WATCH','AVOID'].includes(a.rec)) s.rec = a.rec;
@@ -4554,8 +4579,8 @@ function buildTeamAnalysisContext() {
     : '  （無資料，請先同步試算表）';
 
   // 台股觀察清單（未持有，評估是否買入）
-  const twWatchStr = TW_WATCH.length
-    ? TW_WATCH.map(w => `  ${w.name}(${w.code}): 現價估${w.price} 建議:${w.rec} 理由:${w.reason} 風險:${w.risk}`).join('\n')
+  const twWatchStr = getTwWatchlist().length
+    ? getTwWatchlist().map(w => `  ${w.name}(${w.code}): 現價估${w.price} 建議:${w.rec} 理由:${w.reason} 風險:${w.risk}`).join('\n')
     : '  （空）';
 
   // 美股持倉
@@ -6258,7 +6283,7 @@ async function runMorningScan(force) {
              .map(c => `${c.sym} 現$${c.price?.toFixed(2)} 損益${c.pct>=0?'+':''}${c.pct?.toFixed(1)}%`),
   ].filter(Boolean);
 
-  const watchLines = TW_WATCH.map(w => `${w.name}(${w.code}) 現${w.price?.toFixed(0)}`);
+  const watchLines = getTwWatchlist().map(w => `${w.name}(${w.code}) 現${w.price?.toFixed(0)}`);
 
   const system = `你是一位資深投資顧問，每天早上幫客戶做「晨間操作掃描」。今天是${today}。
 你收到客戶今天的真實持倉數據，以及觀察清單（尚未持有）。
