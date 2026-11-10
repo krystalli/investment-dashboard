@@ -386,6 +386,10 @@
   <div class="nav-tabs" style="margin-bottom:16px" id="holdingsSubTabs">
     <button class="nav-tab active" onclick="showHoldingsTab('tw')">🇹🇼 台股</button>
     <button class="nav-tab" onclick="showHoldingsTab('us')">🇺🇸 美股</button>
+    <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+      <span id="holdingsAnalyzeStatus" style="font-size:11px;color:var(--text2)"></span>
+      <button id="holdingsAnalyzeBtn" onclick="reanalyzeFromHoldings()" style="font-size:11px;padding:4px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析建議</button>
+    </span>
   </div>
 
   <!-- ── 台股區段 ── -->
@@ -2281,7 +2285,37 @@ function reconcileHoldingAction(h, r) {
 }
 
 // ─────── 持倉 inline AI 操作建議（全部一次跑，只顯示需操作的）───────
-async function runHoldingsAnalysis() {
+function runHoldingsAnalysis() {
+  if (window._holdingsAnalysisPromise) return window._holdingsAnalysisPromise;
+  window._holdingsAnalysisPromise = _runHoldingsAnalysis().finally(() => {
+    window._holdingsAnalysisPromise = null;
+    const hp = document.getElementById('holdingsAnalyzeStatus');
+    if (hp) hp.textContent = '';
+  });
+  return window._holdingsAnalysisPromise;
+}
+
+// 持倉頁的「重新分析建議」：清掉今日快取重跑，完成後重畫台股／美股表格
+async function reanalyzeFromHoldings() {
+  const btn = document.getElementById('holdingsAnalyzeBtn');
+  const st  = document.getElementById('holdingsAnalyzeStatus');
+  if (!localStorage.getItem('inv_gemini_key')) {
+    if (st) st.textContent = '⚠️ 請先設定 Groq API Key（右上角齒輪）';
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
+  localStorage.removeItem('inv_holdings_v2');
+  window._holdingsAnalysisErr = '';
+  try { await runHoldingsAnalysis(); } catch (e) { window._holdingsAnalysisErr = e?.message || String(e); }
+  renderTwStocks(); renderUsStocks();
+  const t = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+  if (st) st.textContent = window._holdingsAnalysisErr
+    ? `⚠️ ${t} 部分未完成：${String(window._holdingsAnalysisErr).slice(0, 60)}`
+    : `✅ ${t} 已更新`;
+  if (btn) { btn.disabled = false; btn.textContent = '↻ 重新分析建議'; }
+}
+
+async function _runHoldingsAnalysis() {
   const apiKey = localStorage.getItem('inv_gemini_key');
   if (!apiKey) return;
 
@@ -2310,7 +2344,10 @@ async function runHoldingsAnalysis() {
 
   // 顯示 loading
   const sigEl = () => document.getElementById('home-action-signals');
-  const setMsg = msg => { const el = sigEl(); if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0;opacity:.7">${msg}</div>`; };
+  const setMsg = msg => {
+    const el = sigEl(); if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0;opacity:.7">${msg}</div>`;
+    const hp = document.getElementById('holdingsAnalyzeStatus'); if (hp) hp.textContent = String(msg).replace(/<[^>]+>/g, '');
+  };
   setMsg('🤖 AI 分析載入中…');
 
   // 讀快取
