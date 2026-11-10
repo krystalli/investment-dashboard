@@ -1,0 +1,15 @@
+{
+  "_comment": "格式範例。儀表板只讀 data/analysis.json（由 routine 每天 08:55 寫入），不讀這個檔。不要放任何金額（市值、成本、損益），只放每檔的動作與理由。",
+  "version": 1,
+  "generatedAt": "2026-11-10T08:55:00+08:00",
+  "asOf": "2026-11-07",
+  "marketOutlook": "1-2 句今日台股盤前展望（範例文字）",
+  "portfolioAssessment": "2-3 句整體持倉評估：集中度、風險敞口、與市場環境的適配性（範例文字）",
+  "riskFlags": ["今日需注意的風險點，最多 2 條"],
+  "keyEvents": ["近期需關注的事件或日期，最多 3 條"],
+  "holdings": [
+    { "symbol": "2330", "name": "台積電", "action": "持有觀察", "reason": "站上 20 日線且均線向上，趨勢偏多；持倉比例已高，不再加碼", "risk": "AI 需求放緩、匯率", "watch": "收盤跌破 20 日線連 2 日再評估減碼" },
+    { "symbol": "00937B", "name": "群益ESG投等債20+", "action": "持有觀察", "reason": "債券ETF，看利率與存續期間，不以均線操作", "risk": "利率反彈" },
+    { "symbol": "NVDA", "name": "NVIDIA", "action": "減碼", "reason": "跌破 50 日線且量增，持倉比例偏高", "risk": "出口管制" }
+  ]
+}
