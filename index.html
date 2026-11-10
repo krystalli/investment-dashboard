@@ -3832,7 +3832,7 @@ async function runMarketReport() {
 
   const fmtChips = c => {
     if (!c) return '三大法人：今日無資料';
-    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000).toLocaleString() + '張';
     return `三大法人合計：外資 ${fmt(c.foreign)} / 投信 ${fmt(c.trust)} / 自營 ${fmt(c.dealer)} / 合計 ${fmt(c.foreign+c.trust+c.dealer)}`;
   };
 
@@ -3944,7 +3944,7 @@ function renderMarketReport(result) {
   };
 
   const chipsRow = chips ? (() => {
-    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000) + '千張';
+    const fmt = n => (n >= 0 ? '+' : '') + Math.round(n / 1000).toLocaleString() + '張';
     const total = chips.foreign + chips.trust + chips.dealer;
     const tc = total >= 0 ? 'var(--green)' : 'var(--red)';
     return `<div style="font-size:11px;color:var(--text3);margin-bottom:6px;line-height:1.8">
@@ -4022,7 +4022,7 @@ async function buildTechLines(allHoldings) {
     }
     const chips = h.type==='TW' ? chipsMap[h.key] : null;
     const chipsStr = chips ? (() => {
-      const fmt = n => (n>=0?'+':'')+Math.round(n/1000)+'千張';
+      const fmt = n => (n>=0?'+':'')+Math.round(n/1000).toLocaleString()+'張';
       return `籌碼：外資${fmt(chips.foreign)} 投信${fmt(chips.trust)}`;
     })() : '';
     const levelsStr = ind ? [
