@@ -265,6 +265,7 @@
   <div class="nav-actions">
     <button class="btn-action btn-refresh" onclick="refreshPrices()">🔄 刷新股價</button>
     <button class="btn-action btn-sheets" onclick="syncSheets()">📊 同步試算表</button>
+    <button class="btn-action" onclick="openSheetIdPanel()" title="設定／更換試算表網址" style="background:var(--surface2);color:var(--text2)">🔗</button>
   </div>
   <div class="nav-date" id="navDate">2026/03/27</div>
 </nav>
@@ -3450,7 +3451,73 @@ renderUsStocks();
 })();
 
 // ─────── GOOGLE SHEETS CONFIG ───────
-const SHEET_ID = '1hTju16nqdRegue7QHNE43amiUodgm6hv1amOX8uBxBk';
+// 試算表 ID 不寫在程式裡（程式碼是公開的）：每個裝置第一次同步時貼上一次，只存在這個瀏覽器的 localStorage
+let SHEET_ID = (() => { try { return localStorage.getItem('inv_sheet_id') || ''; } catch (e) { return ''; } })();
+
+// 接受完整網址或單獨的 ID
+function parseSheetId(input) {
+  const t = String(input || '').trim();
+  const m = t.match(/\/spreadsheets\/d\/([A-Za-z0-9_-]{20,})/);
+  if (m) return m[1];
+  return /^[A-Za-z0-9_-]{25,}$/.test(t) ? t : null;
+}
+
+function closeSheetIdPanel() { document.getElementById('sheetIdModal')?.remove(); }
+
+function openSheetIdPanel(msg) {
+  if (document.getElementById('sheetIdModal')) return;
+  const el = document.createElement('div');
+  el.id = 'sheetIdModal';
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center';
+  el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;width:min(460px,92vw)">
+    <div style="font-weight:700;margin-bottom:6px">📊 設定試算表</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">貼上 Google 試算表的網址（或網址中間那一長串 ID）。只會存在這個瀏覽器，不會上傳到任何地方；換新裝置要再貼一次。</div>
+    ${msg ? `<div style="color:var(--yellow);font-size:12px;margin-bottom:8px">${msg}</div>` : ''}
+    <input id="sheetIdInput" type="text" autocomplete="off" placeholder="https://docs.google.com/spreadsheets/d/…" style="width:100%;box-sizing:border-box;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+    <div id="sheetIdErr" style="color:var(--red);font-size:12px;min-height:18px;margin-top:6px;line-height:1.5"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+      ${SHEET_ID ? '<button class="btn-action" onclick="clearSheetId()" style="margin-right:auto">清除</button>' : ''}
+      <button class="btn-action" onclick="closeSheetIdPanel()">取消</button>
+      <button class="btn-action btn-refresh" id="sheetIdSaveBtn" onclick="saveSheetId()">儲存並同步</button>
+    </div>
+  </div>`;
+  document.body.appendChild(el);
+  const input = document.getElementById('sheetIdInput');
+  input.addEventListener('keypress', e => { if (e.key === 'Enter') saveSheetId(); });
+  setTimeout(() => input.focus(), 50);
+}
+
+async function saveSheetId() {
+  const input = document.getElementById('sheetIdInput'), err = document.getElementById('sheetIdErr'), btn = document.getElementById('sheetIdSaveBtn');
+  const id = parseSheetId(input.value);
+  if (!id) { err.textContent = '看不出這是試算表網址，請貼上完整網址（含 /spreadsheets/d/…）'; return; }
+  btn.disabled = true; btn.textContent = '檢查中…'; err.textContent = '';
+  // 先確認三個分頁都讀得到再存，避免存了錯的網址之後同步才一直失敗
+  const tabs = [['台股', SHEET_GIDS.tw], ['美股', SHEET_GIDS.us], ['歷年損益', SHEET_GIDS.history]];
+  const failed = (await Promise.all(tabs.map(async ([name, gid]) => {
+    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const r = await fetch(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${gid}`, { signal: ctrl.signal });
+      const body = r.ok ? await r.text() : '';
+      return (r.ok && !/^\s*<(!doctype|html)/i.test(body)) ? null : name;   // 沒開放分享時 Google 會回登入頁
+    } catch (e) { return name; } finally { clearTimeout(timer); }
+  }))).filter(Boolean);
+  if (failed.length) {
+    err.textContent = `讀不到「${failed.join('、')}」分頁。請確認：分享設為「知道連結的人可檢視」，且是用「建立副本」複製出來的（分頁編號才會一樣）。`;
+    btn.disabled = false; btn.textContent = '儲存並同步';
+    return;
+  }
+  SHEET_ID = id;
+  try { localStorage.setItem('inv_sheet_id', id); } catch (e) {}
+  closeSheetIdPanel();
+  syncSheets();
+}
+
+function clearSheetId() {
+  SHEET_ID = '';
+  try { localStorage.removeItem('inv_sheet_id'); } catch (e) {}
+  closeSheetIdPanel();
+}
 const SHEET_GIDS = {
   tw:      '593571516',   // 台股持股
   us:      '1730614274',  // 美股持股
@@ -4394,6 +4461,7 @@ function updateNasdaqDisplay(price) {
 
 // ─────── 同步 Google Sheets（三張表）───────
 async function syncSheets() {
+  if (!SHEET_ID) { openSheetIdPanel('第一次使用，請先貼上你的 Google 試算表網址'); return; }
   const btn = document.querySelector('.btn-sheets');
   btn.textContent = '⏳ 同步中...'; btn.disabled = true;
   showStatus('⏳ 正在讀取 Google Sheets（三張工作表）...', 'loading');
