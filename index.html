@@ -3480,6 +3480,12 @@ function openSheetIdPanel(msg) {
       <button class="btn-action" onclick="closeSheetIdPanel()">取消</button>
       <button class="btn-action btn-refresh" id="sheetIdSaveBtn" onclick="saveSheetId()">儲存並同步</button>
     </div>
+    <div style="border-top:1px solid var(--border);margin:14px 0 10px"></div>
+    <div style="font-weight:700;font-size:13px;margin-bottom:4px">🌐 資料代理（選填）</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.6">Yahoo 行情（技術面、刷新股價、0050／SPY 比較）要經代理才讀得到，免費公用代理已失效。貼上你自己的 Cloudflare Worker 網址（作法見 worker/data-proxy.js）。留空再按儲存＝清除。</div>
+    <input id="proxyUrlInput" type="text" autocomplete="off" placeholder="https://xxx.workers.dev" value="${(() => { try { return (localStorage.getItem('inv_proxy_url') || '').replace(/"/g, ''); } catch (e) { return ''; } })()}" style="width:100%;box-sizing:border-box;padding:9px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none">
+    <div id="proxyErr" style="font-size:12px;min-height:18px;margin-top:6px;line-height:1.5"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:4px"><button class="btn-action" onclick="saveProxyUrl()">儲存代理</button></div>
   </div>`;
   document.body.appendChild(el);
   const input = document.getElementById('sheetIdInput');
@@ -3513,6 +3519,31 @@ async function saveSheetId() {
   syncSheets();
 }
 
+async function saveProxyUrl() {
+  const input = document.getElementById('proxyUrlInput'), err = document.getElementById('proxyErr');
+  const show = (msg, ok) => { err.style.color = ok ? 'var(--green)' : 'var(--red)'; err.textContent = msg; };
+  const raw = input.value.trim();
+  if (!raw) { try { localStorage.removeItem('inv_proxy_url'); } catch (e) {} show('已清除自訂代理（改用公用備援，目前多半失效）', true); return; }
+  let base;
+  try { const u = new URL(raw); if (u.protocol !== 'https:') throw new Error('not https'); base = (u.origin + u.pathname).replace(/\/+$/, ''); }
+  catch (e) { show('請貼上 https 開頭的網址，例如 https://xxx.workers.dev', false); return; }
+  show('測試中…', true);
+  const test = 'https://query1.finance.yahoo.com/v8/finance/chart/%5ETWII?range=5d&interval=1d';
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const r = await fetch(base + '/?url=' + encodeURIComponent(test), { signal: ctrl.signal });
+    const d = r.ok ? await r.json() : null;
+    if (!d?.chart?.result?.[0]) {
+      show(r.status === 403 ? '代理拒絕了這個網站（Worker 的 ALLOW_ORIGINS 要包含 https://krystalli.github.io）' : `代理沒有回傳行情資料（HTTP ${r.status}）`, false);
+      return;
+    }
+  } catch (e) { show('連不上這個網址（網址打錯，或 Worker 沒有回 Access-Control-Allow-Origin）', false); return; }
+  finally { clearTimeout(timer); }
+  try { localStorage.setItem('inv_proxy_url', base); } catch (e) {}
+  window._proxyDownUntil = 0; window._proxyFails = 0; window._twScanFailedAt = 0;
+  show('✅ 已儲存，代理可用。回持倉頁按「↻ 重新掃描」即可。', true);
+}
+
 function clearSheetId() {
   SHEET_ID = '';
   try { localStorage.removeItem('inv_sheet_id'); } catch (e) {}
@@ -3523,12 +3554,59 @@ const SHEET_GIDS = {
   us:      '1730614274',  // 美股持股
   history: '361233489',   // 歷年損益/資產
 };
+// ─────── 資料代理 ───────
+// 證交所有開放跨網域（Access-Control-Allow-Origin: *），瀏覽器可直連；Yahoo 沒有，必須經代理。
+// 免費公用代理不可靠（corsproxy.io 已拒絕匿名請求、allorigins 常掛掉），所以優先用「自己的代理」
+// （Cloudflare Worker，介面 GET <網址>/?url=<編碼後的目標網址>，網址存在 localStorage inv_proxy_url），公用代理只當備援。
+function dataProxies() {
+  let base = '';
+  try { base = (localStorage.getItem('inv_proxy_url') || '').trim().replace(/\/+$/, ''); } catch (e) {}
+  const mine = base ? [u => base + '/?url=' + encodeURIComponent(u)] : [];
+  return [...mine, u => 'https://corsproxy.io/?' + encodeURIComponent(u), u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)];
+}
+
+// 抓證交所 JSON：先直連，失敗才走代理
+async function twseGet(url) {
+  const tryGet = async (u, ms = 15000) => {
+    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), ms);
+    try { const r = await fetch(u, { signal: ctrl.signal }); return r.ok ? await r.json() : null; }
+    catch (e) { return null; } finally { clearTimeout(timer); }
+  };
+  let raw = await tryGet(url);
+  if (raw) return raw;
+  for (const p of dataProxies()) { raw = await tryGet(p(url)); if (raw) return raw; }
+  return null;
+}
+
+// 逐一嘗試代理（每個 8 秒逾時）。「Yahoo 回 404＝沒這檔」不算代理壞掉；
+// 連續 3 次所有代理都連不上，10 分鐘內直接跳過，避免代理全掛時每一檔都空等逾時、整頁卡住。
+async function viaProxies(url, parse) {
+  if (window._proxyDownUntil && Date.now() < window._proxyDownUntil) return null;
+  let alive = false;
+  for (const p of dataProxies()) {
+    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(p(url), { signal: ctrl.signal, headers: { Accept: 'application/json' } });
+      if (r.ok || r.status === 404) alive = true;
+      const v = r.ok ? await parse(r) : null;
+      if (v) { window._proxyFails = 0; return v; }
+      if (r.status === 404) break;
+    } catch (e) { /* 逾時或連線錯誤：換下一個代理 */ }
+    finally { clearTimeout(timer); }
+  }
+  if (alive) window._proxyFails = 0;
+  else {
+    window._proxyFails = (window._proxyFails || 0) + 1;
+    if (window._proxyFails >= 3) window._proxyDownUntil = Date.now() + 10 * 60 * 1000;
+  }
+  return null;
+}
+
 // ─────── 技術分析 & 籌碼 ───────
 async function fetchYahooHistory(sym) {
   const cacheKey = 'inv_wtech_' + sym + '_' + new Date().toLocaleDateString('zh-TW');
   try { const c = JSON.parse(localStorage.getItem(cacheKey)||'null'); if (c) return c; } catch(e) {}
   const isGH = location.hostname.includes('github.io');
-  const proxies = [u => 'https://corsproxy.io/?'+encodeURIComponent(u), u => 'https://api.allorigins.win/raw?url='+encodeURIComponent(u)];
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1y&interval=1wk&includePrePost=false`;
   const parse = async r => {
     if (!r.ok) return null;
@@ -3544,7 +3622,7 @@ async function fetchYahooHistory(sym) {
   };
   let data = null;
   if (!isGH) { try { data = await fetch(url,{headers:{Accept:'application/json'}}).then(parse); } catch(e) {} }
-  if (!data) { for (const p of proxies) { try { data = await fetch(p(url)).then(parse); if (data) break; } catch(e) {} } }
+  if (!data) data = await viaProxies(url, parse);
   if (data) { try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch(e) {} }
   return data;
 }
@@ -3610,12 +3688,7 @@ async function fetchTWSEChips() {
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
-  const isGH = location.hostname.includes('github.io');
-  const proxies = [u => 'https://corsproxy.io/?'+encodeURIComponent(u)];
-  const tryGet = async u => { const r=await fetch(u); return r.ok?r.json():null; };
-  let raw = null;
-  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
-  if (!raw) { for (const p of proxies) { try { raw = await tryGet(p(url)); if (raw) break; } catch(e) {} } }
+  const raw = await twseGet(url);
   if (!raw?.data) return {};
   const parse = v => { const n=parseInt((v||'').replace(/,/g,''),10); return isNaN(n)?0:n; };
   const map = {};
@@ -3642,6 +3715,24 @@ function readTwScan() {
   try { return JSON.parse(localStorage.getItem(twScanKey()) || 'null'); } catch(e) { return null; }
 }
 
+// 當天的掃描算新鮮；但「降級」的結果（拿不到技術面）30 分鐘後允許重試
+function twScanFresh(scan, todayKey) {
+  return !!scan && scan.date === todayKey && !(scan.degraded && Date.now() - scan.ts > 30 * 60 * 1000);
+}
+
+// 技術面資料完全拿不到時的降級：只依法人籌碼排序，明確標示沒有技術面確認
+function flowOnlyPicks(codes, flow) {
+  const both = x => (x.f > 0 && x.t > 0) ? 1 : 0;
+  return codes.map(c => ({ code: c, ...flow[c] }))
+    .sort((a, b) => (both(b) - both(a)) || (b.tDays - a.tDays) || ((b.f + b.t) - (a.f + a.t)))
+    .slice(0, 8)
+    .map(x => ({
+      code: x.code, name: x.name, price: null, f: x.f, t: x.t, tDays: x.tDays, score: null, extended: false, tier: 'WATCH', rec: 'WATCH',
+      reason: [x.tDays >= 2 ? `投信連${x.tDays}日買超` : (x.t > 0 ? '投信買超' : ''), x.f > 0 ? '外資買超' : ''].filter(Boolean).join('、') + '（技術面資料取得失敗，趨勢未確認）',
+      risk: '未做技術面確認，不宜直接當買進訊號', source: 'flow',
+    }));
+}
+
 // 未持有的候選 = 最近一次市場掃描的建議 − 目前已持有（買進後自動剔除）
 function getTwWatchlist() {
   const norm = c => String(c ?? '').trim().toUpperCase();
@@ -3656,11 +3747,7 @@ async function fetchT86Day(ds) {
   const cacheKey = 'inv_t86_' + ds;
   try { const c = JSON.parse(localStorage.getItem(cacheKey) || 'null'); if (c) return c.none ? null : c; } catch(e) {}
   const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
-  const isGH = location.hostname.includes('github.io');
-  const tryGet = async u => { const r = await fetch(u); return r.ok ? r.json() : null; };
-  let raw = null;
-  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
-  if (!raw) { try { raw = await tryGet('https://corsproxy.io/?' + encodeURIComponent(url)); } catch(e) {} }
+  const raw = await twseGet(url);
   if (!raw) return null;
   const parse = v => { const n = parseInt(String(v || '').replace(/,/g, ''), 10); return isNaN(n) ? 0 : n; };
   const map = {};
@@ -3780,7 +3867,7 @@ async function mapLimit(items, limit, fn) {
 async function getTwRegime() {
   const hist = await fetchYahooHistory('^TWII');
   const ind = hist ? calcIndicators(hist, null) : null;
-  if (!ind || !ind.ma52) return { key: 'unknown', text: '加權指數資料不足，大盤環境未納入判斷' };
+  if (!ind || !ind.ma52) return { key: 'unknown', text: '加權指數資料不足，大盤環境未納入判斷', yahoo: !!hist };
   const key = ind.price < ind.ma52 ? 'bear' : (ind.price > ind.ma20 ? 'bull' : 'neutral');
   const rel = `${ind.price > ind.ma20 ? '站上' : '跌破'}週MA20、${ind.price > ind.ma52 ? '站上' : '跌破'}週MA52`;
   const tag = key === 'bull' ? '偏多' : key === 'bear' ? '偏弱，BUY 一律降為觀察' : '整理';
@@ -3832,7 +3919,7 @@ ${lines}
 async function runTwScan(force) {
   if (window._twScanRunning) return;
   const todayKey = new Date().toLocaleDateString('zh-TW');
-  if (!force && readTwScan()?.date === todayKey) { renderTwScan(); return; }
+  if (!force && twScanFresh(readTwScan(), todayKey)) { renderTwScan(); return; }
   window._twScanRunning = true;
   window._twScanErr = '';
   const btn = document.getElementById('twScanBtn');
@@ -3849,14 +3936,16 @@ async function runTwScan(force) {
 
     setSt('判斷大盤環境…');
     const regime = await getTwRegime();
+    // 連加權指數都抓不到＝Yahoo 代理整個失效，不用再逐檔空等逾時
+    const yahooOk = regime.yahoo !== false;
 
     let done = 0;
-    const inds = await mapLimit(codes, 5, async code => {
+    const inds = yahooOk ? await mapLimit(codes, 5, async code => {
       let ind = null;
       try { const hist = await fetchYahooHistory(code + '.TW'); ind = hist ? calcIndicators(hist, null) : null; } catch(e) {}
       setSt(`技術面掃描 ${++done}/${codes.length}`);
       return ind;
-    });
+    }) : codes.map(() => null);
     const cands = [];
     codes.forEach((code, i) => {
       const ind = inds[i], fl = flow[code];
@@ -3869,16 +3958,19 @@ async function runTwScan(force) {
     cands.sort((a, b) => b.score - a.score || (b.f + b.t) - (a.f + a.t));
     const top = cands.slice(0, 8);
 
-    let picks = [], aiUsed = false;
+    let picks = [], aiUsed = false, degraded = false;
     const apiKey = localStorage.getItem('inv_gemini_key');
     if (apiKey && top.length) {
       setSt('AI 整合持倉與大盤…');
       try { picks = mergeAiPicks(top, await askTwScanAI(apiKey, top, regime, days.length)); aiUsed = picks.length > 0; }
       catch(e) { window._twScanErr = 'AI 整合失敗，已改用規則篩選：' + (e?.message || e); }
     }
-    if (!picks.length) picks = rulePicks(top);
+    if (!picks.length && !cands.length && !yahooOk) {
+      picks = flowOnlyPicks(codes, flow); degraded = true;
+      window._twScanErr = 'Yahoo 行情抓不到（免費代理已失效），這次只依法人籌碼排序、沒有技術面確認。按右上角 🔗 設定「資料代理」可恢復完整掃描。';
+    } else if (!picks.length) picks = rulePicks(top);
     localStorage.setItem(twScanKey(), JSON.stringify({
-      date: todayKey, ts: Date.now(), picks, regime, ai: aiUsed,
+      date: todayKey, ts: Date.now(), picks, regime, ai: aiUsed, degraded,
       funnel: { universe, flowCands: codes.length, techOk: cands.length, flowDates: days.map(d => d.ds) },
     }));
   } catch(e) {
@@ -3895,7 +3987,7 @@ async function runTwScan(force) {
 // 進入持倉頁時，當天還沒掃過就自動掃一次（失敗 10 分鐘內不重試，避免狂打證交所）
 function maybeAutoTwScan() {
   if (window._twScanRunning) return;
-  if (readTwScan()?.date === new Date().toLocaleDateString('zh-TW')) return;
+  if (twScanFresh(readTwScan(), new Date().toLocaleDateString('zh-TW'))) return;
   if (window._twScanFailedAt && Date.now() - window._twScanFailedAt < 10 * 60 * 1000) return;
   runTwScan(false);
 }
@@ -3921,9 +4013,9 @@ function renderTwScan() {
     return `<tr>
       <td><span class="ticker">${esc(p.code)}</span></td>
       <td>${esc(p.name)}</td>
-      <td style="font-family:monospace">$${(+p.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+      <td style="font-family:monospace">${p.price != null ? '$' + (+p.price).toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—'}</td>
       <td style="font-size:11px;white-space:nowrap">外資 ${fmtK(p.f)} 張<br>投信 ${fmtK(p.t)} 張（${p.tDays}日買超）</td>
-      <td>${p.score}/8${p.extended ? ' <span class="tag tag-yellow">偏離大</span>' : ''}</td>
+      <td>${p.score != null ? p.score + '/8' : '—'}${p.extended ? ' <span class="tag tag-yellow">偏離大</span>' : ''}</td>
       <td>${recTag[p.rec] || recTag['WATCH']}</td>
       <td style="color:var(--text2);font-size:11px;max-width:240px">${p.source === 'ai' ? '<span style="color:var(--blue);margin-right:3px">🤖</span>' : ''}${esc(p.reason)}<div style="color:var(--text3);font-family:monospace;margin-top:2px">${esc(lv)}</div></td>
       <td style="color:var(--orange);font-size:11px;max-width:140px">${esc(p.risk)}</td>
@@ -3934,7 +4026,7 @@ function renderTwScan() {
     const dates = (f.flowDates || []).map(d => d.slice(4, 6) + '/' + d.slice(6)).join('、');
     const when = (scan.date === new Date().toLocaleDateString('zh-TW') ? '今日' : scan.date) + ' ' + new Date(scan.ts).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
     sumEl.innerHTML = `<div>📡 ${esc(scan.regime?.text)}</div>
-      <div style="margin-top:3px">全市場 ${f.universe} 檔 → 法人買超 ${f.flowCands} 檔 → 技術合格 ${f.techOk} 檔 → 建議 ${(scan.picks || []).length} 檔（${scan.ai ? 'AI 整合持倉' : '規則篩選'}｜法人資料 ${esc(dates)}｜${esc(when)} 掃描）${bought.length ? `｜${bought.map(esc).join('、')} 已買進，不再列入` : ''}</div>${errHtml}`;
+      <div style="margin-top:3px">全市場 ${f.universe} 檔 → 法人買超 ${f.flowCands} 檔 → 技術合格 ${scan.degraded ? '未能確認' : f.techOk + ' 檔'} → 建議 ${(scan.picks || []).length} 檔（${scan.ai ? 'AI 整合持倉' : '規則篩選'}｜法人資料 ${esc(dates)}｜${esc(when)} 掃描）${bought.length ? `｜${bought.map(esc).join('、')} 已買進，不再列入` : ''}</div>${errHtml}`;
   }
 }
 
@@ -3946,12 +4038,7 @@ async function fetchTWSEMarketChipsAgg() {
   const d = new Date();
   const ds = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   const url = `https://www.twse.com.tw/fund/T86?response=json&date=${ds}&selectType=ALLBUT0999`;
-  const isGH = location.hostname.includes('github.io');
-  const proxy = u => 'https://corsproxy.io/?' + encodeURIComponent(u);
-  const tryGet = async u => { const r = await fetch(u); return r.ok ? r.json() : null; };
-  let raw = null;
-  if (!isGH) { try { raw = await tryGet(url); } catch(e) {} }
-  if (!raw) { try { raw = await tryGet(proxy(url)); } catch(e) {} }
+  const raw = await twseGet(url);
   if (!raw?.data?.length) return null;
   const parse = v => { const n = parseInt((v||'').replace(/,/g,''), 10); return isNaN(n) ? 0 : n; };
   let foreign = 0, trust = 0, dealer = 0;
@@ -4226,10 +4313,6 @@ async function buildTechLines(allHoldings) {
 // 用 Yahoo Finance v8 chart endpoint 取得單一股票即時價格
 async function fetchOnePrice(sym) {
   const isGitHubPages = location.hostname.includes('github.io');
-  const proxies = [
-    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  ];
   const makeUrl = s => `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?range=1d&interval=1d`;
   const parsePrice = async r => {
     if (!r.ok) return null;
@@ -4255,12 +4338,8 @@ async function fetchOnePrice(sym) {
         if (p) return p;
       } catch(e) {}
     }
-    for (const proxy of proxies) {
-      try {
-        const p = await fetch(proxy(url)).then(parsePrice);
-        if (p) return p;
-      } catch(e) {}
-    }
+    const p = await viaProxies(url, parsePrice);
+    if (p) return p;
   }
   return null;
 }
@@ -5241,33 +5320,26 @@ function updateTeamAiKeyHint() {
 async function fetchBenchmarkHistory(sym) {
   const enc = encodeURIComponent(sym);
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${enc}?range=2y&interval=1mo`;
-  const proxies = [
-    u => u,
-    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  ];
-  for (const proxy of proxies) {
-    try {
-      const r = await fetch(proxy(url), { headers: { Accept: 'application/json' } });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const result = d.chart?.result?.[0];
-      if (!result) continue;
-      const ts     = result.timestamp;
-      const closes = result.indicators?.quote?.[0]?.close;
-      if (!ts || !closes || ts.length < 2) continue;
-
-      const monthly = {};
-      for (let i = 1; i < ts.length; i++) {
-        if (closes[i] == null || closes[i-1] == null) continue;
-        const dt = new Date(ts[i] * 1000);
-        const m  = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
-        monthly[m] = +((closes[i] - closes[i-1]) / closes[i-1] * 100).toFixed(3);
-      }
-      return monthly;
-    } catch(e) {}
+  const parse = async r => {
+    const d = await r.json();
+    const result = d.chart?.result?.[0];
+    if (!result) return null;
+    const ts     = result.timestamp;
+    const closes = result.indicators?.quote?.[0]?.close;
+    if (!ts || !closes || ts.length < 2) return null;
+    const monthly = {};
+    for (let i = 1; i < ts.length; i++) {
+      if (closes[i] == null || closes[i-1] == null) continue;
+      const dt = new Date(ts[i] * 1000);
+      const m  = `${dt.getUTCFullYear()}/${String(dt.getUTCMonth()+1).padStart(2,'0')}`;
+      monthly[m] = +((closes[i] - closes[i-1]) / closes[i-1] * 100).toFixed(3);
+    }
+    return monthly;
+  };
+  if (!location.hostname.includes('github.io')) {
+    try { const r = await fetch(url, { headers: { Accept: 'application/json' } }); if (r.ok) { const m = await parse(r); if (m) return m; } } catch(e) {}
   }
-  return null;
+  return await viaProxies(url, parse);
 }
 
 async function syncBenchmarkData() {
