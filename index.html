@@ -353,11 +353,12 @@
   <div class="card" style="margin-bottom:14px">
     <div class="card-title">📋 操作建議
       <span style="margin-left:auto">
-        <button onclick="const b=this;b.textContent='分析中…';b.disabled=true;localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis(true).finally(()=>{b.textContent='↻ 重新分析';b.disabled=false})" id="actionSignalsRefreshBtn" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
+        <button onclick="const b=this;b.textContent='分析中…';b.disabled=true;localStorage.removeItem('inv_holdings_v2');runHoldingsAnalysis(true).finally(()=>{b.textContent='↻ 重新分析';b.disabled=false})" id="actionSignalsRefreshBtn" title="晨報有效時，結果會另列在下方「盤中即時 AI（參考）」，不會取代晨報" style="font-size:11px;padding:3px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;color:var(--text1)">↻ 重新分析</button>
       </span>
     </div>
     <div id="morningReportBox"></div>
     <div id="home-action-signals"><div style="color:var(--text3);font-size:13px;padding:8px 0">載入中…</div></div>
+    <div id="liveAiBox"></div>
   </div>
 
   <div class="card" style="display:none">
@@ -1154,11 +1155,13 @@ async function loadMorningReport(force = false) {
 
 function morningFresh() { return !!MORNING_REPORT && Date.now() - MORNING_REPORT.ts < MORNING_FRESH_MS; }
 
-// 單一檔的建議：晨報與儀表板 AI 都有時，取時間較新的
+// 單一檔的建議：晨報（Claude＋新聞＋日線）20 小時內有效時，一律以晨報為準，
+// 儀表板自己的 AI（小模型、無新聞）只在晨報過期或沒涵蓋該檔時才用；兩者都不新鮮時取較新的
 function getHoldingRec(key) {
   const ai = AI_HOLDINGS_MAP[key];
   const m = MORNING_REPORT?.holdings[String(key).toUpperCase()];
   const mrec = m ? { action: m.action, status: m.reason, alert: m.risk, ts: MORNING_REPORT.ts, source: '晨報', asOf: MORNING_REPORT.asOf } : null;
+  if (mrec && morningFresh()) return mrec;
   if (!ai) return mrec;
   if (!mrec) return ai;
   return (ai.ts || 0) >= mrec.ts ? ai : mrec;
@@ -2402,12 +2405,15 @@ async function reanalyzeFromHoldings() {
   if (btn) { btn.disabled = true; btn.textContent = '分析中…'; }
   localStorage.removeItem('inv_holdings_v2');
   window._holdingsAnalysisErr = '';
+  window._lastLiveAIMode = '';
   try { await runHoldingsAnalysis(true); } catch (e) { window._holdingsAnalysisErr = e?.message || String(e); }
   renderTwStocks(); renderUsStocks();
   const t = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
   if (st) st.textContent = window._holdingsAnalysisErr
     ? `⚠️ ${t} 部分未完成：${String(window._holdingsAnalysisErr).slice(0, 60)}`
-    : `✅ ${t} 已更新`;
+    : (window._lastLiveAIMode === 'ref'
+        ? `✅ ${t} 已重算：結果在今日頁「盤中即時 AI（參考）」，持倉表仍以晨報為準`
+        : `✅ ${t} 已更新`);
   if (btn) { btn.disabled = false; btn.textContent = '↻ 重新分析建議'; }
 }
 
@@ -2438,27 +2444,33 @@ async function _runHoldingsAnalysis(force = false) {
   }
   if (!allHoldings.length) return;
 
-  // 晨報（routine，Claude＋新聞＋日線）20 小時內：直接用它，不自動呼叫 AI；按「↻ 重新分析」才改用儀表板即時 AI
-  if (!force) {
-    const mr = buildMorningResults(allHoldings);
-    if (mr) { renderMorningBox(); renderHoldingsAnalysis(mr.covered, mr.results, { source: '晨報' }); return; }
-  }
+  // 晨報（routine，Claude＋新聞＋日線）有效（20 小時內、涵蓋 7 成以上持股）時，晨報是主要來源：
+  // 沒按「重新分析」就直接用晨報；按了則把儀表板 AI 的結果另列成「盤中即時 AI（參考）」，
+  // 不取代今日卡片、也不寫進持倉表
+  const mr = buildMorningResults(allHoldings);
+  const morningPrimary = !!mr;
+  if (!force && mr) { renderMorningBox(); renderHoldingsAnalysis(mr.covered, mr.results, { source: '晨報' }); return; }
 
   // 顯示 loading
-  const sigEl = () => document.getElementById('home-action-signals');
+  const sigEl = () => document.getElementById(morningPrimary ? 'liveAiBox' : 'home-action-signals');
   const setMsg = msg => {
     const el = sigEl(); if (el) el.innerHTML = `<div style="font-size:12px;color:var(--text3);padding:8px 0;opacity:.7">${msg}</div>`;
     const hp = document.getElementById('holdingsAnalyzeStatus'); if (hp) hp.textContent = String(msg).replace(/<[^>]+>/g, '');
   };
   setMsg('🤖 AI 分析載入中…');
 
+  const publish = finalResults => {
+    window._lastLiveAIMode = morningPrimary ? 'ref' : 'primary';
+    if (morningPrimary) { renderLiveAiBox(allHoldings, finalResults); return; }
+    updateAIHoldingsMap(allHoldings, finalResults, todayKey);
+    renderHoldingsAnalysis(allHoldings, finalResults);
+  };
+
   // 讀快取
   const cached = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); } catch { return null; } })();
   // 完整分析的快取整天有效；不完整的（部分批次失敗）只信任 30 分鐘，避免整天卡在殘缺結果又不狂打 API
   if (cached?.date === todayKey && (cached.complete !== false || Date.now() - (cached.ts || 0) < 30*60*1000)) {
-    const finalCached = cached.results.map(r => reconcileHoldingAction(allHoldings[r.idx], r));
-    updateAIHoldingsMap(allHoldings, finalCached, todayKey);
-    renderHoldingsAnalysis(allHoldings, finalCached);
+    publish(cached.results.map(r => reconcileHoldingAction(allHoldings[r.idx], r)));
     return;
   }
 
@@ -2572,13 +2584,38 @@ status 必須引用資料中的具體事實（均線位置、RSI、籌碼、損�
     }
   }
   localStorage.setItem(CACHE_KEY, JSON.stringify({ date: todayKey, results: allResults, ts: Date.now(), complete: allResults.length >= totalH }));
-  const finalResults = allResults.map(r => reconcileHoldingAction(allHoldings[r.idx], r));
-  updateAIHoldingsMap(allHoldings, finalResults, todayKey);
-  renderHoldingsAnalysis(allHoldings, finalResults);
+  publish(allResults.map(r => reconcileHoldingAction(allHoldings[r.idx], r)));
+}
+
+// 晨報有效時，儀表板 AI 的重算結果另列在這裡（參考用）；並標出跟晨報不一致的標的
+function renderLiveAiBox(allHoldings, results) {
+  const box = document.getElementById('liveAiBox');
+  if (!box) return;
+  const when = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const label = a => (a === '持有' ? '持有觀察' : a);
+  const diffs = [], seen = new Set();
+  results.forEach(r => {
+    const h = allHoldings[r.idx];
+    const key = String(h?.key ?? '').toUpperCase();
+    const m = MORNING_REPORT?.holdings[key];
+    if (!h || !m || seen.has(key)) return;
+    seen.add(key);
+    if (m.action !== r.action) diffs.push(`${escHtml(String(h.key))}（晨報：${label(m.action)}／即時：${label(r.action)}）`);
+  });
+  box.innerHTML = `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border)">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <strong style="font-size:13px">⚡ 盤中即時 AI（參考）</strong>
+      <span style="font-size:11px;color:var(--text3)">${when} 重算｜Groq 小模型、無新聞、週線指標，僅供對照；上方建議與持倉表仍以晨報為準</span>
+      <button class="btn-action" style="margin-left:auto" onclick="document.getElementById('liveAiBox').innerHTML=''">清除</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;line-height:1.7">${diffs.length ? `與晨報不一致 ${diffs.length} 檔：${diffs.join('、')}` : '與晨報的建議一致'}</div>
+    <div id="liveAiBody"></div>
+  </div>`;
+  renderHoldingsAnalysis(allHoldings, results, { source: 'live', targetId: 'liveAiBody' });
 }
 
 function renderHoldingsAnalysis(allHoldings, allResults, meta) {
-  const c = document.getElementById('home-action-signals');
+  const c = document.getElementById(meta?.targetId || 'home-action-signals');
   if (!c) return;
 
   const ACTION_COLOR    = { '加碼':'var(--green)', '減碼':'#e3671a', '出場':'var(--red)' };
@@ -2611,7 +2648,7 @@ function renderHoldingsAnalysis(allHoldings, allResults, meta) {
   const missingWarn = missingN > 0
     ? `<div style="color:var(--orange);margin-top:3px">⚠️ 還有 ${missingN} 檔沒取得分析${window._holdingsAnalysisErr ? `（${String(window._holdingsAnalysisErr).slice(0,90)}）` : ''}，按「↻ 重新分析」重試</div>` : '';
   const srcNote = meta?.source === '晨報'
-    ? `｜來源：📰 晨報（行情資料日 ${MORNING_REPORT?.asOf || '—'}，涵蓋台股／美股），按「↻ 重新分析」可改用儀表板即時 AI`
+    ? `｜來源：📰 晨報（行情資料日 ${MORNING_REPORT?.asOf || '—'}，涵蓋台股／美股），按「↻ 重新分析」會在下方另列「盤中即時 AI（參考）」，不會取代晨報`
     : '';
   const footer = `<div style="font-size:10px;color:var(--text3);margin-top:8px;padding-top:6px;border-top:1px solid var(--border)">已分析 ${analyzedIdxs.size} / ${allHoldings.length} 支（${mktSummary}）${srcNote}${missingWarn}</div>`;
 
