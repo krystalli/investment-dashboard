@@ -4203,20 +4203,28 @@ ${techContext}
 }`;
 
   try {
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
-        max_tokens: 1200,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
-    const result = JSON.parse(data.choices[0].message.content);
+    // 推理模型會把 token 花在思考上導致 JSON 被截斷：降低推理量、放寬上限，失敗時自動重試一次
+    let result = null, lastErr = null;
+    for (let attempt = 0; attempt < 2 && !result; attempt++) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: 'openai/gpt-oss-20b',
+            max_tokens: 3000,
+            temperature: 0.3,
+            reasoning_effort: 'low',
+            response_format: { type: 'json_object' },
+            messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || `HTTP ${res.status}`);
+        result = JSON.parse(data.choices[0].message.content);
+      } catch (e) { lastErr = e; if (/rate|429|key|auth/i.test(e.message)) break; }
+    }
+    if (!result) throw lastErr || new Error('AI 沒有回傳內容');
     result._tw_ind = twInd; result._spx_ind = spxInd; result._qqq_ind = qqqInd; result._chips = twChips;
     renderMarketReport(result);
     const timeStr = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
