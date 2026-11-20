@@ -1807,7 +1807,7 @@ function renderOverviewKPIs() {
       ? TW_HOLD.reduce((s, h) => s + (h.cost != null ? h.cost : (h.avg || 0) * (h.shares || 0)), 0)
       : TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
     const sign = twPnl >= 0;
-    set('kpiTwPnl', (sign ? '+' : '') + '$' + Math.abs(Math.round(twPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    set('kpiTwPnl', (sign ? '+' : '-') + '$' + Math.abs(Math.round(twPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (twCost > 0) {
       const pct = (twPnl / twCost * 100).toFixed(2);
       set('kpiTwPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
@@ -1821,10 +1821,10 @@ function renderOverviewKPIs() {
     const usCost    = usAllHoldings.reduce((s, h) => s + (h.cost || 0), 0);
     const usPnlTwd  = Math.round(usPnl * USD_TWD);
     const sign = usPnl >= 0;
-    set('kpiUsPnl', (sign ? '+' : '') + '$' + Math.abs(usPnl).toLocaleString(undefined, {maximumFractionDigits:0}), 'kpi-value ' + (sign ? 'up' : 'down'));
+    set('kpiUsPnl', (sign ? '+' : '-') + '$' + Math.abs(usPnl).toLocaleString(undefined, {maximumFractionDigits:0}), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (usCost > 0) {
       const pct = (usPnl / usCost * 100).toFixed(2);
-      set('kpiUsPnlPct', `≈ TWD $${Math.abs(usPnlTwd).toLocaleString()}  (${pct >= 0 ? '+' : ''}${pct}%)`, 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
+      set('kpiUsPnlPct', `≈ TWD ${usPnlTwd < 0 ? '-' : ''}$${Math.abs(usPnlTwd).toLocaleString()}  (${pct >= 0 ? '+' : ''}${pct}%)`, 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
     }
   }
 
@@ -1834,7 +1834,7 @@ function renderOverviewKPIs() {
     const cryptoCost = SHEET_ALLOC.binance_c || 0;
     const cryptoPnl  = cryptoMV - cryptoCost;
     const sign = cryptoPnl >= 0;
-    set('kpiCryptoPnl', (sign ? '+' : '') + '$' + Math.abs(Math.round(cryptoPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
+    set('kpiCryptoPnl', (sign ? '+' : '-') + '$' + Math.abs(Math.round(cryptoPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
     if (cryptoCost > 0) {
       const pct = (cryptoPnl / cryptoCost * 100).toFixed(2);
       set('kpiCryptoPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
@@ -4420,7 +4420,10 @@ async function refreshPrices() {
       const p = twPriceMap[s.code];
       if (!p) return;
       s.price = p;
+      const oldMv = s.mv;
       s.mv    = Math.round(p * s.shares);
+      // 試算表的損益欄含配息等基準，刷新價格時只加上市值的變動，避免損益停在舊價格
+      if (s.pnl != null && oldMv != null) s.pnl = Math.round(s.pnl + (s.mv - oldMv));
       s.pct   = (p - s.avg) / s.avg * 100;
       const posWt = s.mv / twTotalMV * 100;
       const a = advisorRec(s, false, posWt);
