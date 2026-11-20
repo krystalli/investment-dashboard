@@ -1289,6 +1289,7 @@ const US_ROY = [
     } catch(e) {}
   };
   load('inv_tw_hold', TW_HOLD);
+  try { const t = JSON.parse(localStorage.getItem('inv_tw_total') || 'null'); if (t && t.pnl) TW_TOTAL = t; } catch(e) {}
   load('inv_us_main', US_MAIN);
   load('inv_us_roy',  US_ROY);
   load('inv_yearly',  YEARLY);
@@ -1799,16 +1800,20 @@ function renderOverviewKPIs() {
   // ── 台股未實現損益（優先用表格的未實現損益欄，否則用現價-均價×股數）──
   if (TW_HOLD.length > 0) {
     const hasPnl = TW_HOLD.some(h => h.pnl != null);
-    const twPnl  = hasPnl
+    let twPnl  = hasPnl
       ? TW_HOLD.reduce((s, h) => s + (h.pnl != null ? h.pnl : ((h.price || h.avg) - h.avg) * (h.shares || 0)), 0)
       : TW_HOLD.reduce((s, h) => s + ((h.price || h.avg) - h.avg) * (h.shares || 0), 0);
     const hasCost = TW_HOLD.some(h => h.cost != null);
     const twCost = hasCost
       ? TW_HOLD.reduce((s, h) => s + (h.cost != null ? h.cost : (h.avg || 0) * (h.shares || 0)), 0)
       : TW_HOLD.reduce((s, h) => s + (h.avg || 0) * (h.shares || 0), 0);
+    const tt = twSheetTotals();
+    if (tt) { twPnl = tt.pnl; }
     const sign = twPnl >= 0;
     set('kpiTwPnl', (sign ? '+' : '-') + '$' + Math.abs(Math.round(twPnl)).toLocaleString(), 'kpi-value ' + (sign ? 'up' : 'down'));
-    if (twCost > 0) {
+    if (tt && tt.pct != null) {
+      set('kpiTwPnlPct', (tt.pct >= 0 ? '+' : '') + tt.pct.toFixed(2) + '%', 'kpi-sub ' + (tt.pct >= 0 ? 'up' : 'down'));
+    } else if (twCost > 0) {
       const pct = (twPnl / twCost * 100).toFixed(2);
       set('kpiTwPnlPct', (pct >= 0 ? '+' : '') + pct + '%', 'kpi-sub ' + (pct >= 0 ? 'up' : 'down'));
     }
@@ -2101,6 +2106,14 @@ const AI_ACTION_TAG = {
   '出場': '<span class="rec-sell">⛔ 出場</span>',
 };
 
+// 台股試算表最下方的合計列（未實現損益已含配息）；有的話 KPI 直接用它，不自己重算
+let TW_TOTAL = null;
+function twSheetTotals() {
+  if (!TW_TOTAL || !TW_TOTAL.pnl) return null;
+  const base = TW_TOTAL.pct ? Math.abs(TW_TOTAL.pnl / TW_TOTAL.pct * 100) : 0;
+  return { pnl: TW_TOTAL.pnl, pct: base ? TW_TOTAL.pnl / base * 100 : null };
+}
+
 function renderTwStocks() {
   const tbody = document.getElementById('twHoldTable');
   tbody.innerHTML = '';
@@ -2149,10 +2162,11 @@ function renderTwStocks() {
   const totalCost = TW_HOLD.reduce((s, h) => s + ((h.shares || 0) * (h.avg || 0)), 0);
   // 優先用 Sheet 的損益欄（含配息），否則 fallback 市值-成本
   const hasPnl   = TW_HOLD.some(h => h.pnl != null);
-  const totalPnl = hasPnl
+  const tt        = twSheetTotals();
+  const totalPnl = tt ? tt.pnl : hasPnl
     ? TW_HOLD.reduce((s, h) => s + (h.pnl != null ? h.pnl : (h.mv || 0) - (h.shares||0)*(h.avg||0)), 0)
     : totalMV - totalCost;
-  const pnlPct    = totalCost > 0 ? totalPnl / totalCost * 100 : 0;
+  const pnlPct    = (tt && tt.pct != null) ? tt.pct : (totalCost > 0 ? totalPnl / totalCost * 100 : 0);
   const kset = (id, v, cls) => { const el = document.getElementById(id); if (el) { el.textContent = v; if (cls) el.className = cls; } };
   kset('twKpiTotal',    `$${Math.round(totalMV).toLocaleString()}`, 'kpi-value ' + (totalPnl >= 0 ? 'up' : 'down'));
   kset('twKpiTotalSub', `${TW_HOLD.length} 支持股`);
@@ -4414,7 +4428,7 @@ async function refreshPrices() {
     });
 
     // 更新台股持倉（含動態建議）
-    let twUpdated = 0;
+    let twUpdated = 0, twMvDelta = 0;
     const twTotalMV = TW_HOLD.reduce((s, h) => s + (h.mv || 0), 0) || 1;
     TW_HOLD.forEach(s => {
       const p = twPriceMap[s.code];
@@ -4424,12 +4438,14 @@ async function refreshPrices() {
       s.mv    = Math.round(p * s.shares);
       // 試算表的損益欄含配息等基準，刷新價格時只加上市值的變動，避免損益停在舊價格
       if (s.pnl != null && oldMv != null) s.pnl = Math.round(s.pnl + (s.mv - oldMv));
+      if (TW_TOTAL && oldMv != null) twMvDelta += s.mv - oldMv;
       s.pct   = (p - s.avg) / s.avg * 100;
       const posWt = s.mv / twTotalMV * 100;
       const a = advisorRec(s, false, posWt);
       s.rec = a.rec; s.reason = a.reason;
       twUpdated++;
     });
+    if (TW_TOTAL && twMvDelta) { TW_TOTAL.pnl = Math.round(TW_TOTAL.pnl + twMvDelta); try { localStorage.setItem('inv_tw_total', JSON.stringify(TW_TOTAL)); } catch(e) {} }
     try { localStorage.setItem('inv_tw_hold', JSON.stringify(TW_HOLD)); } catch(e) {}
 
     const nasdaq = priceMap['QQQ'];
@@ -4634,11 +4650,18 @@ async function syncSheets() {
       };
       if (idx.code < 0) throw new Error(`台股：找不到「代號」欄，目前欄位：${h.slice(0,10).join(', ')}`);
       const holdMap = new Map();
+      let twTotal = null;
       // 台股代號：4~6 位數字，可選一個英文字母結尾（如 00878、2330、00937B）
       const isValidTWCode = c => /^[0-9]{4,6}[A-Za-z]?$/.test(c);
       twRows.slice(1).forEach(row => {
         const code = row[idx.code]?.trim();
-        if (!code) return;
+        if (!code) {
+          // 代號空白、但有未實現損益金額與損益率 → 這是試算表的合計列
+          if (!twTotal && idx.pnl >= 0 && idx.pct >= 0 && parseNum(row[idx.pnl]) && parseNum(row[idx.pct])) {
+            twTotal = { pnl: parseNum(row[idx.pnl]), pct: parseNum(row[idx.pct]) };
+          }
+          return;
+        }
         if (!isValidTWCode(code)) return;  // 過濾 房貸/信貸/配息SUM/代號 等非股票行
         const avg = parseNum(row[idx.avg]);
         const price = parseNum(row[idx.price]) || avg;
@@ -4658,6 +4681,8 @@ async function syncSheets() {
         const reason = sheetReason || advisor.reason;
         holdMap.set(code, { code, shares, avg, price, mv, cost, pnl, realizedPnl, pct, name: row[idx.name]?.trim() || code, rec, reason });
       });
+      TW_TOTAL = twTotal;
+      try { localStorage.setItem('inv_tw_total', JSON.stringify(twTotal)); } catch(e) {}
       const newHold = [...holdMap.values()].filter(s => s.shares > 0);
       if (newHold.length) { TW_HOLD.splice(0, TW_HOLD.length, ...newHold); results.push(`台股 ${newHold.length} 筆`); }
     }
